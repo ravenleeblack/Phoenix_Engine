@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phoenix Engine Documentation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Segoe UI, Arial, sans-serif;
+      background: #10131a;
+      color: #eef2f8;
+    }
+    body {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      line-height: 1.55;
+    }
+    header {
+      border-bottom: 1px solid #343b49;
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+    }
+    h1 { margin-bottom: 6px; }
+    h2 { margin-top: 32px; }
+    .subtitle { color: #aeb8c7; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .card {
+      border: 1px solid #343b49;
+      border-radius: 8px;
+      padding: 16px;
+      background: #171b24;
+    }
+    .card a {
+      color: #77b7ff;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .card a:hover { text-decoration: underline; }
+    code, pre {
+      background: #0b0d12;
+      border: 1px solid #343b49;
+      border-radius: 5px;
+    }
+    code { padding: 2px 5px; }
+    pre { padding: 14px; overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border-bottom: 1px solid #343b49;
+      padding: 9px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Phoenix Engine</h1>
+    <p class="subtitle">Pure C and Vulkan game engine and 3D authoring platform</p>
+  </header>
+
+  <section>
+    <h2>Documentation</h2>
+    <div class="cards">
+      <div class="card">
+        <a href="Phoenix_Engine.md">Phoenix Engine Overview</a>
+        <p>Architecture, user workflow, builds, and preferences.</p>
+      </div>
+      <div class="card">
+        <a href="engine.md">Engine</a>
+        <p>Window, Vulkan runtime, scene, plugin host, and services.</p>
+      </div>
+      <div class="card">
+        <a href="editor.md">Editor</a>
+        <p>Modeling, sculpting, painting, terrain, UVs, UI, and plugin ABI.</p>
+      </div>
+      <div class="card">
+        <a href="game.md">Game</a>
+        <p>Gameplay state, simulation, lifecycle, and project code.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Modules</h2>
+    <table>
+      <thead><tr><th>Module</th><th>Output</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Engine</td><td><code>phoenix_engine.exe</code></td><td>Host runtime and Vulkan renderer</td></tr>
+        <tr><td>Editor</td><td><code>phoenix_editor.dll</code></td><td>Authoring tools and editor UI</td></tr>
+        <tr><td>Loader</td><td><code>phoenix_loader.dll</code></td><td>Mesh and image loading</td></tr>
+        <tr><td>Game</td><td><code>system_game.dll</code></td><td>Project gameplay code</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Build</h2>
+    <pre><code>make all
+make engine
+make editor
+make game
+make loader</code></pre>
+  </section>
+
+  <section>
+    <h2>Clean</h2>
+    <pre><code>make clean_engine
+make clean_editor
+make clean_game
+make clean
+make clean_prefs
+make clean_all</code></pre>
+    <p><code>make clean</code> preserves <code>01_bin/phoenix_editor.pdb</code>. Use <code>make clean_prefs</code> or <code>make clean_all</code> to reset saved editor settings.</p>
+  </section>
+
+  <section>
+    <h2>Run</h2>
+    <p>Press <strong>F5</strong> in VS Code or run <code>01_bin/phoenix_engine.exe</code>. Keep the executable next to its DLLs and preferences file.</p>
+  </section>
+</body>
+</html>

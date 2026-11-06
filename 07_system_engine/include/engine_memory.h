@@ -1,0 +1,56 @@
+#pragma once
+
+#include "engine_defines.h"
+
+/*
+RULES THAT MUST BE FOLLOWED.
+uncomment as we start getting things fixed: 
+Must use lowercase seperated by underscores. Even structs names, enum names, etc.
+Must use verbs before nouns when naming anything
+Must not use ternerys. i fucking hate ternery operators.
+Must use braced control-flow headers: every if, else if, and else must use braces.
+Must call extern in engine_globals.h and init in engine_globals.c
+Must not have statics in any file. I fucking hate statics.
+No static structs, No static enums, No static anything.
+Math functions must go in math file and header.
+Drawing stuff must go into drawing stuff and headers.
+ALl information gets routed into statusbar.
+
+NO CAPITAL LETTERS UNLESS WINDOWS OR VULKAN DEMANDS IT.
+DO NOT REMOVE THIS COMMENT EVER. THESE ARE THE RULES.
+IF SOMETHING IS BREAKING THESE RULES CHANGE IT THEN WE CHANGE EVERYTHING CONNECTED AS WE GO.
+THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
+*/
+
+typedef enum memory_tag {
+    // For temporary use. Should be assigned one of the below or have a new tag created.
+    MEMORY_TAG_UNKNOWN,
+    MEMORY_TAG_ARRAY,
+    MEMORY_TAG_DARRAY,
+    MEMORY_TAG_DICT,
+    MEMORY_TAG_RING_QUEUE,
+    MEMORY_TAG_BST,
+    MEMORY_TAG_STRING,
+    MEMORY_TAG_APPLICATION,
+    MEMORY_TAG_JOB,
+    MEMORY_TAG_TEXTURE,
+    MEMORY_TAG_MATERIAL_INSTANCE,
+    MEMORY_TAG_RENDERER,
+    MEMORY_TAG_GAME,
+    MEMORY_TAG_TRANSFORM,
+    MEMORY_TAG_ENTITY,
+    MEMORY_TAG_ENTITY_NODE,
+    MEMORY_TAG_SCENE,
+
+    MEMORY_TAG_MAX_TAGS
+} memory_tag;
+
+phoenix_engine_api void* kallocate(unsigned long long size, memory_tag tag);
+phoenix_engine_api void kfree(void* block, unsigned long long size, memory_tag tag);
+phoenix_engine_api void* kzero_memory(void* block, unsigned long long size);
+phoenix_engine_api void* kcopy_memory(void* dest, const void* source, unsigned long long size);
+phoenix_engine_api void* kset_memory(void* dest, int value, unsigned long long size);
+
+// Prototype to resolve the implicit declaration warning
+char* string_duplicate(const char* str);
+char* get_memory_usage_str(void);
