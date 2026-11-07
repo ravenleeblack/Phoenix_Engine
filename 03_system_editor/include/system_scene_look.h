@@ -3,9 +3,7 @@
 
 #include "engine_scene_look.h"
 
-#endif
 
-#if 0
 
 #include <stdbool.h>
 #include <vulkan/vulkan.h>
@@ -36,21 +34,10 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /* system_preferences.c.                                                     */
 /* ------------------------------------------------------------------------- */
 
-typedef struct {
-    float top[3];       /* sRGB 0..1, colour at the top of the viewport    */
-    float bottom[3];    /* sRGB 0..1, colour at the bottom of the viewport */
-} scene_background;
-
-typedef struct {
-    float azimuth_deg;      /* compass angle of the sun around Y                */
-    float elevation_deg;    /* 0 = on the horizon, 90 = straight overhead       */
-    float ambient;          /* 0..1, brightness of a face the sun does not hit  */
-} scene_sun;
-
 extern scene_background g_scene_bg;
 extern scene_sun        g_scene_sun;
 
-#define SCENE_LOOK_PRESET_COUNT 4
+#define scene_look_preset_count 4
 const char* scene_look_preset_name(int index);
 void        scene_look_apply_preset(int index);     /* background only */
 

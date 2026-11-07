@@ -19,6 +19,8 @@ char menu_bar_text_buffer[512] = "";
 
 bool is_game_running = false;
 bool is_engine_running = true;
+bool editor_frame_key_down = false;
+bool editor_home_key_down = false;
 
 system_clock main_clock;
 system_program program_state = {0};

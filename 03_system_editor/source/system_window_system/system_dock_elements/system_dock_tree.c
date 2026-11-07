@@ -137,6 +137,7 @@ static void draw_leaf(system_element_context* ui_element, system_dock_node* node
                 mesh->is_dragging   = true;
                 s_tab.pending    = view_type_none;
                 dock_leaf_remove_view(node, i);
+                ui_element->active_id = 0;
                 started_drag = true;
                 break;
             }
@@ -225,7 +226,7 @@ void traverse_dock_tree(system_element_context* ui_element, system_dock_node* no
         s_tab.prev_down = ui_element->input.mouse_down;
         if (!ui_element->input.mouse_down) s_tab.pending = view_type_none;
         update_dock_spawn_requests(&dock_workspace, ui_element);
-        light_update_from_scene();      /* once per UI frame: a directional light object drives the sun */
+        update_light_from_scene();      /* once per UI frame: a directional light object drives the sun */
         mode_state_sync_from_ui(ui_element);    /* once per UI frame, here and not in the Modeler window: that window is closed in Sculpt / Paint */
         mode_menu_follow_state(ui_element);     /* whatever changed the mode, the flags and the Modeler / Sculpt / Paint windows follow it */
         sculpt_input_update(ui_element);        /* once per UI frame: sculpt strokes + mode_state mirror (system_sculpt_input.c) */

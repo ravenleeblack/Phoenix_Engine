@@ -103,7 +103,7 @@ bool edit_insert_loop_dragging(void) { return s_loop_drag; }
 
 void edit_insert_loop_cancel(system_element_context* ui_element)
 {
-    if (s_loop_drag && ui_element && ui_element->active_id == EDIT_OPS_LOCK_ID) ui_element->active_id = 0;
+    if (s_loop_drag && ui_element && ui_element->active_id == edit_ops_lock_id) ui_element->active_id = 0;
     s_loop_drag = false;
     s_loop_have = false;
     s_loop_slide = 0.0f;
@@ -113,7 +113,7 @@ bool edit_insert_loop_toggle(system_element_context* ui_element)
 {
     if (g_mode_state.context != mode_context_edit) { edit_msg("Insert Loop: switch to Edit mode first"); return false; }
     if (is_terrain_object(find_scene_object_by_id(g_scene_registry.selected_object_id))) { edit_msg("Insert Loop: not on terrain (fixed height grid)"); return false; }
-    manip_toggle_edit_tool(manip_edit_insert_loop);
+    toggle_manip_edit_tool(manip_edit_insert_loop);
     edit_target_weld_cancel(ui_element);
     edit_multicut_cancel(ui_element);
     edit_insert_loop_cancel(ui_element);
@@ -121,7 +121,7 @@ bool edit_insert_loop_toggle(system_element_context* ui_element)
     return true;
 }
 
-bool edit_insert_loop_wheel(float notches)
+bool consume_edit_insert_loop_wheel(float notches)
 {
     int d = (int)lroundf(notches);
     if (d == 0) d = (notches > 0.0f) ? 1 : -1;
@@ -132,7 +132,7 @@ bool edit_insert_loop_wheel(float notches)
     return true;
 }
 
-void edit_insert_loop_update(const edit_frame* f)
+void update_edit_insert_loop(const edit_frame* f)
 {
     system_element_context* ui_element = f->ui_element;
     edit_mode_mesh* mesh = f->mesh;
@@ -144,7 +144,7 @@ void edit_insert_loop_update(const edit_frame* f)
             if (e != EM_NONE && edit_ring_build(mesh, e, &s_ring)) s_loop_have = true;
         }
         if (f->press && f->inside && s_loop_have && ui_element->active_id == 0) {
-            s_loop_drag = true; s_loop_x0 = ui_element->input.mouse_x; s_loop_slide = 0.0f; ui_element->active_id = EDIT_OPS_LOCK_ID;
+            s_loop_drag = true; s_loop_x0 = ui_element->input.mouse_x; s_loop_slide = 0.0f; ui_element->active_id = edit_ops_lock_id;
         }
         return;
     }
@@ -178,8 +178,8 @@ void edit_insert_loop_draw(VkCommandBuffer cmd, const edit_mode_camera_context* 
         const uint32_t e1 = i, e2 = (i + 1) % s_ring.n;
         for (int j = 1; j <= s_loop_count; ++j) {
             const float t = system_math_compute_loop_t(j, s_loop_count, slide);
-            const cam_screen p1 = edit_project(cam, lerp3(mesh->verts[s_ring.a[e1]].obj_vert_pos, mesh->verts[s_ring.b[e1]].obj_vert_pos, t));
-            const cam_screen p2 = edit_project(cam, lerp3(mesh->verts[s_ring.a[e2]].obj_vert_pos, mesh->verts[s_ring.b[e2]].obj_vert_pos, t));
+            const cam_screen p1 = project_edit_point(cam, lerp3(mesh->verts[s_ring.a[e1]].obj_vert_pos, mesh->verts[s_ring.b[e1]].obj_vert_pos, t));
+            const cam_screen p2 = project_edit_point(cam, lerp3(mesh->verts[s_ring.a[e2]].obj_vert_pos, mesh->verts[s_ring.b[e2]].obj_vert_pos, t));
             if (p1.ok && p2.ok) edit_line2d(cmd, p1.x, p1.y, p2.x, p2.y, 2.0f, s_ring.clean ? system_theme.system_color_edit_mode_preview_color : system_theme.system_color_edit_mode_invalid_color);
         }
     }

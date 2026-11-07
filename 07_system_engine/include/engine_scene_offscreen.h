@@ -36,16 +36,8 @@ typedef enum {
     offscreen_count
 } offscreen_kind;
 
-#define OFFSCREEN_SCENE offscreen_scene
-#define OFFSCREEN_GAME offscreen_game
-#define OFFSCREEN_COUNT offscreen_count
-#define offscreen_record_frame record_offscreen_frame
-#define offscreen_create_renderpass create_offscreen_renderpass
-#define offscreen_create_resources create_offscreen_resources
-#define offscreen_shutdown shutdown_offscreen
-
 /* 1. Call after the swapchain exists and BEFORE create_vulkan_graphics_pipelines (grid + mesh pipelines are built against this pass). */
-phoenix_engine_api bool create_offscreen_renderpass(VkFormat color_format, VkFormat depth_format);
+phoenix_engine_api bool create_offscreen_renderpass(VkDevice device, VkFormat color_format, VkFormat depth_format);
 
 /* 2. Call after create_vulkan_graphics_pipelines (needs render_context.descriptor_layout): sampler + descriptor sets. Images are created lazily. */
 phoenix_engine_api bool create_offscreen_resources(void);

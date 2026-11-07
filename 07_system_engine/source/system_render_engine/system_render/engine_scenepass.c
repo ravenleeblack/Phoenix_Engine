@@ -1,12 +1,15 @@
 #include "engine_globals.h"
 
 
-void start_system_scenepass(VkCommandBuffer cmd, system_render_context* context, system_element_context* system_ui, float delta_time)
+void start_system_scenepass(VkCommandBuffer cmd)
 {
-    (void)context;
-    (void)system_ui;
-    if (g_editor.draw_ui) {
-        g_editor.draw_ui(cmd, delta_time);
+    if (g_editor.draw_menubar && g_editor.draw_toolbar && g_editor.draw_dock &&
+        g_editor.draw_statusbar && g_editor.flush_ui) {
+        g_editor.draw_menubar(cmd);
+        g_editor.draw_toolbar(cmd);
+        g_editor.draw_dock(cmd);
+        g_editor.draw_statusbar(cmd);
+        g_editor.flush_ui(cmd);
     }
 }
 

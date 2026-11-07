@@ -80,6 +80,7 @@ typedef struct
     int mouse_x;
     int mouse_y;
     bool mouse_down;
+    bool mouse_pressed;
     bool alt_pressed;
     bool middle_down;
     bool camera_manipulating;
@@ -211,15 +212,15 @@ typedef enum {
 } number_field_result;
 
 /* id must be unique per box (and the same every frame). Returns what happened to *value this frame. */
-number_field_result ui_number_field(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id,
+number_field_result draw_number_field(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id,
                                     int x, int y, int w, int h, float* value, const number_field_opts* opts);
 
 /* true while any box is being scrubbed or typed into */
-bool number_field_is_active(void);
+bool is_number_field_active(void);
 
 /* true while a box is taking typed keys. Put   if (number_field_is_editing()) return;
    at the top of every keyboard shortcut (Delete, Backspace, 1 2 3, T ...) so typing a number does not trigger them. */
-bool number_field_is_editing(void);
+bool is_number_field_editing(void);
 
 
 /* Base Initialization Operations */

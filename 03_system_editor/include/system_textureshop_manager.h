@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "system_math.h"
-#include "system_object_database.h"   /* OBJECT_DATA_USER, enum_object_data_kind */
+#include "system_object_database.h"   /* object_data_user, enum_object_data_kind */
 /*
 RULES THAT MUST BE FOLLOWED.
 uncomment as we start getting things fixed: 
@@ -27,7 +27,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 */
 
 /* 1 = editor_vertex is x y z r g b a u vert_to_edge_array nx ny nz (48 bytes). The mesh pipeline (system_scene_draw.c) and
-   mesh_vert.glsl / mesh_frag.glsl read all of it. The grid shader (scene_3d.glsl) has no vertex input, so it is not affected.
+   mesh_vert.glsl / mesh_frag.glsl read all of it. The grid shader (grid_vert.glsl) has no vertex input, so it is not affected.
    Set to 0 only together with reverting editor_vertex, the pipeline attributes and the mesh shaders. */
 #define PHOENIX_VERTEX_HAS_UV_NORMAL 1
 
@@ -41,7 +41,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /* ------------------------------------------------------------------------- */
 /* Skin assignment: which skin an object wears.                              */
 /*                                                                           */
-/* One small block per object in the object database (system_object_database.h), kind OBJECT_DATA_USER + 0.  */
+/* One small block per object in the object database (system_object_database.h), kind object_data_user + 0.  */
 /* The scene registry stays the light list, so system_scene_object does not change and nothing needs a make clean.   */
 /* The block holds a skin ID (texshop_skin.id), never an array index: indexes move when a skin is deleted.        */
 /* No block, or an id that no longer exists = no skin = the object keeps the empty-skin grey.                      */

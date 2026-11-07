@@ -6,86 +6,6 @@
 /* ========================================================================= */
 #define system_rgba(r, g, b, a) { (r) / 255.0f, (g) / 255.0f, (b) / 255.0f, (a) / 255.0f }
 
-/* Unified System Palette - Neutrals */
-system_color system_color_pure_black   = system_rgba(  0,   0,   0, 255);
-system_color system_color_flat_black   = system_rgba( 20,  20,  20, 255);
-
-system_color system_color_less_flat_black   = system_rgba( 30,  30,  30, 255);
-system_color system_color_charcoal     = system_rgba( 40,  40,  40, 255);
-
-system_color system_color_dark_gray_1  = system_rgba( 50,  50,  50, 255);
-system_color system_color_dark_gray_2  = system_rgba( 60,  60,  60, 255);
-
-system_color system_color_mid_gray_1   = system_rgba( 80,  80,  80, 255);
-system_color system_color_mid_gray_2   = system_rgba(100, 100, 108, 255);
-
-system_color system_color_light_gray_1 = system_rgba(130, 130, 138, 255);
-system_color system_color_light_gray_2 = system_rgba(162, 162, 170, 255);
-
-system_color system_color_black        = system_rgba(  0,   0,   0, 255);
-system_color system_color_dark_gray    = system_rgba( 38,  38,  38, 255);
-system_color system_color_light_gray   = system_rgba(115, 115, 115, 255);
-system_color system_color_white        = system_rgba(255, 255, 255, 255);
-system_color system_color_near_white   = system_rgba(245, 245, 247, 255);
-
-/* Unified System Palette - Original Colors Renamed */
-system_color system_color_tea_green    = system_rgba(128, 128,   0, 255);
-system_color system_color_french_gray  = system_rgba(213, 197, 200, 255);
-system_color system_color_orange       = system_rgba(204, 102,   0, 255);
-system_color system_color_teal         = system_rgba(  0, 128, 128, 255);
-system_color system_color_slate        = system_rgba(113, 143, 148, 255);
-
-/* Unified System Palette - Plums */
-system_color system_color_darkest_plum  = system_rgba( 18,  12,  18, 255);
-system_color system_color_dark_plum    = system_rgba( 32,  20,  30, 255);
-system_color system_color_deep_plum    = system_rgba( 48,  30,  44, 255);
-system_color system_color_mid_plum     = system_rgba( 76,  50,  70, 255);
-system_color system_color_light_plum   = system_rgba(114,  84, 106, 255);
-system_color system_color_med_plum     = system_rgba( 48,  33,  42, 255);
-system_color system_color_muted_plum   = system_rgba(148, 118, 140, 255);
-
-/* Unified System Palette - Teals */
-system_color system_color_dark_teal    = system_rgba(  0,  72,  72, 255);
-system_color system_color_teal_alt     = system_rgba(  0, 128, 128, 255);
-system_color system_color_bright_teal  = system_rgba(  0, 185, 182, 255);
-system_color system_color_cyan         = system_rgba(  0, 210, 220, 255);
-
-/* Unified System Palette - Blues */
-system_color system_color_navy         = system_rgba( 14,  28,  80, 255);
-system_color system_color_dark_blue    = system_rgba( 20,  52, 124, 255);
-system_color system_color_steel_blue   = system_rgba( 68, 110, 164, 255);
-system_color system_color_sky_blue     = system_rgba(100, 160, 214, 255);
-system_color system_color_ice_blue     = system_rgba(182, 212, 238, 255);
-
-/* Unified System Palette - Slates */
-system_color system_color_dark_slate   = system_rgba( 52,  72,  84, 255);
-system_color system_color_slate_alt    = system_rgba( 88, 118, 134, 255);
-system_color system_color_light_slate  = system_rgba(132, 160, 172, 255);
-
-/* Unified System Palette - Greens */
-system_color system_color_dark_green   = system_rgba(  0,  76,  40, 255);
-system_color system_color_forest_green = system_rgba( 28, 110,  58, 255);
-system_color system_color_olive        = system_rgba(100, 108,   0, 255);
-system_color system_color_lime         = system_rgba( 78, 164,  38, 255);
-system_color system_color_mint         = system_rgba(138, 202, 160, 255);
-
-/* Unified System Palette - Oranges and Reds */
-system_color system_color_dark_red     = system_rgba(120,  18,  18, 255);
-system_color system_color_crimson      = system_rgba(184,  28,  40, 255);
-system_color system_color_red          = system_rgba(222,  50,  50, 255);
-system_color system_color_dark_orange  = system_rgba( 110,  50,   0, 255);
-system_color system_color_orange_alt   = system_rgba(210, 106,   0, 255);
-system_color system_color_amber        = system_rgba(224, 164,   0, 255);
-system_color system_color_gold         = system_rgba(202, 172,  58, 255);
-
-/* Unified System Palette - Pinks and Roses */
-system_color system_color_dark_rose    = system_rgba(124,  38,  58, 255);
-system_color system_color_rose         = system_rgba(182,  80, 102, 255);
-system_color system_color_pink         = system_rgba(222, 132, 152, 255);
-system_color system_color_silver       = system_rgba(196, 196, 200, 255);
-system_color system_color_pure_white   = system_rgba(255, 255, 255, 255);
-
-
 
 
 
@@ -563,26 +483,25 @@ static phoenix_system_theme build_maya(void)
     t.tab_hover_delta           = 0.06f;
 
     /* edit mode (shared by every theme) */
-    t.system_color_edit_mode_target_weld                    = system_color_sky_blue;
-    t.system_color_edit_mode_normal_color                   = system_color_bright_teal;
-    t.system_color_edit_mode_vert_color                     = system_color_light_gray_1;
-    t.system_color_edit_mode_vert_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_edge_color                     = system_color_mid_gray_2;
-    t.system_color_edit_mode_edge_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_face_color                     = system_color_light_gray_1;
-
-    t.system_color_edit_mode_face_active_color              = color_with_alpha(system_color_pure_white, 0.35f);
-    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_sky_blue, 0.30f);
-    t.system_color_edit_mode_extrude_face_active_color      = color_with_alpha(system_color_ice_blue, 0.50f);
-
-    t.system_color_edit_mode_vert_selection_color           = system_color_red;
-    t.system_color_edit_mode_edge_selection_color           = system_color_amber;
-    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_face_selection;
-    t.system_color_edit_mode_hover_color                    = system_color_cyan;
-    t.system_color_edit_mode_preview_color                  = system_color_amber;
-    t.system_color_edit_mode_invalid_color                  = system_color_red;
-
     t.system_edit_mode_active_face_hover                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_target_weld                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_normal_color                   = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_color                     = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_color                     = t.system_text;
+    t.system_color_edit_mode_edge_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_color                     = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_face_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_edit_mode_active_face_hover, 0.30f);
+    t.system_color_edit_mode_extrude_face_active_color      = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_vert_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_hover_color                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_preview_color                  = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_invalid_color                  = system_color_edit_mode_active_face_hover;
 
     return t;
 }
@@ -698,26 +617,25 @@ static phoenix_system_theme build_zbrush(void)
     t.tab_hover_delta           = 0.06f;
 
     /* edit mode (shared by every theme) */
-    t.system_color_edit_mode_target_weld                    = system_color_sky_blue;
-    t.system_color_edit_mode_normal_color                   = system_color_bright_teal;
-    t.system_color_edit_mode_vert_color                     = system_color_light_gray_1;
-    t.system_color_edit_mode_vert_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_edge_color                     = system_color_mid_gray_2;
-    t.system_color_edit_mode_edge_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_face_color                     = system_color_light_gray_1;
-
-    t.system_color_edit_mode_face_active_color              = color_with_alpha(system_color_pure_white, 0.35f);
-    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_sky_blue, 0.30f);
-    t.system_color_edit_mode_extrude_face_active_color      = color_with_alpha(system_color_ice_blue, 0.50f);
-
-    t.system_color_edit_mode_vert_selection_color           = system_color_red;
-    t.system_color_edit_mode_edge_selection_color           = system_color_amber;
-    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_face_selection;
-    t.system_color_edit_mode_hover_color                    = system_color_cyan;
-    t.system_color_edit_mode_preview_color                  = system_color_amber;
-    t.system_color_edit_mode_invalid_color                  = system_color_red;
-
     t.system_edit_mode_active_face_hover                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_target_weld                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_normal_color                   = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_color                     = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_color                     = t.system_text;
+    t.system_color_edit_mode_edge_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_color                     = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_face_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_edit_mode_active_face_hover, 0.30f);
+    t.system_color_edit_mode_extrude_face_active_color      = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_vert_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_hover_color                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_preview_color                  = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_invalid_color                  = system_color_edit_mode_active_face_hover;
 
     return t;
 }
@@ -833,26 +751,25 @@ static phoenix_system_theme build_plum(void)
     t.tab_hover_delta           = 0.06f;
 
     /* edit mode (shared by every theme) */
-    t.system_color_edit_mode_target_weld                    = system_color_sky_blue;
-    t.system_color_edit_mode_normal_color                   = system_color_bright_teal;
-    t.system_color_edit_mode_vert_color                     = system_color_light_gray_1;
-    t.system_color_edit_mode_vert_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_edge_color                     = system_color_mid_gray_2;
-    t.system_color_edit_mode_edge_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_face_color                     = system_color_light_gray_1;
-
-    t.system_color_edit_mode_face_active_color              = color_with_alpha(system_color_pure_white, 0.35f);
-    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_sky_blue, 0.30f);
-    t.system_color_edit_mode_extrude_face_active_color      = color_with_alpha(system_color_ice_blue, 0.50f);
-
-    t.system_color_edit_mode_vert_selection_color           = system_color_red;
-    t.system_color_edit_mode_edge_selection_color           = system_color_amber;
-    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_face_selection;
-    t.system_color_edit_mode_hover_color                    = system_color_cyan;
-    t.system_color_edit_mode_preview_color                  = system_color_amber;
-    t.system_color_edit_mode_invalid_color                  = system_color_red;
-
     t.system_edit_mode_active_face_hover                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_target_weld                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_normal_color                   = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_color                     = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_color                     = t.system_text;
+    t.system_color_edit_mode_edge_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_color                     = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_face_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_edit_mode_active_face_hover, 0.30f);
+    t.system_color_edit_mode_extrude_face_active_color      = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_vert_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_hover_color                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_preview_color                  = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_invalid_color                  = system_color_edit_mode_active_face_hover;
 
     return t;
 }
@@ -968,26 +885,25 @@ static phoenix_system_theme build_graphite(void)
     t.tab_hover_delta           = 0.06f;
 
     /* edit mode (shared by every theme) */
-    t.system_color_edit_mode_target_weld                    = system_color_sky_blue;
-    t.system_color_edit_mode_normal_color                   = system_color_bright_teal;
-    t.system_color_edit_mode_vert_color                     = system_color_light_gray_1;
-    t.system_color_edit_mode_vert_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_edge_color                     = system_color_mid_gray_2;
-    t.system_color_edit_mode_edge_active_color              = system_color_pure_white;
-    t.system_color_edit_mode_face_color                     = system_color_light_gray_1;
-
-    t.system_color_edit_mode_face_active_color              = color_with_alpha(system_color_pure_white, 0.35f);
-    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_sky_blue, 0.30f);
-    t.system_color_edit_mode_extrude_face_active_color      = color_with_alpha(system_color_ice_blue, 0.50f);
-
-    t.system_color_edit_mode_vert_selection_color           = system_color_red;
-    t.system_color_edit_mode_edge_selection_color           = system_color_amber;
-    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_face_selection;
-    t.system_color_edit_mode_hover_color                    = system_color_cyan;
-    t.system_color_edit_mode_preview_color                  = system_color_amber;
-    t.system_color_edit_mode_invalid_color                  = system_color_red;
-
     t.system_edit_mode_active_face_hover                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_target_weld                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_normal_color                   = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_color                     = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_vert_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_color                     = t.system_text;
+    t.system_color_edit_mode_edge_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_color                     = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_face_active_color              = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_extrude_face_color             = color_with_alpha(system_color_edit_mode_active_face_hover, 0.30f);
+    t.system_color_edit_mode_extrude_face_active_color      = system_color_edit_mode_active_face_hover;
+
+    t.system_color_edit_mode_vert_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_edge_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_face_selection_color           = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_hover_color                    = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_preview_color                  = system_color_edit_mode_active_face_hover;
+    t.system_color_edit_mode_invalid_color                  = system_color_edit_mode_active_face_hover;
 
     return t;
 }

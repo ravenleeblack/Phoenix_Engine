@@ -110,7 +110,7 @@ static void flow_edit_op(VkCommandBuffer cmd, system_element_context* ui_element
     const bool on = (tool == edit_target_weld      && g_manip.edit_tool == manip_edit_target_weld) ||
                     (tool == edit_insert_edge_loop && g_manip.edit_tool == manip_edit_insert_loop);
     if (flow_button(cmd, ui_element, f, label, on ? system_theme.tab_sub_menubar_button_active : system_theme.tab_sub_menubar_button)) {
-        edit_ops_run(ui_element, tool);               /* the reason for a failure is shown at the bottom of the Scene view */
+        run_edit_ops(ui_element, tool);               /* the reason for a failure is shown at the bottom of the Scene view */
         set_modeler_status("%s.", label);
     }
 }
@@ -153,10 +153,10 @@ static void reset_selected(system_scene_object* o, int what)   /* 0 obj_vert_pos
 {
     if (what == 0) {
         o->position = (editor_vec3){ 0, 0, 0 };
-        /* only the terrain object owns an OBJECT_DATA_TERRAIN block in the object database */
-        if (object_db_get(o->id, OBJECT_DATA_TERRAIN, NULL)) {
+        /* only the terrain object owns an object_data_terrain block in the object database */
+        if (object_db_get(o->id, object_data_terrain, NULL)) {
             terrain_location_q zero = { 0, 0, 0 };
-            terrain_set_location(zero);
+            set_terrain_location(zero);
         }
     } else if (what == 1) {
         o->rotation = (editor_vec3){ 0, 0, 0 };
@@ -209,9 +209,9 @@ static void tools_edit(VkCommandBuffer cmd, system_element_context* ui_element, 
 
     flow_text(cmd, ui_element, f, "Mesh operators", system_theme.system_text);
     {
-        float dist = edit_ops_get_extrude_distance();
+        float dist = get_edit_ops_extrude_distance();
         flow_stepper_f(cmd, ui_element, f, "Extrude dist", &dist, 0.25f, 0.0f, 100.0f);
-        edit_ops_set_extrude_distance(dist);
+        set_edit_ops_extrude_distance(dist);
     }
     flow_edit_op(cmd, ui_element, f, "Extrude",      edit_extrude);
     flow_edit_op(cmd, ui_element, f, "Bridge",       edit_bridge);
@@ -308,8 +308,14 @@ static void tools_paint(VkCommandBuffer cmd, system_element_context* ui_element,
 
     flow_text(cmd, ui_element, f, "Color", system_theme.system_text);
     const system_color swatches[8] = {
-        system_color_red, system_color_orange_alt, system_color_amber, system_color_lime,
-        system_color_bright_teal, system_color_sky_blue, system_color_pink, system_color_pure_white
+        system_theme.system_color_edit_mode_face_active_color,
+        system_theme.system_color_edit_mode_target_weld,
+        system_theme.system_color_edit_mode_preview_color,
+        system_theme.system_color_edit_mode_normal_color,
+        system_theme.system_color_edit_mode_normal_color,
+        system_theme.system_edit_mode_active_face_hover,
+        system_theme.system_color_edit_mode_face_selection_color,
+        system_theme.system_color_edit_mode_hover_color
     };
     for (int i = 0; i < 8; i++) {
         if (flow_button(cmd, ui_element, f, "  ", swatches[i])) {

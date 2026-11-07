@@ -57,7 +57,7 @@ bool get_terrain_lighting_enabled(void)
 }
 
 /* update_terrain_streaming() rebuilds the resident chunks next frame */
-void terrain_light_rebuild_all(void)
+void rebuild_terrain_light_all(void)
 {
     system_terrain* t = &g_terrain;
     if (!t->exists) return;
@@ -78,7 +78,7 @@ void set_terrain_light_layer(int layer)
     if (layer < 1 || layer >= terrain_max_layers) return;     /* layer 0 is the height grid */
     if (g_light.layer == layer) return;
     g_light.layer = layer;
-    terrain_light_rebuild_all();                               /* a different layer is a different set of cells */
+    rebuild_terrain_light_all();                               /* a different layer is a different set of cells */
 }
 
 void clear_terrain_light_layer(void)
@@ -96,7 +96,7 @@ void clear_terrain_light_layer(void)
         }
         lc[i].modified = true;
     }
-    terrain_light_rebuild_all();
+    rebuild_terrain_light_all();
 }
 
 /* Meshes bake the light into vertex colour, so every terrain chunk has to be rebuilt when the mode flips. */
@@ -104,7 +104,7 @@ void set_terrain_lighting_enabled(bool enabled)
 {
     if (g_light.enabled == enabled) return;
     g_light.enabled = enabled;
-    terrain_light_rebuild_all();
+    rebuild_terrain_light_all();
 }
 
 void get_terrain_light(const system_terrain* t, int gx, int gy, int gz, int* out_sky, int* out_block)

@@ -258,7 +258,7 @@ static void draw_origin_marker(VkCommandBuffer cmd, const editor_mat4* view, con
 /* Called at the end of create_vulkan_graphics_pipelines().            */
 /* Shaders: mesh_vert.spv / mesh_frag.spv (next to the exe).           */
 /* ------------------------------------------------------------------ */
-bool create_scene_object_pipeline(VkDevice device, VkRenderPass renderpass, bool has_depth)
+bool create_editor_scene_object_pipeline(VkPhysicalDevice physical_device, VkDevice device, VkRenderPass renderpass, bool has_depth)
 {
     const VkSampleCountFlagBits samples = get_msaa_sample_count();
 
@@ -287,7 +287,7 @@ bool create_scene_object_pipeline(VkDevice device, VkRenderPass renderpass, bool
     }
 
     VkPhysicalDeviceProperties dev_props;
-    vkGetPhysicalDeviceProperties(render_context.physical_device, &dev_props);
+    vkGetPhysicalDeviceProperties(physical_device, &dev_props);
     if (dev_props.limits.maxPushConstantsSize < MESH_PC_SIZE) {
         phoenix_error("SCENE3D", "GPU push constant limit is %u bytes, mesh shader needs %u.",
                       dev_props.limits.maxPushConstantsSize, (uint32_t)MESH_PC_SIZE);
@@ -889,6 +889,14 @@ static void draw_terrain_borders(VkCommandBuffer cmd, const editor_mat4* view, c
 void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* proj16)
 {
     static bool logged_missing_pipeline = false;
+    static bool logged_scene_objects_once = false;
+
+    if (!logged_scene_objects_once) {
+        logged_scene_objects_once = true;
+        phoenix_info("SCENE3D", "draw_scene_objects pipeline=%d object_count=%u",
+                     (int)(g_obj_pipeline != VK_NULL_HANDLE),
+                     g_scene_registry.object_count);
+    }
 
     if (g_obj_pipeline == VK_NULL_HANDLE) {
         if (!logged_missing_pipeline) {

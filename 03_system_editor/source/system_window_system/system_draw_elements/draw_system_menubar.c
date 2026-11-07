@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 /* local filled-rect helper: system_color in, one push_quad_element out. */
-static void push_menubar_rect(VkCommandBuffer cmd, float x, float y, float w, float h, system_color c)
+void push_menubar_rect(VkCommandBuffer cmd, float x, float y, float w, float h, system_color c)
 {
     push_quad_element(cmd, x, y, w, h, c);
 }
@@ -22,152 +22,116 @@ static void push_menubar_rect(VkCommandBuffer cmd, float x, float y, float w, fl
 /*  dropdowns overlap the dock and the dock handles input first.             */
 /* ========================================================================= */
 
-enum {
-    menubar_separator_h     = 7,     /* height of a separator row inside a dropdown */
-    menubar_header_pad      = 24,    /* text padding inside a header button         */
-    menubar_dropdown_min_w  = 150,   /* narrowest a dropdown can be                 */
-    menubar_control_w       = 32,    /* minimize / maximize / close button width    */
-    menubar_control_count   = 3,
-    menubar_header_y        = 4,
-    menubar_header_h        = 20,
-    menubar_char_w          = 8
+const struct_menu_item file_menu_items[] = {
+    { "New File",       menu_action_new_file,     true },
+    { "New Folder",     menu_action_new_folder,   true },
+    { "New Project",    menu_action_new_project,  false },
+    { "New Scene",      menu_action_new_scene,    false },
+    { NULL,              menu_action_none,        false },
+    { "Save Scene",     menu_action_save_scene,   false },
+    { "Save Project",   menu_action_save_project, false },
+    { "Save All",       menu_action_save_all,     false },
+    { NULL,              menu_action_none,        false },
+    { "Import...",      menu_action_import,       false },
+    { "Export...",      menu_action_export,       false },
+    { "Preferences...", menu_action_preferences,  true },
+    { NULL,              menu_action_none,        false },
+    { "Build",          menu_action_build,        false },
+    { NULL,              menu_action_none,        false },
+    { "Exit",           menu_action_exit,         true },
 };
 
-typedef enum {
-    menu_action_none = 0,
-    /* file */
-    menu_action_new_file, menu_action_new_folder, menu_action_new_project, menu_action_new_scene,
-    menu_action_save_scene, menu_action_save_project, menu_action_save_all,
-    menu_action_import, menu_action_export, menu_action_preferences,
-    menu_action_build, menu_action_exit,
-    /* edit */
-    menu_action_undo, menu_action_redo, menu_action_copy, menu_action_paste,
-    /* element (ui_element building) */
-    menu_action_element_canvas, menu_action_element_panel, menu_action_element_button,
-    menu_action_element_text, menu_action_element_image, menu_action_element_slider,
-    menu_action_element_toggle, menu_action_element_input, menu_action_element_scroll,
-    /* objects */
-    menu_action_object_empty, menu_action_object_terrain, menu_action_object_cube, menu_action_object_camera,
-    menu_action_object_directional_light,
-    menu_action_board_octagon, menu_action_board_diamond, menu_action_board_triangle_half, menu_action_board_triangle_quarter,
-    /* scripts */
-    menu_action_script_new, menu_action_script_attach, menu_action_script_open,
-    menu_action_script_reload, menu_action_script_settings
-} enum_menu_action;
-
-typedef struct {
-    const char*       label;          /* NULL = separator row */
-    enum_menu_action  action;
-    bool              implemented;    /* false = dim, prints "not implemented yet" */
-} struct_menu_item;
-
-typedef struct {
-    const char*              title;
-    const struct_menu_item*  items;
-    int                      face_type;
-} struct_menu_def;
-
-#define menu_entry(label, action, done)  { label, action, done }
-#define menu_separator                   { NULL, menu_action_none, false }
-#define count_of(array)                  ((int)(sizeof(array) / sizeof((array)[0])))
-
-static const struct_menu_item file_menu_items[] = {
-    menu_entry("New File",       menu_action_new_file,     true),
-    menu_entry("New Folder",     menu_action_new_folder,   true),
-    menu_entry("New Project",    menu_action_new_project,  false),
-    menu_entry("New Scene",      menu_action_new_scene,    false),
-    menu_separator,
-    menu_entry("Save Scene",     menu_action_save_scene,   false),
-    menu_entry("Save Project",   menu_action_save_project, false),
-    menu_entry("Save All",       menu_action_save_all,     false),
-    menu_separator,
-    menu_entry("Import...",      menu_action_import,       false),
-    menu_entry("Export...",      menu_action_export,       false),
-    menu_entry("Preferences...", menu_action_preferences,  true),
-    menu_separator,
-    menu_entry("Build",          menu_action_build,        false),
-    menu_separator,
-    menu_entry("Exit",           menu_action_exit,         true),
-};
-
-static const struct_menu_item edit_menu_items[] = {
-    menu_entry("Undo",  menu_action_undo,  false),
-    menu_entry("Redo",  menu_action_redo,  false),
-    menu_separator,
-    menu_entry("Copy",  menu_action_copy,  false),
-    menu_entry("Paste", menu_action_paste, false),
+const struct_menu_item edit_menu_items[] = {
+    { "Undo",  menu_action_undo,  false },
+    { "Redo",  menu_action_redo,  false },
+    { NULL,    menu_action_none,   false },
+    { "Copy",  menu_action_copy,   false },
+    { "Paste", menu_action_paste,  false },
 };
 
 /* real engine ui_element building blocks (not unity-style canvas objects). */
-static const struct_menu_item element_menu_items[] = {
-    menu_entry("Canvas",      menu_action_element_canvas, false),
-    menu_entry("Panel",       menu_action_element_panel,  false),
-    menu_separator,
-    menu_entry("Button",      menu_action_element_button, false),
-    menu_entry("Text",        menu_action_element_text,   false),
-    menu_entry("Image",       menu_action_element_image,  false),
-    menu_separator,
-    menu_entry("Slider",      menu_action_element_slider, false),
-    menu_entry("Toggle",      menu_action_element_toggle, false),
-    menu_entry("Input Field", menu_action_element_input,  false),
-    menu_entry("Scroll View", menu_action_element_scroll, false),
+const struct_menu_item element_menu_items[] = {
+    { "Canvas",      menu_action_element_canvas, false },
+    { "Panel",       menu_action_element_panel,  false },
+    { NULL,          menu_action_none,          false },
+    { "Button",      menu_action_element_button, false },
+    { "Text",        menu_action_element_text,   false },
+    { "Image",       menu_action_element_image,  false },
+    { NULL,          menu_action_none,          false },
+    { "Slider",      menu_action_element_slider, false },
+    { "Toggle",      menu_action_element_toggle, false },
+    { "Input Field", menu_action_element_input,  false },
+    { "Scroll View", menu_action_element_scroll, false },
 };
 
 /* only what can actually be placed in a scene right now. */
-static const struct_menu_item objects_menu_items[] = {
-    menu_entry("Create Empty",       menu_action_object_empty,             true),
-    menu_separator,
-    menu_entry("Terrain",            menu_action_object_terrain,           true),
-    menu_entry("Cube",               menu_action_object_cube,              true),
-    menu_entry("Camera",             menu_action_object_camera,            true),
-    menu_entry("Directional Light",  menu_action_object_directional_light, true),
-    menu_separator,
-    menu_entry("Board Octagon",          menu_action_board_octagon,          true),
-    menu_entry("Board Diamond",          menu_action_board_diamond,          true),
-    menu_entry("Board Triangle (half)",  menu_action_board_triangle_half,    true),
-    menu_entry("Board Triangle (quarter)", menu_action_board_triangle_quarter, true),
+const struct_menu_item objects_menu_items[] = {
+    { "Create Empty",       menu_action_object_empty,             true },
+    { NULL,                 menu_action_none,                    false },
+    { "Terrain",            menu_action_object_terrain,           true },
+    { "Cube",               menu_action_object_cube,              true },
+    { "Camera",             menu_action_object_camera,            true },
+    { "Directional Light",  menu_action_object_directional_light, true },
+    { NULL,                 menu_action_none,                    false },
+    { "Board Octagon",          menu_action_board_octagon,          true },
+    { "Board Diamond",          menu_action_board_diamond,          true },
+    { "Board Triangle (half)",  menu_action_board_triangle_half,    true },
+    { "Board Triangle (quarter)", menu_action_board_triangle_quarter, true },
 };
 
-static const struct_menu_item scripts_menu_items[] = {
-    menu_entry("New Script",         menu_action_script_new,      false),
-    menu_entry("Attach Script",      menu_action_script_attach,   false),
-    menu_entry("Open in Editor",     menu_action_script_open,     false),
-    menu_separator,
-    menu_entry("Reload Scripts",     menu_action_script_reload,   false),
-    menu_entry("Script Settings...", menu_action_script_settings, false),
+const struct_menu_item scripts_menu_items[] = {
+    { "New Script",         menu_action_script_new,      false },
+    { "Attach Script",      menu_action_script_attach,   false },
+    { "Open in Editor",     menu_action_script_open,     false },
+    { NULL,                 menu_action_none,            false },
+    { "Reload Scripts",     menu_action_script_reload,   false },
+    { "Script Settings...", menu_action_script_settings, false },
 };
 
-static const struct_menu_def main_menus[] = {
-    { "File",    file_menu_items,    count_of(file_menu_items)    },
-    { "Edit",    edit_menu_items,    count_of(edit_menu_items)    },
-    { "Element", element_menu_items, count_of(element_menu_items) },
-    { "Objects", objects_menu_items, count_of(objects_menu_items) },
-    { "Scripts", scripts_menu_items, count_of(scripts_menu_items) },
+const struct_menu_item window_menu_items[] = {
+    { "Hierarchy",     menu_action_window_hierarchy,     true },
+    { "Scene",         menu_action_window_scene,         true },
+    { "Game",          menu_action_window_game,          true },
+    { "Inspector",     menu_action_window_inspector,     true },
+    { NULL,            menu_action_none,                 false },
+    { "Modeler",       menu_action_window_modeler,       true },
+    { "Texture Shop",  menu_action_window_texture_shop,  true },
+    { "World Builder", menu_action_window_world_builder, true },
+    { "Timeline",      menu_action_window_timeline,      true },
 };
-enum { main_menu_count = 5 };   /* keep equal to the number of entries above */
 
+const struct_menu_def main_menus[] = {
+    { "File",    file_menu_items,    (int)(sizeof(file_menu_items) / sizeof(file_menu_items[0])) },
+    { "Edit",    edit_menu_items,    (int)(sizeof(edit_menu_items) / sizeof(edit_menu_items[0])) },
+    { "Element", element_menu_items, (int)(sizeof(element_menu_items) / sizeof(element_menu_items[0])) },
+    { "Objects", objects_menu_items, (int)(sizeof(objects_menu_items) / sizeof(objects_menu_items[0])) },
+    { "Scripts", scripts_menu_items, (int)(sizeof(scripts_menu_items) / sizeof(scripts_menu_items[0])) },
+    { "Window",  window_menu_items,  (int)(sizeof(window_menu_items) / sizeof(window_menu_items[0])) },
+};
 /* ------------------------------------------------------------------------- */
 /* state (one menu open at a time, -1 = none)                                 */
 /* ------------------------------------------------------------------------- */
 
-static int  open_menu_index    = -1;
-static bool mouse_was_pressed  = false;     /* rising edge_to_face_array of left mouse this frame */
+int  menubar_open_menu_index    = -1;
+bool menubar_mouse_was_pressed  = false;     /* rising edge_to_face_array of left mouse this frame */
+bool previous_menubar_mouse_down = false;
+const char* menubar_control_labels[menubar_control_count] = { "_", "[]", "X" };
 
 /* the dock can call this to ignore clicks while a dropdown is open. */
-bool is_menubar_menu_open(void) { return open_menu_index >= 0; }
+bool is_menubar_menu_open(void) { return menubar_open_menu_index >= 0; }
 
-static bool is_point_in_rect(int px, int py, int x, int y, int w, int h)
+bool is_point_in_rect(int px, int py, int x, int y, int w, int h)
 {
     return px >= x && px < (x + w) && py >= y && py < (y + h);
 }
 
-static void set_status_not_implemented(const char* label)
+void set_status_not_implemented(const char* label)
 {
     snprintf(status_bar_text_buffer, sizeof(status_bar_text_buffer), "%s: not implemented yet.", label);
 }
 
 /* status text goes to the statusbar (draw_system_statusbar.c reads status_bar_text_buffer). */
-static void set_menubar_status(const char* format, ...)
+void set_menubar_status(const char* format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -179,7 +143,16 @@ static void set_menubar_status(const char* format, ...)
 /* actions                                                                    */
 /* ------------------------------------------------------------------------- */
 
-static void run_menu_action(const struct_menu_item* item)
+void toggle_menubar_window(enum_view_type view, enum_view_type beside, enum_view_type fallback)
+{
+    if (dock_find_leaf_with_view(dock_workspace.root, view)) {
+        dock_close_view_type(&dock_workspace, view);
+    } else {
+        spawn_dock_view_beside(&dock_workspace, beside, fallback, view);
+    }
+}
+
+void run_menu_action(const struct_menu_item* item, system_element_context* ui_ctx)
 {
     switch (item->action) {
     case menu_action_exit:
@@ -238,6 +211,37 @@ static void run_menu_action(const struct_menu_item* item)
         open_preferences_window();
         set_menubar_status("Preferences opened.");
         break;
+    case menu_action_window_hierarchy:
+        toggle_menubar_window(view_type_hierarchy, view_type_scene, view_type_inspector);
+        break;
+    case menu_action_window_scene:
+        toggle_menubar_window(view_type_scene, view_type_hierarchy, view_type_game);
+        break;
+    case menu_action_window_game:
+        toggle_menubar_window(view_type_game, view_type_scene, view_type_hierarchy);
+        break;
+    case menu_action_window_inspector:
+        toggle_menubar_window(view_type_inspector, view_type_scene, view_type_hierarchy);
+        break;
+    case menu_action_window_modeler:
+        toggle_menubar_window(view_type_modeler, view_type_inspector, view_type_hierarchy);
+        break;
+    case menu_action_window_texture_shop:
+        if (dock_find_leaf_with_view(dock_workspace.root, view_type_textureshop))
+            dock_close_view_type(&dock_workspace, view_type_textureshop);
+        else
+            open_texture_shop_windows(&dock_workspace, ui_ctx);
+        break;
+    case menu_action_window_world_builder:
+        ui_ctx->spawn_worldbuilder_window = !dock_find_leaf_with_view(dock_workspace.root, view_type_worldbld);
+        if (ui_ctx->spawn_worldbuilder_window)
+            open_world_builder_windows(&dock_workspace, ui_ctx);
+        else
+            dock_close_view_type(&dock_workspace, view_type_worldbld);
+        break;
+    case menu_action_window_timeline:
+        toggle_menubar_window(view_type_timeline, view_type_scene, view_type_inspector);
+        break;
 
     /* same thing the file archive right click menu does: goes into the obj_vert_selected folder (or the asset root) */
     case menu_action_new_file:
@@ -259,10 +263,10 @@ static void run_menu_action(const struct_menu_item* item)
 /* dropdown geometry + drawing                                                */
 /* ------------------------------------------------------------------------- */
 
-static int get_menu_width(const struct_menu_def* menu)
+int get_menu_width(const struct_menu_def* menu)
 {
     int w = menubar_dropdown_min_w;
-    for (int i = 0; i < menu->face_type; i++) {
+    for (int i = 0; i < menu->item_count; i++) {
         if (!menu->items[i].label) continue;
         int needed = (int)strlen(menu->items[i].label) * menubar_char_w + 28;
         if (needed > w) w = needed;
@@ -270,20 +274,20 @@ static int get_menu_width(const struct_menu_def* menu)
     return w;
 }
 
-static int get_menu_height(const struct_menu_def* menu)
+int get_menu_height(const struct_menu_def* menu)
 {
     int h = menu_pad_top + menu_pad_bottom;
-    for (int i = 0; i < menu->face_type; i++) h += menu->items[i].label ? menu_item_h : menubar_separator_h;
+    for (int i = 0; i < menu->item_count; i++) h += menu->items[i].label ? menu_item_h : menubar_separator_h;
     return h;
 }
 
 /* panel behind a dropdown: square top (butts against the menubar), rounded bottom, 1px border. */
-static void draw_dropdown_panel(VkCommandBuffer cmd, int x, int w, int h)
+void draw_dropdown_panel(VkCommandBuffer cmd, int x, int w, int h)
 {
-    push_rounded_quad(cmd, (float)(x - 1), (float)menu_drop_y, (float)(w + 2), (float)(h + 1),
-                      system_theme.dropdown_outline, menu_radius, corner_bottom);
-    push_rounded_quad(cmd, (float)x, (float)menu_drop_y, (float)w, (float)h,
-                      system_theme.menubar_background, menu_radius, corner_bottom);
+    push_menubar_rect(cmd, (float)(x - 1), (float)menu_drop_y, (float)(w + 2), (float)(h + 1),
+                      system_theme.dropdown_outline);
+    push_menubar_rect(cmd, (float)x, (float)menu_drop_y, (float)w, (float)h,
+                      system_theme.menubar_background);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -291,7 +295,7 @@ static void draw_dropdown_panel(VkCommandBuffer cmd, int x, int w, int h)
 /* clipped to [x0, x1). adding things here can never move a static button.    */
 /* ------------------------------------------------------------------------- */
 
-static bool draw_dynamic_zone_button(VkCommandBuffer cmd, system_element_context* ui_ctx, const char* label,
+bool draw_dynamic_zone_button(VkCommandBuffer cmd, system_element_context* ui_ctx, const char* label,
                                      int* x, int x1, bool is_active)
 {
     int w = (int)strlen(label) * menubar_char_w + 16;
@@ -306,11 +310,11 @@ static bool draw_dynamic_zone_button(VkCommandBuffer cmd, system_element_context
     draw_text_element(cmd, ui_ctx, label, *x + 8, menubar_header_y + (menubar_header_h - ui_font_h) / 2,
                       (is_active || is_hovered) ? system_theme.system_active_text : system_theme.system_text);
     *x += w + 2;
-    return is_hovered && mouse_was_pressed;
+    return is_hovered && menubar_mouse_was_pressed;
 }
 
 /* read-only value shown in the dynamic zone (brush size, opacity). dropped when it does not fit, like a button. */
-static void draw_dynamic_zone_readout(VkCommandBuffer cmd, system_element_context* ui_ctx, const char* text, int* x, int x1)
+void draw_dynamic_zone_readout(VkCommandBuffer cmd, system_element_context* ui_ctx, const char* text, int* x, int x1)
 {
     const int w = (int)strlen(text) * menubar_char_w;
     if (*x + w > x1) return;
@@ -318,7 +322,7 @@ static void draw_dynamic_zone_readout(VkCommandBuffer cmd, system_element_contex
     *x += w + 12;
 }
 
-static void draw_dynamic_zone(VkCommandBuffer cmd, system_element_context* ui_ctx, int x0, int x1)
+void draw_dynamic_zone(VkCommandBuffer cmd, system_element_context* ui_ctx, int x0, int x1)
 {
     mode_state_sync_from_ui(ui_ctx);
 
@@ -388,9 +392,12 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
     int w = (int)swapchain->extent.width;
 
     /* rising edge_to_face_array of the left mouse button, computed once per frame. */
-    static bool previous_mouse_down = false;
-    mouse_was_pressed   = ui_ctx->input.mouse_down && !previous_mouse_down;
-    previous_mouse_down = ui_ctx->input.mouse_down;
+    menubar_mouse_was_pressed = ui_ctx->input.mouse_pressed;
+    if (menubar_mouse_was_pressed) {
+        phoenix_trace("Menubar", "mouse press processed at (%d,%d)", ui_ctx->input.mouse_x, ui_ctx->input.mouse_y);
+    }
+    ui_ctx->input.mouse_pressed = false;
+    previous_menubar_mouse_down = ui_ctx->input.mouse_down;
 
     const int mouse_x = ui_ctx->input.mouse_x;
     const int mouse_y = ui_ctx->input.mouse_y;
@@ -408,14 +415,15 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
         header_x[i] = x;
 
         bool is_hovered = is_point_in_rect(mouse_x, mouse_y, x, menubar_header_y, header_w, menubar_header_h);
-        if (mouse_was_pressed && is_hovered) {
-            open_menu_index = (open_menu_index == i) ? -1 : i;
+        if (menubar_mouse_was_pressed && is_hovered) {
+            phoenix_trace("Menubar", "opening %s at header x=%d y=%d", main_menus[i].title, x, menubar_header_y);
+            menubar_open_menu_index = (menubar_open_menu_index == i) ? -1 : i;
             click_used = true;
-        } else if (open_menu_index >= 0 && open_menu_index != i && is_hovered) {
-            open_menu_index = i;             /* sliding across headers while one is open switches menus */
+        } else if (menubar_open_menu_index >= 0 && menubar_open_menu_index != i && is_hovered) {
+            menubar_open_menu_index = i;             /* sliding across headers while one is open switches menus */
         }
 
-        bool is_open = (open_menu_index == i);
+        bool is_open = (menubar_open_menu_index == i);
         if (is_open)         push_menubar_rect(cmd, (float)x, (float)menubar_header_y, (float)header_w, (float)menubar_header_h, system_theme.menubar_background);
         else if (is_hovered) push_menubar_rect(cmd, (float)x, (float)menubar_header_y, (float)header_w, (float)menubar_header_h, system_theme.system_border);
 
@@ -436,7 +444,6 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
     const int separator_2_x   = control_x0 - 7;
     push_menubar_rect(cmd, (float)separator_2_x, (float)separator_y, 1.0f, (float)separator_h, system_theme.menu_vert_separator);
 
-    static const char* control_labels[menubar_control_count] = { "_", "[]", "X" };
     for (int k = 0; k < menubar_control_count; k++) {
         int button_x = control_x0 + k * menubar_control_w;
         int button_h = menubar_h - 1;                                 /* stop above the border row */
@@ -447,14 +454,14 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
                                        (k == 2) ? system_theme.system_close_hover : system_theme.menubar_button);
         }
 
-        int text_w = (int)strlen(control_labels[k]) * menubar_char_w;
-        draw_text_element(cmd, ui_ctx, control_labels[k], button_x + (menubar_control_w - text_w) / 2,
+        int text_w = (int)strlen(menubar_control_labels[k]) * menubar_char_w;
+        draw_text_element(cmd, ui_ctx, menubar_control_labels[k], button_x + (menubar_control_w - text_w) / 2,
                           menubar_y + (button_h - ui_font_h) / 2,
                           is_hovered ? system_theme.system_active_text : system_theme.system_text);
 
-        if (is_hovered && mouse_was_pressed && !click_used) {
+        if (is_hovered && menubar_mouse_was_pressed && !click_used) {
             click_used = true;
-            open_menu_index = -1;
+            menubar_open_menu_index = -1;
             HWND window = hwnd_window_00 ? hwnd_window_00 : GetActiveWindow();
             if (k == 0 && window)      ShowWindow(window, SW_MINIMIZE);
             else if (k == 1 && window) ShowWindow(window, IsZoomed(window) ? SW_RESTORE : SW_MAXIMIZE);
@@ -468,18 +475,22 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
     if (dynamic_x1 > dynamic_x0) draw_dynamic_zone(cmd, ui_ctx, dynamic_x0, dynamic_x1);
 
     /* ================= open dropdown (drawn last, on top of everything) ================= */
-    if (open_menu_index >= 0) {
-        const struct_menu_def* menu = &main_menus[open_menu_index];
-        int drop_x = header_x[open_menu_index];
+    if (menubar_open_menu_index >= 0) {
+        const struct_menu_def* menu = &main_menus[menubar_open_menu_index];
+        int drop_x = header_x[menubar_open_menu_index];
         int drop_w = get_menu_width(menu);
         int drop_h = get_menu_height(menu);
+        phoenix_info("Menubar", "DRAWING %s dropdown at screen (%d,%d) %dx%d",
+                      menu->title, drop_x, menu_drop_y, drop_w, drop_h);
+        phoenix_trace("Menubar", "dropdown calc: drop_x=%d menu_drop_y=%d drop_w=%d drop_h=%d",
+                      drop_x, menu_drop_y, drop_w, drop_h);
 
         draw_dropdown_panel(cmd, drop_x, drop_w, drop_h);
 
         const struct_menu_item* clicked_item = NULL;
         int y = menu_drop_y + menu_pad_top;
 
-        for (int i = 0; i < menu->face_type; i++) {
+        for (int i = 0; i < menu->item_count; i++) {
             const struct_menu_item* item = &menu->items[i];
 
             if (!item->label) {                                       /* separator row */
@@ -493,7 +504,7 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
             if (is_hovered) {
                 push_menubar_rect(cmd, (float)(drop_x + 2), (float)y, (float)(drop_w - 4), (float)menu_item_h,
                                            system_theme.menu_item_selected);
-                if (mouse_was_pressed && !click_used) clicked_item = item;
+                if (menubar_mouse_was_pressed && !click_used) clicked_item = item;
             }
 
             system_color text_color = is_hovered ? system_theme.system_active_text
@@ -504,11 +515,12 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
 
         if (clicked_item) {
             click_used = true;
-            open_menu_index = -1;
-            run_menu_action(clicked_item);
-        } else if (mouse_was_pressed && !click_used &&
+            menubar_open_menu_index = -1;
+            phoenix_trace("Menubar", "selected %s", clicked_item->label);
+            run_menu_action(clicked_item, ui_ctx);
+        } else if (menubar_mouse_was_pressed && !click_used &&
                    !is_point_in_rect(mouse_x, mouse_y, drop_x, menu_drop_y, drop_w, drop_h)) {
-            open_menu_index = -1;                                     /* click anywhere else closes it */
+            menubar_open_menu_index = -1;                                     /* click anywhere else closes it */
         }
     }
 

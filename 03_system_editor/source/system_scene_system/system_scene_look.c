@@ -10,7 +10,7 @@ static VkPipelineLayout g_bg_layout   = VK_NULL_HANDLE;
 /* ------------------------------------------------------------------------- */
 /* presets                                                                    */
 /* ------------------------------------------------------------------------- */
-static const struct { const char* name; float top[3]; float bottom[3]; } k_presets[SCENE_LOOK_PRESET_COUNT] = {
+static const struct { const char* name; float top[3]; float bottom[3]; } k_presets[scene_look_preset_count] = {
     { "Maya", { 0.43f, 0.49f, 0.57f }, { 0.16f, 0.17f, 0.19f } },
     { "Dark", { 0.20f, 0.21f, 0.23f }, { 0.08f, 0.08f, 0.09f } },
     { "Sky",  { 0.30f, 0.50f, 0.80f }, { 0.76f, 0.83f, 0.91f } },
@@ -19,12 +19,12 @@ static const struct { const char* name; float top[3]; float bottom[3]; } k_prese
 
 const char* scene_look_preset_name(int i)
 {
-    return (i >= 0 && i < SCENE_LOOK_PRESET_COUNT) ? k_presets[i].name : "?";
+    return (i >= 0 && i < scene_look_preset_count) ? k_presets[i].name : "?";
 }
 
 void scene_look_apply_preset(int i)
 {
-    if (i < 0 || i >= SCENE_LOOK_PRESET_COUNT) return;
+    if (i < 0 || i >= scene_look_preset_count) return;
     memcpy(g_scene_bg.top,    k_presets[i].top,    sizeof(g_scene_bg.top));
     memcpy(g_scene_bg.bottom, k_presets[i].bottom, sizeof(g_scene_bg.bottom));
 }

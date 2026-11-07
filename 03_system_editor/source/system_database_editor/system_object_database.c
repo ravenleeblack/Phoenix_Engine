@@ -7,7 +7,7 @@ typedef struct {
     uint32_t        object_id;
     uint8_t         state;                         /* slot_empty / slot_used / slot_dead */
     uint8_t         face_type;
-    object_db_entry entries[OBJECT_DB_MAX_KINDS];
+    object_db_entry entries[object_db_max_kinds];
 } object_db_slot;
 
 enum { slot_empty = 0, slot_used = 1, slot_dead = 2 };
@@ -115,7 +115,7 @@ void shutdown_object_database(void)
 
 bool object_db_set(uint32_t object_id, enum_object_data_kind kind, const void* data, uint32_t size)
 {
-    if (object_id == 0 || kind == OBJECT_DATA_NONE || size > max_block_bytes) return false;
+    if (object_id == 0 || kind == object_data_none || size > max_block_bytes) return false;
 
     object_db_slot* s = get_or_create_slot(object_id);
     if (!s) return false;
@@ -125,7 +125,7 @@ bool object_db_set(uint32_t object_id, enum_object_data_kind kind, const void* d
         if (s->entries[i].kind == (uint32_t)kind) { e = &s->entries[i]; break; }
 
     if (!e) {
-        if (s->face_type >= OBJECT_DB_MAX_KINDS) {
+        if (s->face_type >= object_db_max_kinds) {
             if (s->face_type == 0) release_slot(s);
             return false;
         }
@@ -205,7 +205,7 @@ bool object_db_set_mesh(uint32_t object_id, const void* vertices, uint32_t verte
     memcpy(buf + sizeof(h), vertices, (size_t)vbytes);
     memcpy(buf + sizeof(h) + vbytes, indices, (size_t)ibytes);
 
-    bool ok = object_db_set(object_id, OBJECT_DATA_MESH_BLOB, buf, (uint32_t)total);
+    bool ok = object_db_set(object_id, object_data_mesh_blob, buf, (uint32_t)total);
     free(buf);
     return ok;
 }
@@ -214,7 +214,7 @@ bool object_db_get_mesh(uint32_t object_id, const void** vertices, uint32_t* ver
                         const uint32_t** indices, uint32_t* index_count)
 {
     uint32_t size = 0;
-    const uint8_t* buf = (const uint8_t*)object_db_get(object_id, OBJECT_DATA_MESH_BLOB, &size);
+    const uint8_t* buf = (const uint8_t*)object_db_get(object_id, object_data_mesh_blob, &size);
     if (!buf || size < sizeof(mesh_header)) return false;
 
     mesh_header h;
@@ -233,9 +233,6 @@ bool object_db_get_mesh(uint32_t object_id, const void** vertices, uint32_t* ver
 /* ------------------------------------------------------------------------- */
 /* file: "PHXO" | version | object face_type | { id, kind face_type, { kind, size, bytes } }                   */
 /* ------------------------------------------------------------------------- */
-#define OBJECT_DB_MAGIC   0x4F584850u      /* "PHXO" */
-#define OBJECT_DB_VERSION 1u
-
 bool object_db_save(const char* file_name)
 {
     char path[512], tmp[520];
@@ -245,7 +242,7 @@ bool object_db_save(const char* file_name)
     FILE* f = fopen(tmp, "wb");
     if (!f) return false;
 
-    uint32_t head[3] = { OBJECT_DB_MAGIC, OBJECT_DB_VERSION, s_used };
+    uint32_t head[3] = { object_database_file_magic, object_database_file_version, s_used };
     bool ok = fwrite(head, sizeof(head), 1, f) == 1;
 
     for (uint32_t i = 0; ok && i < s_capacity; i++) {
@@ -275,12 +272,12 @@ bool object_db_load(const char* file_name)
     if (!f) return false;
 
     uint32_t head[3];
-    if (fread(head, sizeof(head), 1, f) != 1 || head[0] != OBJECT_DB_MAGIC || head[1] != OBJECT_DB_VERSION) { fclose(f); return false; }
+    if (fread(head, sizeof(head), 1, f) != 1 || head[0] != object_database_file_magic || head[1] != object_database_file_version) { fclose(f); return false; }
 
     bool ok = true;
     for (uint32_t n = 0; ok && n < head[2]; n++) {
         uint32_t rec[2];
-        if (fread(rec, sizeof(rec), 1, f) != 1 || rec[1] > OBJECT_DB_MAX_KINDS) { ok = false; break; }
+        if (fread(rec, sizeof(rec), 1, f) != 1 || rec[1] > object_db_max_kinds) { ok = false; break; }
         for (uint32_t k = 0; k < rec[1]; k++) {
             uint32_t eh[2];
             if (fread(eh, sizeof(eh), 1, f) != 1 || eh[1] > max_block_bytes) { ok = false; break; }

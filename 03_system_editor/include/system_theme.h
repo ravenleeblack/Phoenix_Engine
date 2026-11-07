@@ -38,6 +38,7 @@ typedef struct system_color
     float alpha;
 } system_color;
 
+
 /* ------------------------------------------------------------- ui_element layout */
 /* vertical stack, every bar touches the next one (no gaps)
    y=0   .. 26  menubar   (menubar_h = 28, last row y=27 is its border)
@@ -99,84 +100,6 @@ enum {
 
 /* -------------------------------------------------------- color palette */
 
-/* Unified System Palette - Neutrals */
-extern system_color system_color_pure_black;
-extern system_color system_color_flat_black;
-extern system_color system_color_less_flat_black;
-extern system_color system_color_charcoal;
-
-
-extern system_color system_color_dark_gray_1;
-extern system_color system_color_dark_gray_2;
-
-extern system_color system_color_mid_gray_1;
-extern system_color system_color_mid_gray_2;
-
-extern system_color system_color_light_gray_1;
-extern system_color system_color_light_gray_2;
-
-extern system_color system_color_black;
-extern system_color system_color_dark_gray;
-extern system_color system_color_light_gray;
-extern system_color system_color_white;
-extern system_color system_color_near_white;
-
-/* Unified System Palette - Original Colors Renamed */
-extern system_color system_color_tea_green;
-extern system_color system_color_french_gray;
-extern system_color system_color_orange;
-extern system_color system_color_teal;
-extern system_color system_color_slate;
-
-/* Unified System Palette - Plums */
-extern system_color system_color_darkest_plum;
-extern system_color system_color_dark_plum;
-extern system_color system_color_deep_plum;
-extern system_color system_color_mid_plum;
-extern system_color system_color_light_plum;
-extern system_color system_color_med_plum;
-extern system_color system_color_muted_plum;
-
-/* Unified System Palette - Teals */
-extern system_color system_color_dark_teal;
-extern system_color system_color_teal_alt;
-extern system_color system_color_bright_teal;
-extern system_color system_color_cyan;
-
-/* Unified System Palette - Blues */
-extern system_color system_color_navy;
-extern system_color system_color_dark_blue;
-extern system_color system_color_steel_blue;
-extern system_color system_color_sky_blue;
-extern system_color system_color_ice_blue;
-
-/* Unified System Palette - Slates */
-extern system_color system_color_dark_slate;
-extern system_color system_color_slate_alt;
-extern system_color system_color_light_slate;
-
-/* Unified System Palette - Greens */
-extern system_color system_color_dark_green;
-extern system_color system_color_forest_green;
-extern system_color system_color_olive;
-extern system_color system_color_lime;
-extern system_color system_color_mint;
-
-/* Unified System Palette - Oranges and Reds */
-extern system_color system_color_dark_red;
-extern system_color system_color_crimson;
-extern system_color system_color_red;
-extern system_color system_color_dark_orange;
-extern system_color system_color_orange_alt;
-extern system_color system_color_amber;
-extern system_color system_color_gold;
-
-/* Unified System Palette - Pinks and Roses */
-extern system_color system_color_dark_rose;
-extern system_color system_color_rose;
-extern system_color system_color_pink;
-extern system_color system_color_silver;
-extern system_color system_color_pure_white;
 
 extern system_color system_color_edit_mode_face_selection;
 extern system_color system_color_edit_mode_active_face_hover;

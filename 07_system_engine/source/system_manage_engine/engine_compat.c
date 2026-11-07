@@ -91,5 +91,9 @@ void focus_system_grid_on_selected_object(void)
     world_camera* camera = get_editor_camera();
     if (!camera) return;
     camera->position = target;
-    camera->position.z += 5.0f;
+    camera->position.x += 12.0f;
+    camera->position.y += 8.0f;
+    camera->position.z += 12.0f;
+    camera->rotation.x = -0.45f;
+    camera->rotation.y = -0.78539816339f;
 }

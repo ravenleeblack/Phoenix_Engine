@@ -174,7 +174,7 @@ static void sun_from_rotation(editor_vec3 rot, float* az_deg, float* el_deg)
     *el_deg = el;
 }
 
-void light_update_from_scene(void)
+void update_light_from_scene(void)
 {
     s_driver = -1;
 
@@ -212,7 +212,7 @@ void light_object_set_enabled(int index, bool enabled)
     if (index >= 0 && index < s_light_count) s_lights[index].enabled = enabled;
 }
 
-void light_object_select(int index)
+void select_light_object(int index)
 {
     if (index >= 0 && index < s_light_count) g_scene_registry.selected_object_id = s_lights[index].object_id;
 }

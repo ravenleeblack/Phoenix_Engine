@@ -7,7 +7,7 @@ void draw_board_builder(system_element_context* ui_element, VkCommandBuffer cmd,
     if (h < 40) return;
     (void)w;
 
-    draw_text_element(cmd, ui_element, "Board (4 mesh pieces)", x, y, system_color_near_white);
+    draw_text_element(cmd, ui_element, "Board (4 mesh pieces)", x, y, system_theme.system_text);
 
     static const struct { const char* label; const char* note; } k_piece[] = {
         { "Octagon", "main tile" }, { "Diamond", "fills gaps between octagons" },
@@ -20,7 +20,7 @@ void draw_board_builder(system_element_context* ui_element, VkCommandBuffer cmd,
         if (by + bh > y + h) break;
         const bool clicked = draw_button_element(cmd, ui_element, 95500u + (uint32_t)i, k_piece[i].label, x, by, bw, bh, system_theme.strip_button);
         const bool hovered = validate_rectangle_hit(ui_element->input.mouse_x, ui_element->input.mouse_y, x, by, bw, bh);
-        draw_text_element(cmd, ui_element, k_piece[i].note, x + bw + 8, by + (bh - ui_font_h) / 2, system_color_light_gray_2);
+        draw_text_element(cmd, ui_element, k_piece[i].note, x + bw + 8, by + (bh - ui_font_h) / 2, system_theme.system_text);
 
         if (clicked || (hovered && edge_to_face_array)) {
             if      (i == 0) create_system_board_octagon(NULL);

@@ -260,7 +260,7 @@ static void draw_origin_marker(VkCommandBuffer cmd, const editor_mat4* view, con
 /* ------------------------------------------------------------------ */
 bool create_scene_object_pipeline(VkDevice device, VkRenderPass renderpass, bool has_depth)
 {
-    const VkSampleCountFlagBits samples = get_msaa_sample_count();
+    const VkSampleCountFlagBits samples = get_render_msaa_sample_count();
 
     if (g_obj_pipeline != VK_NULL_HANDLE) {
         if (g_obj_renderpass == renderpass && g_obj_samples == samples) return true;

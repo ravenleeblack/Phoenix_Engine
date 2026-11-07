@@ -165,14 +165,14 @@ static void select_row(edit_mode_mesh* mesh, enum_mesh_selection kind, uint32_t 
     }
 }
 
-void edit_row_select_update(const edit_frame* f)
+void update_edit_row_select(const edit_frame* f)
 {
     if (!f->press || !f->inside) return;
     system_element_context* ui_element = f->ui_element;
     edit_mode_mesh* mesh = f->mesh;
 
     const enum_mesh_selection kind = ui_element->active_select_type;
-    const edit_pick_selection p = edit_pick_element(mesh, kind, f->mx, f->my);
+    const edit_pick_selection p = pick_edit_element(mesh, kind, f->mx, f->my);
     const ULONGLONG now = GetTickCount64();
     const bool same = (p.index != EM_NONE) && s_last_click.index == p.index && s_last_click.kind == p.kind;
     const bool dbl  = same && (now - s_last_time) < 350 && abs(ui_element->input.mouse_x - s_last_mx) < 6 && abs(ui_element->input.mouse_y - s_last_my) < 6;

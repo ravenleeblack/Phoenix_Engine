@@ -10,14 +10,13 @@ void create_vulkan_renderpass(
     float depth,
     int stencil)
 {
-    (void)context;
     out_renderpass->x = x; out_renderpass->y = y;
     out_renderpass->w = w; out_renderpass->h = h;
     out_renderpass->r = r; out_renderpass->g = g;
     out_renderpass->b = b; out_renderpass->a = a;
     out_renderpass->depth = depth;
     out_renderpass->stencil = stencil;
-    out_renderpass->state = NOT_ALLOCATED;
+    out_renderpass->state = vulkan_render_pass_state_not_allocated;
 
     /* The main (UI) pass is plain 1-sample color straight into the swapchain image.
        MSAA + depth live in the offscreen scene pass (system_offscreen.c). */
@@ -61,8 +60,14 @@ void create_vulkan_renderpass(
     render_pass_info.dependencyCount = 1;
     render_pass_info.pDependencies   = &dependency;
 
+    VkDevice render_device = context->device.logical_device;
+    if (render_device == VK_NULL_HANDLE) {
+        phoenix_fatal("VULKAN", "%s", "Cannot create the master render pass with a null logical device!");
+        return;
+    }
+
     if (vkCreateRenderPass(
-            render_context.logical_device, 
+            render_device,
             &render_pass_info, 
             render_context.allocator, 
             &render_context.renderpass_main) != VK_SUCCESS) 
@@ -72,7 +77,7 @@ void create_vulkan_renderpass(
     }
 
     out_renderpass->handle = render_context.renderpass_main;
-    out_renderpass->state  = READY;
+    out_renderpass->state  = vulkan_render_pass_state_ready;
 
     phoenix_info("VULKAN", "%s", "Master UI VkRenderPass instantiated (1 sample, scene MSAA is offscreen).");
 }
@@ -98,23 +103,20 @@ void begin_vulkan_renderpass(
     begin_info.renderArea.extent.width = renderpass->w;
     begin_info.renderArea.extent.height = renderpass->h;
 
-    VkClearValue clear_values[2];
-    kzero_memory(clear_values, sizeof(VkClearValue) * 2);
+    VkClearValue clear_values[1];
+    kzero_memory(clear_values, sizeof(VkClearValue) * 1);
     clear_values[0].color.float32[0] = renderpass->r;
     clear_values[0].color.float32[1] = renderpass->g;
     clear_values[0].color.float32[2] = renderpass->b;
     clear_values[0].color.float32[3] = renderpass->a;
-    clear_values[1].depthStencil.depth = renderpass->depth;
-    clear_values[1].depthStencil.stencil = renderpass->stencil;
-
-    begin_info.clearValueCount = 2;
+    begin_info.clearValueCount = 1;     /* the ui pass has one color attachment and no depth */
     begin_info.pClearValues = clear_values;
 
     vkCmdBeginRenderPass(command_buffer->handle, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
-    command_buffer->state = COMMAND_BUFFER_STATE_IN_RENDER_PASS;
+    command_buffer->state = vulkan_command_buffer_state_in_render_pass;
 }
 
 void end_vulkan_renderpass(vulkan_command_buffer* command_buffer, vulkan_renderpass* renderpass) {
     vkCmdEndRenderPass(command_buffer->handle);
-    command_buffer->state = COMMAND_BUFFER_STATE_RECORDING;
+    command_buffer->state = vulkan_command_buffer_state_recording;
 }

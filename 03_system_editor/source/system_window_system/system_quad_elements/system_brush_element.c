@@ -427,7 +427,7 @@ bool brush_slider(VkCommandBuffer cmd, system_element_context* ui_element, uint3
     const bool active = (ui_element->active_id == id);
 
     /* draw */
-    draw_text_element(cmd, ui_element, label, x, y + (h - ui_font_h) / 2, system_color_light_gray_2);
+    draw_text_element(cmd, ui_element, label, x, y + (h - ui_font_h) / 2, system_theme.system_text);
     push_quad_element(cmd, (float)tx, (float)y, (float)tw, (float)h, system_theme.strip_button);
     const int fw = (int)(t * (float)(tw - 2));
     if (fw > 0) push_quad_element(cmd, (float)(tx + 1), (float)(y + 1), (float)fw, (float)(h - 2), color_with_alpha(system_theme.system_accent, 0.65f));
@@ -539,7 +539,7 @@ int brush_color_picker(VkCommandBuffer cmd, system_element_context* ui_element, 
     {   /* marker */
         const int px = x + (int)(s_cp.s * (float)(sv_w - 1)), py = y + (int)((1.0f - s_cp.vert_to_edge_array) * (float)(sv_h - 1));
         draw_icon_border(cmd, px - 4, py - 4, 9, 9, (system_color){ 0.0f, 0.0f, 0.0f, 0.9f });
-        draw_icon_border(cmd, px - 3, py - 3, 7, 7, system_color_pure_white);
+        draw_icon_border(cmd, px - 3, py - 3, 7, 7, system_theme.system_text);
     }
     draw_icon_border(cmd, x, y, sv_w, sv_h, system_theme.system_border);
 
@@ -554,7 +554,7 @@ int brush_color_picker(VkCommandBuffer cmd, system_element_context* ui_element, 
     {
         const int hy = y + (int)(s_cp.h * (float)(sv_h - 1));
         draw_icon_border(cmd, hue_x - 1, hy - 2, hue_w + 2, 5, (system_color){ 0.0f, 0.0f, 0.0f, 0.9f });
-        draw_icon_border(cmd, hue_x,     hy - 1, hue_w,     3, system_color_pure_white);
+        draw_icon_border(cmd, hue_x,     hy - 1, hue_w,     3, system_theme.system_text);
     }
 
     /* ---- preview, hex, Save, Del ---- */
@@ -568,7 +568,7 @@ int brush_color_picker(VkCommandBuffer cmd, system_element_context* ui_element, 
     const int save_w = 4 * ui_font_w + 8, del_w = 3 * ui_font_w + 8;
     const int bx_del = x + w - del_w, bx_save = bx_del - 4 - save_w;
     if (bx_save > x + 32 + 7 * ui_font_w + 4)
-        draw_text_element(cmd, ui_element, hex, x + 34, ry + (row_h - 2 - ui_font_h) / 2, system_color_light_gray_2);
+        draw_text_element(cmd, ui_element, hex, x + 34, ry + (row_h - 2 - ui_font_h) / 2, system_theme.system_text);
     if (bx_save > x + 34) {
         if (cp_button(cmd, ui_element, press, "Save", bx_save, ry, save_w, row_h - 2, false)) brush_saved_color_add(rgb);
         if (cp_button(cmd, ui_element, press, "Del",  bx_del,  ry, del_w,  row_h - 2, s_cp.del_mode)) s_cp.del_mode = !s_cp.del_mode;
@@ -593,7 +593,15 @@ int brush_color_palette(VkCommandBuffer cmd, system_element_context* ui_element,
     /* ---- saved ---- */
     const int saved_rows = (brush_saved_max + cols - 1) / cols;
     if (cy + 12 + saved_rows * (cell + g) > limit) goto palette;
-    draw_text_element(cmd, ui_element, s_cp.del_mode ? "Saved (click one to delete it)" : "Saved colours", x, cy, s_cp.del_mode ? system_color_amber : system_color_near_white);
+    system_color saved_label_color = system_theme.system_text;
+    if (s_cp.del_mode) {
+        saved_label_color = system_theme.system_color_edit_mode_preview_color;
+    }
+    const char* saved_label = "Saved colours";
+    if (s_cp.del_mode) {
+        saved_label = "Saved (click one to delete it)";
+    }
+    draw_text_element(cmd, ui_element, saved_label, x, cy, saved_label_color);
     cy += 12;
     for (int i = 0; i < brush_saved_max; i++) {
         const int sx = x + (i % cols) * (cell + g), sy = cy + (i / cols) * (cell + g);
@@ -601,7 +609,14 @@ int brush_color_palette(VkCommandBuffer cmd, system_element_context* ui_element,
         const bool hov = validate_rectangle_hit(mx, my, sx, sy, cell, cell);
         if (filled) push_quad_element(cmd, (float)sx, (float)sy, (float)cell, (float)cell, (system_color){ s_saved[i][0], s_saved[i][1], s_saved[i][2], 1.0f });
         else        push_quad_element(cmd, (float)sx, (float)sy, (float)cell, (float)cell, system_theme.strip_button);
-        draw_icon_border(cmd, sx, sy, cell, cell, (hov && filled) ? (s_cp.del_mode ? system_color_red : system_color_pure_white) : system_theme.system_border);
+        system_color saved_border_color = system_theme.system_border;
+        if (hov && filled) {
+            saved_border_color = system_theme.system_text;
+            if (s_cp.del_mode) {
+                saved_border_color = system_theme.system_color_edit_mode_invalid_color;
+            }
+        }
+        draw_icon_border(cmd, sx, sy, cell, cell, saved_border_color);
         if (filled && hov && press) {
             if (s_cp.del_mode) { brush_saved_color_remove(i); break; }
             for (int c = 0; c < 3; c++) rgb[c] = s_saved[i][c];
@@ -614,7 +629,7 @@ palette:
     {
         const int rows = brush_palette_count / cols;
         if (cy + 12 + rows * (cell + g) > limit) return cy - y;
-        draw_text_element(cmd, ui_element, "Colours", x, cy, system_color_near_white);
+        draw_text_element(cmd, ui_element, "Colours", x, cy, system_theme.system_text);
         cy += 12;
         for (int i = 0; i < brush_palette_count; i++) {
             const int sx = x + (i % cols) * (cell + g), sy = cy + (i / cols) * (cell + g);
@@ -622,7 +637,7 @@ palette:
             brush_palette_color(i, cc);
             const bool hov = validate_rectangle_hit(mx, my, sx, sy, cell, cell);
             push_quad_element(cmd, (float)sx, (float)sy, (float)cell, (float)cell, (system_color){ cc[0], cc[1], cc[2], 1.0f });
-            draw_icon_border(cmd, sx, sy, cell, cell, hov ? system_color_pure_white : system_theme.system_border);
+            draw_icon_border(cmd, sx, sy, cell, cell, hov ? system_theme.system_text : system_theme.system_border);
             if (hov && press) for (int c = 0; c < 3; c++) rgb[c] = cc[c];
         }
         cy += rows * (cell + g);

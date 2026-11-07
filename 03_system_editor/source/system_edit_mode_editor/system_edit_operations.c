@@ -25,25 +25,25 @@ static void cancel_all(system_element_context* ui_element)
 /* ------------------------------------------------------------------------- */
 /* mouse / wheel ownership                                                   */
 /* ------------------------------------------------------------------------- */
-bool edit_ops_wants_mouse(void)
+bool is_edit_ops_using_mouse(void)
 {
     if (g_mode_state.context != mode_context_edit) return false;
     if (edit_target_weld_dragging() || edit_insert_loop_dragging()) return true;
     return (g_manip.edit_tool == manip_edit_target_weld || g_manip.edit_tool == manip_edit_insert_loop || g_manip.edit_tool == manip_edit_multicut) &&
-           edit_in_scene_view(&element_context) && !manip_overlay_wants_mouse();
+           is_edit_in_scene_view(&element_context) && !is_manip_overlay_using_mouse();
 }
 
-bool edit_ops_consume_wheel(float notches)
+bool consume_edit_ops_wheel(float notches)
 {
     if (g_mode_state.context != mode_context_edit) return false;
-    if (!edit_in_scene_view(&element_context)) return false;
-    if (g_manip.edit_tool == manip_edit_multicut)    return edit_multicut_wheel(notches);      /* only while CTRL is held */
-    if (g_manip.edit_tool == manip_edit_insert_loop) return edit_insert_loop_wheel(notches);
+    if (!is_edit_in_scene_view(&element_context)) return false;
+    if (g_manip.edit_tool == manip_edit_multicut)    return consume_edit_multicut_wheel(notches);
+    if (g_manip.edit_tool == manip_edit_insert_loop) return consume_edit_insert_loop_wheel(notches);
     return false;
 }
 
 /* tools that draw their own guide: the transform gizmo hides while they are on */
-bool edit_ops_wants_gizmo_hidden(void)
+bool is_edit_ops_hiding_gizmo(void)
 {
     if (g_mode_state.context != mode_context_edit) return false;
     return g_manip.edit_tool == manip_edit_target_weld || g_manip.edit_tool == manip_edit_multicut || g_manip.edit_tool == manip_edit_insert_loop;
@@ -52,7 +52,7 @@ bool edit_ops_wants_gizmo_hidden(void)
 /* ------------------------------------------------------------------------- */
 /* per frame                                                                 */
 /* ------------------------------------------------------------------------- */
-void edit_ops_update(system_element_context* ui_element)
+void update_edit_ops(system_element_context* ui_element)
 {
     if (!ui_element) return;
     if (s_frame_seen == g_ui_frame_index) return;           /* once per frame, however many Scene views draw */
@@ -63,25 +63,25 @@ void edit_ops_update(system_element_context* ui_element)
     s_prev_down = down;
 
     system_scene_object* obj = NULL; edit_mode_mesh* mesh = NULL;
-    const bool have = edit_get_target(&obj, &mesh);
+    const bool have = get_edit_target(&obj, &mesh);
     if (!have || g_manip.edit_tool == manip_edit_none) cancel_all(ui_element);
     if (!have) return;
     if (ui_element->input.camera_manipulating || ui_element->input.alt_pressed || is_context_menu_open()) { if (!down) cancel_all(ui_element); return; }
 
     edit_mode_camera_context cam;
-    if (!edit_cam_begin(&cam, ui_element, obj) || !edit_project_all(&cam, mesh)) return;
+    if (!begin_edit_camera(&cam, ui_element, obj) || !project_edit_points_all(&cam, mesh)) return;
 
     edit_frame f;
     f.ui_element = ui_element; f.obj = obj; f.mesh = mesh; f.cam = &cam;
     f.mx = (float)ui_element->input.mouse_x; f.my = (float)ui_element->input.mouse_y;
-    f.inside = edit_in_scene_view(ui_element) && !manip_overlay_wants_mouse();
+    f.inside = is_edit_in_scene_view(ui_element) && !is_manip_overlay_using_mouse();
     f.press = press; f.down = down;
 
     switch (g_manip.edit_tool) {
-    case manip_edit_target_weld: edit_target_weld_update(&f);  break;
-    case manip_edit_insert_loop: edit_insert_loop_update(&f);  break;
-    case manip_edit_multicut:    edit_multicut_update(&f);     break;
-    default:                     edit_row_select_update(&f);   break;      /* no tool: double click selects a row */
+    case manip_edit_target_weld: update_edit_target_weld(&f);  break;
+    case manip_edit_insert_loop: update_edit_insert_loop(&f);  break;
+    case manip_edit_multicut:    update_edit_multicut(&f);     break;
+    default:                     update_edit_row_select(&f);   break;      /* no tool: double click selects a row */
     }
 }
 
@@ -112,14 +112,14 @@ static void draw_active_elements(VkCommandBuffer cmd, const edit_mode_mesh* mesh
     }
 }
 
-void edit_ops_draw(VkCommandBuffer cmd, system_element_context* ui_element)
+void draw_edit_ops(VkCommandBuffer cmd, system_element_context* ui_element)
 {
     if (!ui_element) return;
 
     system_scene_object* obj = NULL; edit_mode_mesh* mesh = NULL;
-    if (edit_get_target(&obj, &mesh)) {
+    if (get_edit_target(&obj, &mesh)) {
         edit_mode_camera_context cam;
-        if (edit_cam_begin(&cam, ui_element, obj) && edit_project_all(&cam, mesh)) {
+        if (begin_edit_camera(&cam, ui_element, obj) && project_edit_points_all(&cam, mesh)) {
             draw_active_elements(cmd, mesh);
             edit_target_weld_draw(cmd, ui_element, mesh);
             edit_insert_loop_draw(cmd, &cam, mesh);
@@ -137,7 +137,7 @@ typedef bool (*op_fn)(edit_mode_mesh*, const char**);
 static bool run_instant(const char* name, op_fn fn)
 {
     system_scene_object* obj = NULL; edit_mode_mesh* mesh = NULL;
-    if (!edit_get_target(&obj, &mesh)) { edit_msg("%s: switch to Edit mode with an object selected", name); return false; }
+    if (!get_edit_target(&obj, &mesh)) { edit_msg("%s: switch to Edit mode with an object selected", name); return false; }
     if (is_terrain_object(obj))         { edit_msg("%s: not on terrain (fixed height grid). Select / move vertices with the gizmo instead", name); return false; }
     const char* err = NULL;
     if (!fn(mesh, &err))                { edit_msg("%s: %s", name, err ? err : "failed"); return false; }
@@ -156,7 +156,7 @@ bool edit_ops_tool_is_wired(system_edit_tools tool)
     }
 }
 
-bool edit_ops_run(system_element_context* ui_element, system_edit_tools tool)
+bool run_edit_ops(system_element_context* ui_element, system_edit_tools tool)
 {
     switch (tool) {
     case edit_extrude:           return run_instant("Extrude",      edit_op_extrude);

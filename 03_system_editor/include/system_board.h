@@ -50,7 +50,7 @@ typedef enum {
     BOARD_TILE_KIND_COUNT
 } enum_board_tile_kind;
 
-/* Stored in the object database as OBJECT_DATA_BOARD_TILE. */
+/* Stored in the object database as object_data_board_tile. */
 typedef struct {
     uint32_t kind;          /* enum_board_tile_kind */
     float    edge_m;

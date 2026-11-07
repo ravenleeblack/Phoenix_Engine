@@ -92,7 +92,7 @@ void update_element_input(system_element_context* context, int mouse_x, int mous
 {
     if (!context) return;
 
-    camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* cam = &engine_context.world_state.editor_scene_camera;
 
     int dx = mouse_x - g_mouse_prev_x;
     int dy = mouse_y - g_mouse_prev_y;
@@ -108,9 +108,33 @@ void update_element_input(system_element_context* context, int mouse_x, int mous
     context->input.alt_pressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
     context->input.middle_down = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
 
+    /* Scene-view movement uses the same frame-delivered key state as the rest of the editor.
+       Keep it horizontal when forward/backward keys are held, so WASD remains predictable in flight. */
+    if (is_cursor_in_scene_view()) {
+        const float move_speed = 0.75f;
+        float forward_amount = (input_is_key_down(phoenix_key_w) ? 1.0f : 0.0f)
+                             - (input_is_key_down(phoenix_key_s) ? 1.0f : 0.0f);
+        float right_amount   = (input_is_key_down(phoenix_key_d) ? 1.0f : 0.0f)
+                             - (input_is_key_down(phoenix_key_a) ? 1.0f : 0.0f);
+
+        float vertical_amount = (input_is_key_down(phoenix_key_e) ? 1.0f : 0.0f)
+                              - (input_is_key_down(phoenix_key_q) ? 1.0f : 0.0f);
+        if (forward_amount != 0.0f || right_amount != 0.0f || vertical_amount != 0.0f) {
+            float yaw = cam->rotation.y;
+            editor_vec3 forward = { sinf(yaw), 0.0f, -cosf(yaw) };
+            editor_vec3 right   = { cosf(yaw), 0.0f, sinf(yaw) };
+            cam->position.x += (forward.x * forward_amount + right.x * right_amount) * move_speed;
+            cam->position.y += vertical_amount * move_speed;
+            cam->position.z += (forward.z * forward_amount + right.z * right_amount) * move_speed;
+        }
+    }
+
     /* rule 1: hard intercept for the menu bar (top 30 pixels). stop any viewport camera manipulation up here. */
     if (mouse_y <= 30) {
         context->input.camera_manipulating = false;
+        if (!mouse_down && context->active_id != 0) {
+            context->active_id = 0;
+        }
         return;
     }
 

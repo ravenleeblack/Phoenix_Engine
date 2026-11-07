@@ -1,4 +1,5 @@
 #include "system_globals.h"
+#include "system_edit_manager.h"
 
 
 

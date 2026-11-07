@@ -296,7 +296,7 @@ static void set_select_type(system_element_context* ui_element, enum_mesh_select
 {
     system_scene_object* obj = NULL;
     edit_mode_mesh* mesh = NULL;
-    if (ui_element->active_select_type != t && edit_get_target(&obj, &mesh) && mesh)
+    if (ui_element->active_select_type != t && get_edit_target(&obj, &mesh) && mesh)
         em_sync_selection(mesh, ui_element->active_select_type);   /* make verts / edges / faces agree under the OLD type first */
     ui_element->active_select_type = t;
     g_mode_state.edit.select_type = t;
@@ -320,26 +320,26 @@ static void run_action(system_element_context* ui_element, menu_action a)
     case action_set_textureshop: enter_textureshop_mode(ui_element);         break;
 
     /* picking a normal tool turns Show Manipulator off: only one manipulator at a time */
-    case action_tool_select:     manip_set_show(ui_element, false); ui_element->active_tool = tool_select;    break;
-    case action_tool_translate:  manip_set_show(ui_element, false); ui_element->active_tool = tool_translate; break;
-    case action_tool_rotate:     manip_set_show(ui_element, false); ui_element->active_tool = tool_rotate;    break;
-    case action_tool_scale:      manip_set_show(ui_element, false); ui_element->active_tool = tool_scale;     break;
-    case action_tool_show_manip: manip_set_show(ui_element, !g_manip.show_manipulator);               break;
+    case action_tool_select:     set_manip_show(ui_element, false); ui_element->active_tool = tool_select;    break;
+    case action_tool_translate:  set_manip_show(ui_element, false); ui_element->active_tool = tool_translate; break;
+    case action_tool_rotate:     set_manip_show(ui_element, false); ui_element->active_tool = tool_rotate;    break;
+    case action_tool_scale:      set_manip_show(ui_element, false); ui_element->active_tool = tool_scale;     break;
+    case action_tool_show_manip: set_manip_show(ui_element, !g_manip.show_manipulator);               break;
 
-    case action_snap_off:        manip_set_snap(manip_snap_off);            break;
-    case action_snap_point:      manip_set_snap(manip_snap_point_to_point); break;
-    case action_snap_grid:       manip_set_snap(manip_snap_point_to_grid);  break;
-    case action_snap_grid_up:    manip_scale_grid(2.0f);                    break;
-    case action_snap_grid_down:  manip_scale_grid(0.5f);                    break;
+    case action_snap_off:        set_manip_snap(manip_snap_off);            break;
+    case action_snap_point:      set_manip_snap(manip_snap_point_to_point); break;
+    case action_snap_grid:       set_manip_snap(manip_snap_point_to_grid);  break;
+    case action_snap_grid_up:    scale_manip_grid(2.0f);                    break;
+    case action_snap_grid_down:  scale_manip_grid(0.5f);                    break;
 
-    case action_edit_target_weld: edit_ops_run(ui_element, edit_target_weld);          break;
-    case action_edit_insert_loop: edit_ops_run(ui_element, edit_insert_edge_loop);     break;
-    case action_edit_extrude:     edit_ops_run(ui_element, edit_extrude);              break;
-    case action_edit_bridge:      edit_ops_run(ui_element, edit_bridge);               break;
-    case action_edit_merge:       edit_ops_run(ui_element, edit_merge_vertices);       break;
-    case action_edit_delete:      edit_ops_run(ui_element, edit_delete_component);     break;
-    case action_edit_flip:        edit_ops_run(ui_element, edit_flip_normals);         break;
-    case action_edit_multicut:    manip_toggle_edit_tool(manip_edit_multicut);    break;
+    case action_edit_target_weld: run_edit_ops(ui_element, edit_target_weld);          break;
+    case action_edit_insert_loop: run_edit_ops(ui_element, edit_insert_edge_loop);     break;
+    case action_edit_extrude:     run_edit_ops(ui_element, edit_extrude);              break;
+    case action_edit_bridge:      run_edit_ops(ui_element, edit_bridge);               break;
+    case action_edit_merge:       run_edit_ops(ui_element, edit_merge_vertices);       break;
+    case action_edit_delete:      run_edit_ops(ui_element, edit_delete_component);     break;
+    case action_edit_flip:        run_edit_ops(ui_element, edit_flip_normals);         break;
+    case action_edit_multicut:    toggle_manip_edit_tool(manip_edit_multicut);    break;
     case action_edit_sel_vert:    set_select_type(ui_element, select_vert); break;
     case action_edit_sel_edge:    set_select_type(ui_element, select_edge); break;
     case action_edit_sel_face:    set_select_type(ui_element, select_face); break;

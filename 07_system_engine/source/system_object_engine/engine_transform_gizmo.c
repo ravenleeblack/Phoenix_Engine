@@ -155,11 +155,11 @@ void draw_gizmo_line(VkCommandBuffer cmd, const gizmo_cam* c, float x0, float y0
 
 system_color get_gizmo_axis_color(int axis, bool highlighted)
 {
-    if (highlighted)                    return system_color_amber;
-    if (axis == gizmo_axis_x)           return system_color_red;
-    if (axis == gizmo_axis_y)           return system_color_lime;
-    if (axis == gizmo_axis_z)           return system_color_sky_blue;
-    return system_color_near_white;
+    if (highlighted)                    return system_theme.system_color_edit_mode_preview_color;
+    if (axis == gizmo_axis_x)           return system_theme.system_color_edit_mode_invalid_color;
+    if (axis == gizmo_axis_y)           return system_theme.system_color_edit_mode_normal_color;
+    if (axis == gizmo_axis_z)           return system_theme.system_edit_mode_active_face_hover;
+    return system_theme.system_color_edit_mode_hover_color;
 }
 
 /* ---------------------------------------------------------------- terrain sync (Object mode only) */

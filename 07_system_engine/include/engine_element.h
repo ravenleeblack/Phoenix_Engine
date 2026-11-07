@@ -81,6 +81,7 @@ typedef struct
     int mouse_x;
     int mouse_y;
     bool mouse_down;
+    bool mouse_pressed;
     bool alt_pressed;
     bool middle_down;
     bool camera_manipulating;

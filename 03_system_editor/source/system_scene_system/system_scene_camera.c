@@ -50,7 +50,7 @@ static void scene_clip_planes(editor_vec3 eye, float* out_near, float* out_far)
    Convention: yaw 0 faces -Z, rotation.x is pitch (negative looks down). */
 void build_scene_view_camera(float aspect, editor_mat4* out_view, editor_mat4* out_proj)
 {
-    camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* cam = &engine_context.world_state.editor_scene_camera;
     float cp = cosf(cam->rotation.x), sp = sinf(cam->rotation.x);
     float cy = cosf(cam->rotation.y), sy = sinf(cam->rotation.y);
 

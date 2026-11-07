@@ -1,5 +1,5 @@
-#ifndef PHOENIX_ENGINE_JOB_SYSTEM_H
-#define PHOENIX_ENGINE_JOB_SYSTEM_H
+#ifndef PHOENIX_ENGINE_JOB_SYSTEM
+#define PHOENIX_ENGINE_JOB_SYSTEM
 
 #include "engine_defines.h"
 

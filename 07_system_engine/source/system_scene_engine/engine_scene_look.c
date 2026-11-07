@@ -22,7 +22,7 @@ void apply_scene_look_preset(int index)
 /* ------------------------------------------------------------------------- */
 /* sun                                                                        */
 /* ------------------------------------------------------------------------- */
-void get_scene_look_light_view(const editor_mat4* view, float out[4])
+void scene_look_get_light_view(const editor_mat4* view, float out[4])
 {
     out[0] = 0.0f;
     out[1] = 0.0f;
@@ -44,7 +44,7 @@ void get_scene_look_light_view(const editor_mat4* view, float out[4])
 /* ------------------------------------------------------------------------- */
 /* background pipeline                                                        */
 /* ------------------------------------------------------------------------- */
-bool create_scene_look_pipelines(VkDevice device, VkRenderPass offscreen_renderpass)
+bool scene_look_create_pipelines(VkDevice device, VkRenderPass offscreen_renderpass)
 {
     if (g_scene_bg_pipeline != VK_NULL_HANDLE) return true;
 
@@ -131,7 +131,7 @@ bool create_scene_look_pipelines(VkDevice device, VkRenderPass offscreen_renderp
     return true;
 }
 
-void draw_scene_look_background(VkCommandBuffer cmd)
+void scene_look_draw_background(VkCommandBuffer cmd)
 {
     if (g_scene_bg_pipeline == VK_NULL_HANDLE) return;   /* shaders missing: the offscreen clear colour shows instead */
 
@@ -144,7 +144,7 @@ void draw_scene_look_background(VkCommandBuffer cmd)
     vkCmdDraw(cmd, 3, 1, 0, 0);
 }
 
-void shutdown_scene_look(VkDevice device)
+void scene_look_shutdown(VkDevice device)
 {
     if (!device) return;
     if (g_scene_bg_pipeline != VK_NULL_HANDLE) {

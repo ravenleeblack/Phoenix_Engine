@@ -173,13 +173,13 @@ static void draw_uv_labels(VkCommandBuffer cmd, system_element_context* ui_eleme
         int x = (int)convert_u_to_x(vp, (float)i * step) + 3;
         if (x < vp->x + 2 || x + 32 > vp->x + vp->w) continue;
         snprintf(text, sizeof(text), "%.1f", (double)((float)i * step));
-        draw_text_element(cmd, ui_element, text, x, vp->y + vp->h - 15, system_color_light_gray_2);
+        draw_text_element(cmd, ui_element, text, x, vp->y + vp->h - 15, system_theme.system_text);
     }
     for (int i = (int)floorf(low_v / step); i <= (int)ceilf(high_v / step); i++) {
         int y = (int)convert_v_to_y(vp, (float)i * step) - 14;
         if (y < vp->y + 2 || y + 12 > vp->y + vp->h - 18) continue;
         snprintf(text, sizeof(text), "%.1f", (double)((float)i * step));
-        draw_text_element(cmd, ui_element, text, vp->x + 4, y, system_color_light_gray_2);
+        draw_text_element(cmd, ui_element, text, vp->x + 4, y, system_theme.system_text);
     }
 }
 
@@ -304,7 +304,7 @@ void draw_textureshop_editor_window(system_element_context* ui_ctx, system_dock_
         for (int i = 0; i < (int)(sizeof(k_menu) / sizeof(k_menu[0])); i++) {
             int tw = (int)strlen(k_menu[i]) * ui_font_w;
             if (mx + tw > x + w) break;
-            draw_text_element(cmd, ui_ctx, k_menu[i], mx, menu_y + 3, system_color_light_gray_2);
+            draw_text_element(cmd, ui_ctx, k_menu[i], mx, menu_y + 3, system_theme.system_text);
             mx += tw + 16;
         }
     }
@@ -333,7 +333,7 @@ void draw_textureshop_editor_window(system_element_context* ui_ctx, system_dock_
     context_menu_textureshop_window(ui_ctx, vp.x, vp.y, vp.w, vp.h);
 
     /* ---- status strip: U / V under the cursor, UDIM tile, zoom, texture size ---- */
-    push_quad_element(cmd, (float)x, (float)status_y, (float)w, (float)uv_status_h, system_color_dark_gray_2);
+    push_quad_element(cmd, (float)x, (float)status_y, (float)w, (float)uv_status_h, system_theme.toolbar_background);
     {
         char text[160];
         const int mx = ui_ctx->input.mouse_x, my = ui_ctx->input.mouse_y;
@@ -353,6 +353,6 @@ void draw_textureshop_editor_window(system_element_context* ui_ctx, system_dock_
             len += snprintf(text + len, sizeof(text) - (size_t)len, "   Texture: %d", g_mode_state.uv.texture_size);
         if (g_uv_view.faces_drawn > 0) snprintf(text + len, sizeof(text) - (size_t)len, "   Faces: %u", (unsigned)g_uv_view.faces_drawn);
         else                           snprintf(text + len, sizeof(text) - (size_t)len, "   Select a mesh object in the Hierarchy");
-        draw_text_element(cmd, ui_ctx, text, x + 8, status_y + 3, system_color_light_gray_2);
+        draw_text_element(cmd, ui_ctx, text, x + 8, status_y + 3, system_theme.system_text);
     }
 }

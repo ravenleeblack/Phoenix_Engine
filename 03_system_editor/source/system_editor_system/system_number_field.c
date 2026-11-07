@@ -71,8 +71,8 @@ static void begin_frame_once(system_element_context* ui_element)
     s_k_esc   = key_edge(VK_ESCAPE);
 }
 
-bool number_field_is_active(void)  { return s_mode != nf_idle; }
-bool number_field_is_editing(void) { return s_mode == nf_edit; }
+bool is_number_field_active(void)  { return s_mode != nf_idle; }
+bool is_number_field_editing(void) { return s_mode == nf_edit; }
 
 /* ------------------------------------------------------------------------- */
 /* text helpers                                                              */
@@ -140,7 +140,7 @@ static float clamp_opts(float vert_to_edge_array, const number_field_opts* o)
 /* ------------------------------------------------------------------------- */
 /* the widget                                                                */
 /* ------------------------------------------------------------------------- */
-number_field_result ui_number_field(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id,
+number_field_result draw_number_field(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id,
                                     int x, int y, int w, int h, float* value, const number_field_opts* opts)
 {
     number_field_result result = number_field_none;
@@ -226,7 +226,7 @@ number_field_result ui_number_field(VkCommandBuffer cmd, system_element_context*
         snprintf(text, sizeof(text), "%s%s", s_text, caret ? "_" : " ");
         const int n = (int)strlen(text);
         const char* shown = (n > max_chars) ? text + (n - max_chars) : text;   /* keep the end (the caret side) visible */
-        draw_text_element(cmd, ui_element, shown, x + w - nf_pad - (int)strlen(shown) * nf_char_w, y + (h - 8) / 2, system_color_pure_white);
+        draw_text_element(cmd, ui_element, shown, x + w - nf_pad - (int)strlen(shown) * nf_char_w, y + (h - 8) / 2, system_theme.system_text);
 
         const system_color amber = { .red = 1.0f, .green = 0.7f, .blue = 0.1f, .alpha = 1.0f };
         push_quad_element(cmd, (float)x, (float)y, (float)w, 1.0f, amber);

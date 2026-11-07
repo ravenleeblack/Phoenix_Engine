@@ -5,10 +5,10 @@
 extern void build_scene_view_camera(float aspect, editor_mat4* out_view, editor_mat4* out_proj);
 
 /* If the overlay is mirrored vertically, flip this. (Your gimbal code proves the projection is already Y-flipped, so 0.) */
-#define EM_PROJ_Y_FLIP        0
+#define EDIT_PROJ_Y_FLIP        0
 
-#define EM_PICK_VERT_PX   10.0f
-#define EM_PICK_EDGE_PX    8.0f
+#define EDIT_PICK_VERT_PX   10.0f
+#define EDIT_PICK_EDGE_PX    8.0f
 
 typedef struct { float sx, sy, z; uint8_t ok; } em_proj;
 
@@ -71,7 +71,7 @@ static void project_point(const editor_mat4* M, editor_vec3 p, const struct_view
     float cw = M->mesh[0][3] * p.x + M->mesh[1][3] * p.y + M->mesh[2][3] * p.z + M->mesh[3][3];
     if (cw < 1e-5f) { o->ok = 0; return; }
     float nx = cx / cw, ny = cy / cw;
-#if EM_PROJ_Y_FLIP
+#if EDIT_PROJ_Y_FLIP
     ny = -ny;
 #endif
     o->sx = (float)b->offset_x + (nx * 0.5f + 0.5f) * (float)b->width;
@@ -99,7 +99,7 @@ static void build_mouse_ray(const editor_mat4* view, const editor_mat4* proj, co
 {
     float nx = ((mx - (float)b->offset_x) / (float)b->width)  * 2.0f - 1.0f;
     float ny = ((my - (float)b->offset_y) / (float)b->height) * 2.0f - 1.0f;
-#if EM_PROJ_Y_FLIP
+#if EDIT_PROJ_Y_FLIP
     ny = -ny;
 #endif
     float p00 = proj->mesh[0][0], p11 = proj->mesh[1][1], p23 = proj->mesh[2][3];
@@ -220,7 +220,7 @@ static uint32_t pick(const edit_mode_mesh* mesh, enum_mesh_selection mode, const
     uint32_t best = EM_NONE;
 
     if (mode == select_vert) {
-        float bd = EM_PICK_VERT_PX;
+        float bd = EDIT_PICK_VERT_PX;
         for (uint32_t i = 0; i < mesh->vert_count; ++i) {
             if (!s_proj[i].ok || !s_vvis[i]) continue;
             float dx = s_proj[i].sx - mx, dy = s_proj[i].sy - my;
@@ -229,7 +229,7 @@ static uint32_t pick(const edit_mode_mesh* mesh, enum_mesh_selection mode, const
         }
     }
     else if (mode == select_edge) {
-        float bd = EM_PICK_EDGE_PX;
+        float bd = EDIT_PICK_EDGE_PX;
         for (uint32_t i = 0; i < mesh->edge_count; ++i) {
             const edit_mode_edge* e = &mesh->edges[i];
             if (!s_proj[e->vert_to_edge_array[0]].ok || !s_proj[e->vert_to_edge_array[1]].ok) continue;
@@ -318,7 +318,7 @@ void system_edit_mode_update(system_element_context* ui_element)
 
     /* click = select the hovered vert / edge / face. shift or ctrl + click = add it to the selection (or remove it if it is already in).
        Not while a modeling tool owns the mouse (Target Weld, Insert Loop), over the manipulator overlay, or while something else holds the mouse. */
-    if (press && s_hover != EM_NONE && ui_element->active_id == 0 && !edit_ops_wants_mouse() && !manip_overlay_wants_mouse()) {
+    if (press && s_hover != EM_NONE && ui_element->active_id == 0 && !is_edit_ops_using_mouse() && !is_manip_overlay_using_mouse()) {
         const bool additive = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
         em_select_element(mesh, ui_element->active_select_type, s_hover, additive);
     }

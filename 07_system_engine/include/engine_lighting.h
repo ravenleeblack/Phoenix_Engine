@@ -58,7 +58,6 @@ phoenix_engine_api int  get_terrain_light_layer(void);
 /* Sun colour for the mesh shader: rgb = tint * brightness, a = unused.
    `ambient` is the ambient value that goes to the shader next to the sun direction. (was light_get_sun_color) */
 phoenix_engine_api void get_light_sun_color(float ambient, float out[4]);
-#define light_get_sun_color get_light_sun_color
 
 /* Re-bake the light into every terrain mesh (after min_light changed, for example). (was terrain_light_rebuild_all) */
 phoenix_engine_api void rebuild_terrain_light_all(void);

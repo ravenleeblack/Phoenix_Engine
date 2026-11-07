@@ -62,7 +62,7 @@ void system_camera_dolly(float notches)
         !validate_rectangle_hit(element_context.input.mouse_x, element_context.input.mouse_y,
                                 b->offset_x, b->offset_y, b->width, b->height)) return;
 
-    camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* cam = &engine_context.world_state.editor_scene_camera;
 
     float cp = cosf(cam->rotation.x), sp = sinf(cam->rotation.x);
     float cy = cosf(cam->rotation.y), sy = sinf(cam->rotation.y);
@@ -95,18 +95,13 @@ void system_wheel_hook_update(void)
     install_wheel_hook();
 
     /* wheel messages the engine's window procedure forwarded to process_system_mouse_wheel: grid zoom, as before */
-    float forwarded = consume_mouse_wheel();
-    if (forwarded != 0.0f) {
-        system_grid_zoom(forwarded);
-    }
-
     if (!g_wheel_old_proc) return;
 
     LONG raw = InterlockedExchange(&g_wheel_accum, 0);
     if (raw == 0) return;
 
     /* insert loop uses the wheel for "how many rows". when it takes the wheel the camera must not dolly. */
-    if (edit_ops_consume_wheel((float)raw / 120.0f)) return;
+    if (consume_edit_ops_wheel((float)raw / 120.0f)) return;
 
     if (g_wheel_logged < 3) {
         phoenix_engine_info("input", "mouse wheel event received (raw delta %ld).", (long)raw);

@@ -172,11 +172,11 @@ static void line(VkCommandBuffer cmd, const gizmo_cam* c, float x0, float y0, fl
 
 static system_color axis_color(int axis, bool highlighted)
 {
-    if (highlighted)        return system_color_amber;
-    if (axis == AX_X)       return system_color_red;
-    if (axis == AX_Y)       return system_color_lime;
-    if (axis == AX_Z)       return system_color_sky_blue;
-    return system_color_near_white;
+    if (highlighted)        return system_theme.system_color_edit_mode_preview_color;
+    if (axis == AX_X)       return system_theme.system_color_edit_mode_invalid_color;
+    if (axis == AX_Y)       return system_theme.system_color_edit_mode_normal_color;
+    if (axis == AX_Z)       return system_theme.system_edit_mode_active_face_hover;
+    return system_theme.system_color_edit_mode_hover_color;
 }
 
 /* ---------------------------------------------------------------- terrain sync (Object mode only) */
@@ -186,15 +186,15 @@ static void commit_object(system_scene_object* o)
 {
     if (g_terrain.exists && o->id == g_terrain.scene_object_id) {
         terrain_location_q q;
-        q.x = (int32_t)lroundf(o->position.x * (float)TERRAIN_UNITS_PER_METER);
-        q.y = (int32_t)lroundf(o->position.y * (float)TERRAIN_UNITS_PER_METER);
-        q.z = (int32_t)lroundf(o->position.z * (float)TERRAIN_UNITS_PER_METER);
+        q.x = (int32_t)lroundf(o->position.x * (float)terrain_units_per_meter);
+        q.y = (int32_t)lroundf(o->position.y * (float)terrain_units_per_meter);
+        q.z = (int32_t)lroundf(o->position.z * (float)terrain_units_per_meter);
         g_terrain.settings.location = q;
         g_terrain_ui.location       = q;
         terrain_apply_location();
-        o->position.x = (float)q.x / (float)TERRAIN_UNITS_PER_METER;
-        o->position.y = (float)q.y / (float)TERRAIN_UNITS_PER_METER;
-        o->position.z = (float)q.z / (float)TERRAIN_UNITS_PER_METER;
+        o->position.x = (float)q.x / (float)terrain_units_per_meter;
+        o->position.y = (float)q.y / (float)terrain_units_per_meter;
+        o->position.z = (float)q.z / (float)terrain_units_per_meter;
     }
 }
 

@@ -7,7 +7,7 @@ bool start_render_frontend(const char* application_name)
 {
     backend = kallocate(sizeof(render_backend), MEMORY_TAG_RENDERER);
 
-    if (!create_render_backend(RENDERER_BACKEND_TYPE_VULKAN, backend)) {
+    if (!create_render_backend(render_backend_type_vulkan, backend)) {
         phoenix_fatal("RENDERER", "Factory mapping failed to extract Vulkan plugin descriptors.");
         return FALSE;
     }
@@ -61,7 +61,7 @@ VkCommandBuffer begin_frontend_main_pass(void)
     VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[image_idx];
     if (cmd == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
-    offscreen_record_frame(cmd);
+    g_editor.record_offscreen_frame(cmd);
 
     VkRenderPassBeginInfo pass_begin = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     pass_begin.renderPass = render_context.renderpass_main;
@@ -111,10 +111,8 @@ bool draw_frontend_render_frame(render_packet* packet)
     if (image_idx < render_context.swapchain_main.image_count) {
         VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[image_idx];
         if (cmd != VK_NULL_HANDLE) {
-            
-            // 2b. Scene + Game views render into their own offscreen targets (MSAA + depth + resolve) BEFORE the UI pass.
-            //     Render passes cannot nest, so this has to be recorded outside the main pass.
-            offscreen_record_frame(cmd);
+            /* Scene and Game targets are recorded outside their main UI pass. */
+            g_editor.record_offscreen_frame(cmd);
 
             // 3. Build our explicit clear pass parameters
             VkRenderPassBeginInfo pass_begin = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
@@ -155,7 +153,7 @@ bool draw_frontend_render_frame(render_packet* packet)
             }
             
             // 5. THE REAL DRAWER: Execute broken-up layout blocks to append commands directly to the pipeline
-            start_system_scenepass(cmd, &render_context, &element_context, packet->delta_time);
+            start_system_scenepass(cmd);
             shutdown_system_scenepass();
             
             vkCmdEndRenderPass(cmd);

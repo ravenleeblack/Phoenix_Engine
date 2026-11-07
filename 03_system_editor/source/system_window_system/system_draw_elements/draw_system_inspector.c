@@ -8,5 +8,5 @@ void draw_inspector_window(system_element_context* ui_ctx, system_dock_node* nod
     const int x = node->x + 10;
     int y = content_y + 34;
 
-    draw_text_element(cmd, ui_ctx, "Inspector Window Active", x, y, system_color_pure_white);
+    draw_text_element(cmd, ui_ctx, "Inspector Window Active", x, y, system_theme.system_text);
 }

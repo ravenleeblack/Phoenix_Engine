@@ -65,7 +65,7 @@ terrain_dims terrain_resolve_dims(const terrain_settings* s)
     return d;
 }
 
-const char* terrain_layer_name(int layer)
+const char* get_terrain_layer_name(int layer)
 {
     static const char* names[terrain_max_layers] = {
         "1 terrain", "2 trees", "3 grass", "4 buildings", "5 props",
@@ -107,26 +107,26 @@ bool chunk_region_on(const system_terrain* t, int cx, int cz)
     return !t->region_off[region_of_chunk(t, cx, cz)];
 }
 
-int region_of_terrain_object(uint32_t id)
+int get_terrain_region_of_object(uint32_t id)
 {
     if (!g_terrain.exists || id == 0) return -1;
     for (int r = 0; r < terrain_region_count; r++) if (g_terrain.region_ids[r] == id) return r;
     return -1;
 }
 
-int terrain_camera_region(void)
+int get_terrain_camera_region(void)
 {
     const system_terrain* t = &g_terrain;
     if (!t->exists || !t->region_valid) return -1;
     return region_of_chunk(t, t->center_cx, t->center_cz);
 }
 
-bool terrain_region_is_enabled(int r)
+bool is_terrain_region_enabled(int r)
 {
     return g_terrain.exists && r >= 0 && r < terrain_region_count && !g_terrain.region_off[r];
 }
 
-void terrain_region_set_enabled(int r, bool on)
+void set_terrain_region_enabled(int r, bool on)
 {
     system_terrain* t = &g_terrain;
     if (!t->exists || r < 0 || r >= terrain_region_count) return;
@@ -139,14 +139,14 @@ void terrain_region_set_enabled(int r, bool on)
     s_regions_changed = true;
 }
 
-void terrain_region_solo(int r)
+void solo_terrain_region(int r)
 {
-    for (int k = 0; k < terrain_region_count; k++) terrain_region_set_enabled(k, k == r);
+    for (int k = 0; k < terrain_region_count; k++) set_terrain_region_enabled(k, k == r);
 }
 
 void terrain_region_show_all(void)
 {
-    for (int k = 0; k < terrain_region_count; k++) terrain_region_set_enabled(k, true);
+    for (int k = 0; k < terrain_region_count; k++) set_terrain_region_enabled(k, true);
 }
 
 
@@ -780,7 +780,7 @@ bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
 /* ------------------------------------------------------------------------- */
 void camera_local_xz(const system_terrain* t, float* lx, float* lz)
 {
-    const camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    const world_camera* cam = &engine_context.world_state.editor_scene_camera;
     const system_scene_object* obj = find_scene_object_by_id(t->scene_object_id);
     float obj_x = 0.0f, obj_z = 0.0f;
     if (obj) { obj_x = obj->position.x; obj_z = obj->position.z; }
@@ -1169,7 +1169,7 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
     t->exists = true;
     for (int r = 0; r < terrain_region_count; r++) {
         t->region_off[r] = false;                                            /* every region on */
-        object_db_remove(t->region_ids[r], object_data_terrain_color);       /* a flat reset also clears the paint */
+        remove_object_data(t->region_ids[r], object_data_terrain_color);       /* a flat reset also clears the paint */
     }
     s_regions_changed = false;
 
@@ -1182,7 +1182,7 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
             t->exists = false; terrain_free_cpu(t);
             return false;
         }
-        region_header* h = (region_header*)object_db_get(t->region_ids[r], object_data_terrain_region, NULL);
+        region_header* h = (region_header*)get_object_data(t->region_ids[r], object_data_terrain_region, NULL);
         if (!h) {
             phoenix_engine_error("terrain", "region %d height block missing right after creation.", r);
             t->exists = false; terrain_free_cpu(t);
@@ -1193,7 +1193,7 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
         memset(h, 0, (size_t)bytes);
         h->magic = region_magic; h->version = region_version; h->side = side;
     }
-    object_db_remove(t->scene_object_id, object_data_terrain_tunnels);
+    remove_object_data(t->scene_object_id, object_data_terrain_tunnels);
     persist_settings();
     refresh_height_cache(t);
     apply_terrain_location();
@@ -1239,7 +1239,7 @@ void shutdown_terrain_system(void)
 {
     if (!g_terrain.exists) return;
     terrain_free_cpu(&g_terrain);
-    em_mesh_free(&s_edit); s_edit_have = false;
+    em_mesh_free(s_edit); s_edit_have = false;
     g_terrain.exists = false;
     g_terrain.builder_bound = false;
 }
@@ -1267,8 +1267,8 @@ bool delete_terrain(void)
     t->edit_revision++;
     s_regions_changed = false;
 
-    for (int r = 0; r < terrain_region_count; r++) object_db_remove_object(ids[r]);
-    object_db_remove_object(root);
+    for (int r = 0; r < terrain_region_count; r++) remove_object_data_all(ids[r]);
+    remove_object_data_all(root);
 
     g_scene_registry.selected_object_id = 0;
     for (int r = 0; r < terrain_region_count; r++) delete_scene_object(ids[r]);

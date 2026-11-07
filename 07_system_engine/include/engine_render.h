@@ -30,13 +30,15 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 
 struct static_mesh_data;
 
+#define vulkan_frames_in_flight_count 2   /* cpu pacing ring size for the main swapchain */
+#define shader_directory_count        5   /* entries in g_shader_dirs (engine_globals.h) */
+
 typedef enum render_backend_type
 {
     render_backend_type_vulkan,
     render_backend_type_opengl,
     render_backend_type_directx
 } render_backend_type;
-#define RENDERER_BACKEND_TYPE_VULKAN render_backend_type_vulkan
 
 typedef struct render_backend
 {
@@ -152,15 +154,6 @@ typedef enum vulkan_command_buffer_state
     vulkan_command_buffer_state_not_allocated
 } vulkan_command_buffer_state;
 
-#define NOT_ALLOCATED vulkan_render_pass_state_not_allocated
-#define READY vulkan_render_pass_state_ready
-#define COMMAND_BUFFER_STATE_RECORDING vulkan_command_buffer_state_recording
-#define COMMAND_BUFFER_STATE_IN_RENDER_PASS vulkan_command_buffer_state_in_render_pass
-#define COMMAND_BUFFER_STATE_NOT_ALLOCATED vulkan_command_buffer_state_not_allocated
-#define COMMAND_BUFFER_STATE_READY vulkan_command_buffer_state_ready
-#define COMMAND_BUFFER_STATE_RECORDING_ENDED vulkan_command_buffer_state_recording_ended
-#define COMMAND_BUFFER_STATE_SUBMITTED vulkan_command_buffer_state_submitted
-
 typedef struct vulkan_command_buffer
 {
     VkCommandBuffer handle;
@@ -193,7 +186,6 @@ typedef struct vulkan_system_context
 #if defined(_DEBUG)
     VkDebugUtilsMessengerEXT debug_messenger;
 #endif
-
     vulkan_device device;
 
     vulkan_swapchain swapchain;
@@ -297,6 +289,17 @@ void shutdown_vulkan_render_backend(render_backend* backend);
 void vulkan_render_backend_on_resized(render_backend* backend, int width, int height);
 bool begin_vulkan_render_backend_frame(render_backend* backend, float delta_time);
 bool end_vulkan_render_backend_frame(render_backend* backend, float delta_time);
+int  find_memory_index(unsigned int type_filter, unsigned int property_flags);
+void create_command_buffers(render_backend* backend);
+void regenerate_framebuffers(render_backend* backend, editor_window_swapchain* swapchain, VkRenderPass* renderpass);
+bool recreate_swapchain(render_backend* backend);
+bool create_ui_fallback_descriptor(void);
+void destroy_ui_fallback_descriptor(void);
+VKAPI_ATTR VkBool32 VKAPI_CALL handle_vulkan_debug_message(
+    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+    VkDebugUtilsMessageTypeFlagsEXT message_types,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void* user_data);
 
 /* ---- frontend ---- */
 bool start_render_frontend(const char* application_name);
@@ -443,18 +446,39 @@ bool acquire_vulkan_swapchain_next_image_index(
     VkFence fence,
     int* out_image_index);
 
+void present_vulkan_swapchain(
+    vulkan_system_context* context,
+    vulkan_swapchain* swapchain,
+    VkQueue graphics_queue,
+    VkQueue present_queue,
+    VkSemaphore render_complete_semaphore,
+    int present_image_index);
+
+void create_vulkan_swapchain_objects(vulkan_system_context* context, int width, int height, vulkan_swapchain* swapchain);
+void destroy_vulkan_swapchain_objects(vulkan_system_context* context, vulkan_swapchain* swapchain);
+
 void destroy_swapchain_depth_image(void);
+void destroy_swapchain_msaa_image(void);
+void create_swapchain_msaa_image(VkExtent2D extent, VkFormat format);
+VkImageView get_swapchain_msaa_view(void);
 
 /* ---- scene pass (engine side) ---- */
-void start_system_scenepass(VkCommandBuffer cmd, system_render_context* context, system_element_context* system_ui, float delta_time);
+void start_system_scenepass(VkCommandBuffer cmd);
 void shutdown_system_scenepass(void);
 void end_system_scenepass_element_handling(void);
 
 /* ---- shaders and pipelines ---- */
+uint32_t* read_spirv_file(const char* path, size_t* out_size);
+bool get_file_write_time(const char* path, FILETIME* out);
+void warn_if_shader_stale(const char* spv_path, const char* name);
+VkShaderModule create_shader_module(VkDevice device, const uint32_t* code, size_t code_size, const VkAllocationCallbacks* allocator);
+void destroy_module_if_valid(VkDevice device, VkShaderModule mesh, const VkAllocationCallbacks* allocator);
 VkShaderModule load_shader_binary_module(VkDevice device, const char* filename);
 bool create_vulkan_graphics_pipelines(vulkan_system_context* context, VkRenderPass renderpass);
 void skin_gpu_tick(void);
 void skin_gpu_flush(void);
-bool create_scene_object_pipeline(VkDevice device, VkRenderPass renderpass, bool has_depth);
+VkSampleCountFlagBits get_render_msaa_sample_count(void);
+VkSampleCountFlagBits get_valid_grid_sample_count(vulkan_system_context* context);
+
 
 #endif

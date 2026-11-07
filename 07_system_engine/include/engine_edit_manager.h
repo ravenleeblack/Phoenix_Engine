@@ -50,7 +50,6 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /*==================================================================================================*/
 
 #define edit_ops_lock_id 0x7C7C7C03u        /* ui_element->active_id while a tool drag runs, so nothing underneath reacts */
-#define EDIT_OPS_LOCK_ID edit_ops_lock_id
 
 
 /*==================================================================================================*/

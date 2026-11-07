@@ -1,4 +1,6 @@
 #include "system_globals.h"
+#include "system_edit_manager.h"
+#include "system_scene_terrain.h"
 
 
 
@@ -26,14 +28,14 @@ void edit_msg_draw(VkCommandBuffer cmd, system_element_context* ui_element)
         const int tw = (int)strlen(s_msg) * 8;
         const int x = b->offset_x + (b->width - tw) / 2, y = b->offset_y + b->height - 34;
         push_quad_element(cmd, (float)(x - 8), (float)(y - 4), (float)(tw + 16), 22.0f, system_theme.tab_content_window);
-        draw_text_element(cmd, ui_element, s_msg, x, y, system_color_pure_white);
+        draw_text_element(cmd, ui_element, s_msg, x, y, system_theme.system_text);
     }
 }
 
 /* ========================================================================= */
 /* target: the mesh of the obj_vert_selected object                                   */
 /* ========================================================================= */
-bool edit_get_target(system_scene_object** out_obj, edit_mode_mesh** out_m)
+bool get_edit_target(system_scene_object** out_obj, edit_mode_mesh** out_m)
 {
     if (g_mode_state.context != mode_context_edit) return false;
     system_scene_object* o = find_scene_object_by_id(g_scene_registry.selected_object_id);
@@ -190,7 +192,7 @@ static uint32_t s_scr_cap = 0;
 
 const cam_screen* edit_screen_points(void) { return s_scr; }
 
-bool edit_cam_begin(edit_mode_camera_context* c, const system_element_context* ui_element, const system_scene_object* obj)
+bool begin_edit_camera(edit_mode_camera_context* c, const system_element_context* ui_element, const system_scene_object* obj)
 {
     c->vx = ui_element->scene_view.offset_x; c->vy = ui_element->scene_view.offset_y;
     c->vw = ui_element->scene_view.width;    c->vh = ui_element->scene_view.height;
@@ -202,16 +204,16 @@ bool edit_cam_begin(edit_mode_camera_context* c, const system_element_context* u
     return true;
 }
 
-cam_screen edit_project(const edit_mode_camera_context* c, editor_vec3 p) { return system_math_project_point(c, p); }
+cam_screen project_edit_point(const edit_mode_camera_context* c, editor_vec3 p) { return system_math_project_point(c, p); }
 
-bool edit_project_all(const edit_mode_camera_context* c, const edit_mode_mesh* mesh)
+bool project_edit_points_all(const edit_mode_camera_context* c, const edit_mode_mesh* mesh)
 {
     if (mesh->vert_count > s_scr_cap) {
         cam_screen* p = (cam_screen*)realloc(s_scr, sizeof(cam_screen) * mesh->vert_count);
         if (!p) return false;
         s_scr = p; s_scr_cap = mesh->vert_count;
     }
-    for (uint32_t i = 0; i < mesh->vert_count; ++i) s_scr[i] = edit_project(c, mesh->verts[i].obj_vert_pos);
+    for (uint32_t i = 0; i < mesh->vert_count; ++i) s_scr[i] = project_edit_point(c, mesh->verts[i].obj_vert_pos);
     return true;
 }
 
@@ -270,7 +272,7 @@ uint32_t edit_pick_face(const edit_mode_mesh* mesh, float mx, float my)
     return best;
 }
 
-edit_pick_selection edit_pick_element(const edit_mode_mesh* mesh, enum_mesh_selection kind, float mx, float my)
+edit_pick_selection pick_edit_element(const edit_mode_mesh* mesh, enum_mesh_selection kind, float mx, float my)
 {
     edit_pick_selection p; p.kind = kind; p.index = EM_NONE;
     if      (kind == select_vert) p.index = edit_pick_vert(mesh, mx, my, EM_NONE);
@@ -279,7 +281,7 @@ edit_pick_selection edit_pick_element(const edit_mode_mesh* mesh, enum_mesh_sele
     return p;
 }
 
-bool edit_in_scene_view(const system_element_context* ui_element)
+bool is_edit_in_scene_view(const system_element_context* ui_element)
 {
     const struct_viewport_bounds* b = &ui_element->scene_view;
     return b->width > 0 && validate_rectangle_hit(ui_element->input.mouse_x, ui_element->input.mouse_y, b->offset_x, b->offset_y, b->width, b->height);

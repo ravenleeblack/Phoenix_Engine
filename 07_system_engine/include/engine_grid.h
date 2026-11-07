@@ -26,7 +26,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /* Include from engine_globals.h after editor_vec3, editor_mat4 and world_camera are defined. */
 
 /*
- * The grid is generated entirely inside scene_3d.glsl from gl_VertexIndex
+ * The grid is generated entirely inside grid_vert.glsl from gl_VertexIndex
  * (1001 lines per axis * 2 axes * 2 verts = 4004 vertices), so NO vertex buffer is needed.
  *
  * There is ONE camera: engine_context.world_state.editor_scene_camera.
@@ -34,7 +34,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
  * so the grid, meshes and gizmo cannot disagree.
  * Convention: yaw 0 faces -Z, rotation.x is pitch (negative looks down).
  */
-#define grid_vertex_count   4004   /* must match scene_3d.glsl */
+#define grid_vertex_count   4004   /* must match grid_vert.glsl */
 #define zoom_min_distance   1.0f
 #define zoom_max_distance   50000.0f
 #define zoom_step_factor    0.88f      /* one wheel notch */
@@ -42,7 +42,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #define grid_default_fov    1.0471976f /* 60 degrees */
 
 
-/* Must match: layout(push_constant) uniform camera_block { mat4 view; mat4 projection; } in scene_3d.glsl */
+/* Must match: layout(push_constant) uniform camera_block { mat4 view; mat4 projection; } in grid_vert.glsl */
 typedef struct {
     editor_mat4 view;
     editor_mat4 projection;

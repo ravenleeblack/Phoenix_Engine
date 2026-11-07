@@ -40,32 +40,6 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /* ------------------------------------------------------------------------- */
 #define terrain_units_per_meter        16
 #define terrain_max_layers             10
-#define TERRAIN_MAX_LAYERS terrain_max_layers
-#define TERRAIN_REGION_GRID terrain_region_grid
-#define TERRAIN_REGION_COUNT terrain_region_count
-#define TERRAIN_MAX_REGION_CHUNKS terrain_max_region_chunks
-#define TERRAIN_CHUNK_CELLS terrain_chunk_cells
-#define TERRAIN_UNITS_PER_METER terrain_units_per_meter
-#define TERRAIN_REGION_SIDE_CHUNKS terrain_region_side_chunks
-#define TERRAIN_SUB_STEPS terrain_substeps
-#define TERRAIN_FACE_COUNT terrain_face_count
-#define TERRAIN_FACE_TOP terrain_face_top
-#define TERRAIN_LAYER_TERRAIN terrain_layer_terrain
-#define TERRAIN_MODE_SANDBOX terrain_mode_sandbox
-#define TERRAIN_CELL_DIRT terrain_cell_dirt
-#define TERRAIN_FACE_BOTTOM terrain_face_bottom
-#define TERRAIN_FACE_WEST terrain_face_west
-#define TERRAIN_FACE_EAST terrain_face_east
-#define TERRAIN_FACE_NORTH terrain_face_north
-#define TERRAIN_FACE_SOUTH terrain_face_south
-#define TERRAIN_MAX_LOAD_RADIUS terrain_max_load_radius
-#define TERRAIN_MAX_TUNNELS 64
-#define TERRAIN_DEFAULT_REGION_CHUNKS terrain_default_region_chunks
-#define TERRAIN_SUBSTEPS terrain_substeps
-#define TERRAIN_CELL_AIR terrain_cell_air
-#define TERRAIN_CELL_STONE terrain_cell_stone
-#define TERRAIN_CELL_SAND terrain_cell_sand
-#define TERRAIN_CELL_GRASS terrain_cell_grass
 #define terrain_region_side_chunks     3        /* one region = 3 x 3 chunks = 9 chunks = 300 x 300 cubes. the world is a grid of 35 x 35 such regions (10500 cubes).
                                                    only the region the camera is over is meshed and edited, so 9 chunks are alive at any time. */
 #define terrain_max_load_radius        32       /* (no longer limits anything: every chunk of every region is meshed, flat chunks cost 4 vertices) */
@@ -77,6 +51,17 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #define terrain_max_region_chunks      35       /* 35 x 100 = 3500 cells per region side: 3501^2 floats = 49 mb per region. 36 would be 52 mb; keep under the 64 mb db block cap */
 #define terrain_sub_steps              16       /* a top corner can sit 0..16 sixteenths of a cube above its cube layer (see terrain_quad.sub) */
 #define terrain_max_tunnels            64
+
+enum terrain_constant
+{
+    terrain_regions_use_world_position = 1,
+    terrain_region_file_magic = 0x4e474552u,
+    terrain_region_file_version = 1u,
+    terrain_region_file_header = 16u,
+    terrain_bake_skin_color = 0,
+    terrain_tube_segments = 12,
+    terrain_no_layer = -1000000
+};
 
 /* set to 0 if your renderer multiplies a child's transform by its parent's.
    1 = every region object carries the terrain's world position itself (what edit mode assumes: it only reads obj->position). */

@@ -1,9 +1,10 @@
 #include "system_globals.h"
+#include "system_scene_offscreen.h"
 #include <stdarg.h>
 #include <stdio.h>
 
 /* status text goes to the statusbar (draw_system_statusbar.c reads status_bar_text_buffer). */
-static void set_sceneview_status(const char* format, ...)
+void set_sceneview_status(const char* format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -18,16 +19,7 @@ static void set_sceneview_status(const char* format, ...)
    Everything below the glyphs is built from draw_icon_element / draw_icon_border (system_icon_element.c).
    To add a button: add an enum value, a glyph case, a row in k_buttons, and a case in scene_button_on / scene_button_click. */
 
-typedef enum {
-    scene_icon_lock, scene_icon_home,
-    scene_icon_grid, scene_icon_origin, scene_icon_camera,
-    scene_icon_wire, scene_icon_shaded, scene_icon_textured, scene_icon_wire_on_shaded, scene_icon_xray,
-    scene_icon_lit, scene_icon_aa
-} enum_scene_icon;
-
-typedef struct { enum_scene_icon icon; const char* name; bool separator_before; } scene_button;
-
-static const scene_button k_buttons[] = {
+const scene_button scene_view_buttons[] = {
     { scene_icon_lock,           "Camera Lock",          false },
     { scene_icon_home,           "Home (reset view)",    false },
 
@@ -44,21 +36,19 @@ static const scene_button k_buttons[] = {
     { scene_icon_lit,            "Use Lights (Lit)",     true  },
     { scene_icon_aa,             "Anti-aliasing (FXAA)", false },
 };
-enum { scene_button_count = (int)(sizeof(k_buttons) / sizeof(k_buttons[0])) };
-
-static system_color scaled_alpha(system_color c, float k) { c.alpha *= k; return c; }
+system_color scaled_alpha(system_color c, float k) { c.alpha *= k; return c; }
 
 /* ------------------------------------------------------------------ glyphs */
 
 /* cube: front face + top + right side. d = depth offset, n = front face size */
-static void draw_cube_faces(VkCommandBuffer cmd, int ix, int iy, int d, int n, system_color front, system_color top, system_color side)
+void draw_cube_faces(VkCommandBuffer cmd, int ix, int iy, int d, int n, system_color front, system_color top, system_color side)
 {
     draw_icon_element(cmd, ix, iy + d, n, n, front);
     for (int r = 0; r < d; r++)  draw_icon_element(cmd, ix + d - r, iy + r, n, 1, top);
     for (int k = 0; k < d; k++)  draw_icon_element(cmd, ix + n + k, iy + d - k, 1, n, side);
 }
 
-static void draw_cube_wire(VkCommandBuffer cmd, int ix, int iy, int d, int n, system_color c)
+void draw_cube_wire(VkCommandBuffer cmd, int ix, int iy, int d, int n, system_color c)
 {
     draw_icon_border(cmd, ix,     iy + d, n, n, c);          /* front */
     draw_icon_border(cmd, ix + d, iy,     n, n, c);          /* back  */
@@ -71,7 +61,7 @@ static void draw_cube_wire(VkCommandBuffer cmd, int ix, int iy, int d, int n, sy
 }
 
 /* s x s box at ix, iy */
-static void draw_scene_icon(VkCommandBuffer cmd, system_element_context* ui_element, enum_scene_icon icon, bool on, int ix, int iy, int s, system_color c)
+void draw_scene_icon(VkCommandBuffer cmd, system_element_context* ui_element, enum_scene_icon icon, bool on, int ix, int iy, int s, system_color c)
 {
     int d = s / 4; if (d < 2) d = 2;
     const int n = s - d;
@@ -172,7 +162,7 @@ static void draw_scene_icon(VkCommandBuffer cmd, system_element_context* ui_elem
 
 /* ------------------------------------------------------------ button state */
 
-static bool scene_button_on(enum_scene_icon icon)
+bool scene_button_on(enum_scene_icon icon)
 {
     switch (icon) {
     case scene_icon_lock:           return g_scene_view.camera_locked;
@@ -190,7 +180,7 @@ static bool scene_button_on(enum_scene_icon icon)
     }
 }
 
-static void scene_button_click(enum_scene_icon icon, camera_component* cam)
+void scene_button_click(enum_scene_icon icon, world_camera* cam)
 {
     switch (icon) {
     case scene_icon_lock:
@@ -198,9 +188,7 @@ static void scene_button_click(enum_scene_icon icon, camera_component* cam)
         if (g_scene_view.camera_locked) { g_scene_view.lock_position = cam->position; g_scene_view.lock_rotation = cam->rotation; }
         break;
     case scene_icon_home:
-        cam->position   = (editor_vec3){ 0.0f, 6.0f, 12.0f };
-        cam->rotation.x = -0.45f;      /* pitch, negative looks down */
-        cam->rotation.y = 0.0f;        /* yaw 0 faces -Z */
+        focus_system_grid_on_selected_object();
         if (g_scene_view.camera_locked) { g_scene_view.lock_position = cam->position; g_scene_view.lock_rotation = cam->rotation; }
         break;
     case scene_icon_grid:           g_scene_view.show_grid      = !g_scene_view.show_grid;      break;
@@ -217,7 +205,7 @@ static void scene_button_click(enum_scene_icon icon, camera_component* cam)
 }
 
 /* tells the statusbar what a click just did. toggles say on / off, shading modes say which one is active. */
-static void report_scene_button(const scene_button* b)
+void report_scene_button(const scene_button* b)
 {
     switch (b->icon) {
     case scene_icon_home:
@@ -237,7 +225,7 @@ static void report_scene_button(const scene_button* b)
 /* ------------------------------------------------------------------ button */
 
 /* one flat square button. returns true on click (press and release on it). */
-static bool draw_scene_icon_button(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id, enum_scene_icon icon,
+bool draw_scene_icon_button(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id, enum_scene_icon icon,
                                    int x, int y, int s, bool on, const char* name, const char** hover_name)
 {
     const int mx = ui_element->input.mouse_x, my = ui_element->input.mouse_y;
@@ -265,13 +253,13 @@ static bool draw_scene_icon_button(VkCommandBuffer cmd, system_element_context* 
 }
 
 /* draws the Scene tab sub menubar, then the buttons on it */
-static void draw_scene_sub_menu(system_element_context* ui_element, system_dock_node* node, VkCommandBuffer cmd)
+void draw_scene_sub_menu(system_element_context* ui_element, system_dock_node* node, VkCommandBuffer cmd)
 {
     const int x = node->x, y = node->y + tab_bar_h, w = node->w, h = tab_menu_h;
 
     draw_tab_sub_menubar(cmd, ui_element, x, y, w, h);
 
-    camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* cam = &engine_context.world_state.editor_scene_camera;
     if (g_scene_view.camera_locked) { cam->position = g_scene_view.lock_position; cam->rotation = g_scene_view.lock_rotation; }
 
     int s = h - 5;                      /* h includes the 1px divider on the bottom row */
@@ -285,7 +273,7 @@ static void draw_scene_sub_menu(system_element_context* ui_element, system_dock_
     const char* hover_name = NULL;
 
     for (int i = 0; i < scene_button_count; i++) {
-        const scene_button* b = &k_buttons[i];
+        const scene_button* b = &scene_view_buttons[i];
 
         if (b->separator_before) {
             if (bx + sep + s > right_limit) break;
@@ -310,6 +298,9 @@ static void draw_scene_sub_menu(system_element_context* ui_element, system_dock_
 
 void draw_sceneview_window(system_element_context* ui_ctx, system_dock_node* node, int content_y, int content_h, VkCommandBuffer current_cmd)
 {
+    phoenix_info("SCENE_VIEW", "draw_sceneview_window: node=%dx%d at (%d,%d), content_h=%d", 
+                 node->w, node->h, node->x, content_y, content_h);
+    
     /* this window's own tab sub menubar + buttons */
     draw_scene_sub_menu(ui_ctx, node, current_cmd);
 
@@ -319,7 +310,13 @@ void draw_sceneview_window(system_element_context* ui_ctx, system_dock_node* nod
     ui_ctx->scene_view.offset_x = node->x;
     ui_ctx->scene_view.offset_y = content_y;
 
+    phoenix_info("SCENE_VIEW", "Requesting offscreen size: %dx%d", node->w, content_h);
+    phoenix_info("SCENE_VIEW", "About to call offscreen_request_size with (0, %.0f, %.0f)", (double)node->w, (double)content_h);
+    offscreen_request_size(offscreen_scene, (double)node->w, (double)content_h);
+    phoenix_info("SCENE_VIEW", "Returned from offscreen_request_size");
+
     VkDescriptorSet texture_set = render_context.scene_viewport_target.descriptor_set;
+    phoenix_info("SCENE_VIEW", "Viewport descriptor: %p", (void*)texture_set);
 
     // 1. Submit offscreen viewport image target presentation regions to queue commands
     draw_sceneview_viewport(ui_ctx, current_cmd, node->x, content_y, node->w, content_h, texture_set);
@@ -332,9 +329,9 @@ void draw_sceneview_window(system_element_context* ui_ctx, system_dock_node* nod
     //    (The transform gizmo is still drawn afterwards from traverse_dock_tree, so it sits on top.)
     brush_ui_frame(ui_ctx);                  /* terrain brush + sculpt input + paint input, once per frame */
     system_edit_mode_update(ui_ctx);
-    edit_ops_update(ui_ctx);                 /* modeling tools + double click row select. AFTER edit mode so its selection wins this frame */
+    update_edit_ops(ui_ctx);                 /* modeling tools + double click row select. AFTER edit mode so its selection wins this frame */
     system_edit_mode_draw(current_cmd, ui_ctx);
-    edit_ops_draw(current_cmd, ui_ctx);      /* loop preview, weld rubber band, status line */
+    draw_edit_ops(current_cmd, ui_ctx);      /* loop preview, weld rubber band, status line */
 
     // 4. Delete key removes the obj_vert_selected object (and its children) while the mouse is over the Scene view
     system_scene_delete_hotkey(ui_ctx, node->x, content_y, node->w, content_h);

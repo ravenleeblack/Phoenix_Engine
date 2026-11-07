@@ -163,15 +163,15 @@ static void draw_link(VkCommandBuffer cmd, const texnode_rect* vp, float x0, flo
 static system_color header_color(int kind)
 {
     switch (kind) {
-    case texnode_kind_output:    return system_color_crimson;
-    case texnode_kind_color:     return system_color_orange;
-    case texnode_kind_noise:     return system_color_steel_blue;
-    case texnode_kind_gradient:  return system_color_teal;
-    case texnode_kind_texture:   return system_color_dark_green;
-    case texnode_kind_paint:     return system_color_mid_plum;
-    case texnode_kind_curvature: return system_color_olive;
-    case texnode_kind_levels:    return system_color_slate_alt;
-    default:                     return system_color_dark_slate;
+    case texnode_kind_output:    return system_theme.system_color_edit_mode_invalid_color;
+    case texnode_kind_color:     return system_theme.system_color_edit_mode_preview_color;
+    case texnode_kind_noise:     return system_theme.system_edit_mode_active_face_hover;
+    case texnode_kind_gradient:  return system_theme.system_color_edit_mode_normal_color;
+    case texnode_kind_texture:   return system_theme.system_color_edit_mode_face_active_color;
+    case texnode_kind_paint:     return system_theme.system_color_edit_mode_face_selection_color;
+    case texnode_kind_curvature: return system_theme.system_color_edit_mode_extrude_face_color;
+    case texnode_kind_levels:    return system_theme.system_color_edit_mode_hover_color;
+    default:                     return system_theme.system_border;
     }
 }
 
@@ -340,18 +340,18 @@ static void draw_node(VkCommandBuffer cmd, system_element_context* ui_element, c
     const texnode_box  b = box_of(vp, n);
     const bool obj_vert_selected  = (g_nodes.obj_vert_selected == index);
 
-    if (obj_vert_selected) fill_clipped(cmd, vp, b.x - 2.0f, b.y - 2.0f, b.w + 4.0f, b.h + 4.0f, system_color_orange);
+    if (obj_vert_selected) fill_clipped(cmd, vp, b.x - 2.0f, b.y - 2.0f, b.w + 4.0f, b.h + 4.0f, system_theme.system_color_edit_mode_preview_color);
     else          fill_clipped(cmd, vp, b.x - 1.0f, b.y - 1.0f, b.w + 2.0f, b.h + 2.0f, k_outline);
     fill_clipped(cmd, vp, b.x, b.y, b.w, b.h, k_body);
     fill_clipped(cmd, vp, b.x, b.y, b.w, b.head, header_color(n->kind));
 
     if (g_nodes.zoom >= 0.8f) {
-        text_clipped(cmd, ui_element, vp, d->title, (int)b.x + 6, (int)(b.y + (b.head - (float)ui_font_h) * 0.5f), system_color_pure_white);
+        text_clipped(cmd, ui_element, vp, d->title, (int)b.x + 6, (int)(b.y + (b.head - (float)ui_font_h) * 0.5f), system_theme.system_text);
         for (int p = 0; p < d->inputs; p++)
-            if (d->in_name[p]) text_clipped(cmd, ui_element, vp, d->in_name[p], (int)b.x + 10, (int)(b.y + b.head + b.row * (float)p + (b.row - (float)ui_font_h) * 0.5f), system_color_light_gray_2);
+            if (d->in_name[p]) text_clipped(cmd, ui_element, vp, d->in_name[p], (int)b.x + 10, (int)(b.y + b.head + b.row * (float)p + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_text);
         if (d->outputs > 0 && d->out_name) {
             const int tw = (int)strlen(d->out_name) * ui_font_w;
-            text_clipped(cmd, ui_element, vp, d->out_name, (int)(b.x + b.w) - tw - 10, (int)(b.y + b.head + (b.row - (float)ui_font_h) * 0.5f), system_color_light_gray_2);
+            text_clipped(cmd, ui_element, vp, d->out_name, (int)(b.x + b.w) - tw - 10, (int)(b.y + b.head + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_text);
         }
     }
 
@@ -359,7 +359,11 @@ static void draw_node(VkCommandBuffer cmd, system_element_context* ui_element, c
     for (int p = 0; p < d->inputs; p++)  { port_pos(&b, false, p, &px, &py); fill_clipped(cmd, vp, px - 4.0f, py - 4.0f, 8.0f, 8.0f, k_port); }
     if (d->outputs > 0) {
         port_pos(&b, true, 0, &px, &py);
-        fill_clipped(cmd, vp, px - 4.0f, py - 4.0f, 8.0f, 8.0f, (g_nodes.link_from == index) ? system_color_orange : k_port);
+        if (g_nodes.link_from == index) {
+            fill_clipped(cmd, vp, px - 4.0f, py - 4.0f, 8.0f, 8.0f, system_theme.system_color_edit_mode_preview_color);
+        } else {
+            fill_clipped(cmd, vp, px - 4.0f, py - 4.0f, 8.0f, 8.0f, k_port);
+        }
     }
 }
 
@@ -376,14 +380,14 @@ static void draw_graph(VkCommandBuffer cmd, system_element_context* ui_element, 
         float x0, y0, x1, y1;
         port_pos(&a, true, 0, &x0, &y0);
         port_pos(&c, false, l->to_port, &x1, &y1);
-        draw_link(cmd, vp, x0, y0, x1, y1, system_color_light_gray_2);
+        draw_link(cmd, vp, x0, y0, x1, y1, system_theme.system_text);
     }
 
     if (g_nodes.link_from >= 0 && g_nodes.nodes[g_nodes.link_from].used) {
         const texnode_box a = box_of(vp, &g_nodes.nodes[g_nodes.link_from]);
         float x0, y0;
         port_pos(&a, true, 0, &x0, &y0);
-        draw_link(cmd, vp, x0, y0, (float)ui_element->input.mouse_x, (float)ui_element->input.mouse_y, system_color_orange);
+        draw_link(cmd, vp, x0, y0, (float)ui_element->input.mouse_x, (float)ui_element->input.mouse_y, system_theme.system_color_edit_mode_preview_color);
     }
 
     for (int i = 0; i < texnode_max; i++) if (g_nodes.nodes[i].used) draw_node(cmd, ui_element, vp, i);
@@ -525,6 +529,6 @@ void draw_textureshop_node_window(system_element_context* ui_ctx, system_dock_no
         for (int i = 0; i < texnode_max_links; i++) if (g_nodes.links[i].used) link_count++;
         char text[200];
         snprintf(text, sizeof(text), "Nodes: %d   Links: %d   Zoom: %.0f%%   %s", node_count, link_count, (double)(g_nodes.zoom * 100.0f), g_nodes.status);
-        draw_text_element(cmd, ui_ctx, text, x + 8, status_y + 3, system_color_light_gray_2);
+        draw_text_element(cmd, ui_ctx, text, x + 8, status_y + 3, system_theme.system_text);
     }
 }

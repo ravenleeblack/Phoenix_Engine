@@ -432,7 +432,7 @@ uint32_t get_object_skin_id(uint32_t object_id)
 {
     check_texshop_ready();
     uint32_t size = 0;
-    const skin_ref* r = (const skin_ref*)object_db_get(object_id, OBJECT_DATA_SKIN_REF, &size);
+    const skin_ref* r = (const skin_ref*)object_db_get(object_id, object_data_skin_ref, &size);
     if (!r || size != sizeof(*r)) return 0;
     return find_texshop_skin_by_id(r->skin_id) ? r->skin_id : 0;     /* a deleted skin counts as no skin */
 }
@@ -462,7 +462,7 @@ void assign_texshop_skin_to_selected(void)
     if (o->type == scene_object_camera || o->type == scene_object_light) { set_texshop_status("Cameras and lights have no surface."); return; }
 
     const skin_ref ref = { s->id };
-    if (!object_db_set(o->id, OBJECT_DATA_SKIN_REF, &ref, (uint32_t)sizeof(ref))) {
+    if (!object_db_set(o->id, object_data_skin_ref, &ref, (uint32_t)sizeof(ref))) {
         set_texshop_status("That object already holds 8 data blocks.");
         return;
     }
@@ -478,8 +478,8 @@ void clear_texshop_skin_on_selected(void)
     system_scene_object* o = get_texshop_target_object();
     if (!o) { set_texshop_status("Select an object in the Hierarchy first."); return; }
     uint32_t size = 0;
-    if (!object_db_get(o->id, OBJECT_DATA_SKIN_REF, &size)) { set_texshop_status("That object has no skin."); return; }
-    object_db_remove(o->id, OBJECT_DATA_SKIN_REF);
+    if (!object_db_get(o->id, object_data_skin_ref, &size)) { set_texshop_status("That object has no skin."); return; }
+    object_db_remove(o->id, object_data_skin_ref);
     set_texshop_status("Skin cleared. The object is grey again.");
 }
 

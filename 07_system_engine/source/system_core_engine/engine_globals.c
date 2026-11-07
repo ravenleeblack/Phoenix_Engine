@@ -36,6 +36,33 @@ VkPipeline       graphics_pipeline_ui   = VK_NULL_HANDLE;
 VkPipelineLayout pipeline_layout_grid   = VK_NULL_HANDLE;
 VkPipeline       graphics_pipeline_grid = VK_NULL_HANDLE;
 
+/* ---- vulkan backend state (were file statics in engine_vulkan_backend.c) ---- */
+unsigned int             g_cached_framebuffer_width         = 0;
+unsigned int             g_cached_framebuffer_height        = 0;
+unsigned long long       g_framebuffer_size_generation      = 0;
+unsigned long long       g_framebuffer_size_last_generation = 0;
+bool                     g_recreating_swapchain             = false;
+uint32_t                 g_current_inflight_cpu_frame       = 0;
+VkDebugUtilsMessengerEXT g_debug_messenger                  = VK_NULL_HANDLE;
+vulkan_system_context    g_vulkan_runtime_context           = {0};
+
+/* ---- fallback ui texture (were file statics in engine_vulkan_backend.c) ---- */
+VkImage          g_ui_fallback_image   = VK_NULL_HANDLE;
+VkDeviceMemory   g_ui_fallback_memory  = VK_NULL_HANDLE;
+VkImageView      g_ui_fallback_view    = VK_NULL_HANDLE;
+VkSampler        g_ui_fallback_sampler = VK_NULL_HANDLE;
+VkDescriptorPool g_ui_fallback_pool    = VK_NULL_HANDLE;
+VkDescriptorSet  g_ui_fallback_set     = VK_NULL_HANDLE;
+
+/* ---- swapchain targets (were file statics in engine_vulkan_swapchain.c) ---- */
+vulkan_image   g_swapchain_depth_image = {0};
+VkImage        g_msaa_image            = VK_NULL_HANDLE;
+VkDeviceMemory g_msaa_memory           = VK_NULL_HANDLE;
+VkImageView    g_msaa_view             = VK_NULL_HANDLE;
+
+/* ---- shader search folders (was a file static in engine_vulkan_pipeline.c) ---- */
+const char* const g_shader_dirs[shader_directory_count] = { "", "shaders/", "../shaders/", "../../shaders/", "../" };
+
 HMODULE     system_editor_dll         = NULL;
 HMODULE     system_loader_dll         = NULL;
 HMODULE     system_game_dll           = NULL;
@@ -47,6 +74,26 @@ const char* program_window_title      = "phoenix engine";
 system_clock          main_clock     = {0};
 system_program        program_state  = {0};
 system_render_context render_context = {0};
+
+__declspec(dllexport) system_render_context* get_engine_render_context(void)
+{
+    return &render_context;
+}
+
+__declspec(dllexport) system_program* get_engine_program_state(void)
+{
+    return &program_state;
+}
+
+__declspec(dllexport) VkPipeline get_engine_grid_pipeline(void)
+{
+    return graphics_pipeline_grid;
+}
+
+__declspec(dllexport) VkPipelineLayout get_engine_grid_pipeline_layout(void)
+{
+    return pipeline_layout_grid;
+}
 system_engine_context engine_context = {0};
 system_element_context element_context = {0};
 

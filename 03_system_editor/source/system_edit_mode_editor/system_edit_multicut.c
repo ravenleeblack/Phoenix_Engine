@@ -32,7 +32,7 @@ bool edit_multicut_toggle(system_element_context* ui_element)
 {
     if (g_mode_state.context != mode_context_edit) { edit_msg("Multicut: switch to Edit mode first"); return false; }
     if (is_terrain_object(find_scene_object_by_id(g_scene_registry.selected_object_id))) { edit_msg("Multicut: not on terrain (fixed height grid)"); return false; }
-    manip_toggle_edit_tool(manip_edit_multicut);
+    toggle_manip_edit_tool(manip_edit_multicut);
     edit_target_weld_cancel(ui_element);
     edit_insert_loop_cancel(ui_element);
     edit_multicut_cancel(ui_element);
@@ -40,7 +40,7 @@ bool edit_multicut_toggle(system_element_context* ui_element)
     return true;
 }
 
-bool edit_multicut_wheel(float notches)
+bool consume_edit_multicut_wheel(float notches)
 {
     if (!is_ctrl_down()) return false;                          /* no CTRL: the wheel keeps zooming the camera */
     int d = (int)lroundf(notches);
@@ -52,7 +52,7 @@ bool edit_multicut_wheel(float notches)
     return true;
 }
 
-void edit_multicut_update(const edit_frame* f)
+void update_edit_multicut(const edit_frame* f)
 {
     s_cut_have = false;
     s_cut_edge = EM_NONE;
@@ -97,8 +97,8 @@ void edit_multicut_draw(VkCommandBuffer cmd, system_element_context* ui_element,
         const float t = system_math_compute_loop_t(j, s_cut_count, 0.0f);
         for (uint32_t i = 0; i < nf; ++i) {
             const uint32_t e1 = i, e2 = (i + 1) % R->n;
-            const cam_screen p1 = edit_project(cam, lerp3(mesh->verts[R->a[e1]].obj_vert_pos, mesh->verts[R->b[e1]].obj_vert_pos, t));
-            const cam_screen p2 = edit_project(cam, lerp3(mesh->verts[R->a[e2]].obj_vert_pos, mesh->verts[R->b[e2]].obj_vert_pos, t));
+            const cam_screen p1 = project_edit_point(cam, lerp3(mesh->verts[R->a[e1]].obj_vert_pos, mesh->verts[R->b[e1]].obj_vert_pos, t));
+            const cam_screen p2 = project_edit_point(cam, lerp3(mesh->verts[R->a[e2]].obj_vert_pos, mesh->verts[R->b[e2]].obj_vert_pos, t));
             if (p1.ok && p2.ok) edit_line2d(cmd, p1.x, p1.y, p2.x, p2.y, 2.0f, line_color);
         }
     }
@@ -110,8 +110,8 @@ void edit_multicut_draw(VkCommandBuffer cmd, system_element_context* ui_element,
 
     for (int j = 1; j <= s_cut_count; ++j) {
         const float t = system_math_compute_loop_t(j, s_cut_count, 0.0f);
-        const cam_screen p = edit_project(cam, lerp3(mesh->verts[R->a[idx]].obj_vert_pos, mesh->verts[R->b[idx]].obj_vert_pos, t));
-        const cam_screen q = edit_project(cam, lerp3(mesh->verts[R->a[nb]].obj_vert_pos,  mesh->verts[R->b[nb]].obj_vert_pos,  t));
+        const cam_screen p = project_edit_point(cam, lerp3(mesh->verts[R->a[idx]].obj_vert_pos, mesh->verts[R->b[idx]].obj_vert_pos, t));
+        const cam_screen q = project_edit_point(cam, lerp3(mesh->verts[R->a[nb]].obj_vert_pos,  mesh->verts[R->b[nb]].obj_vert_pos,  t));
         if (!p.ok || !q.ok) continue;
         edit_box2d(cmd, p.x, p.y, 4.0f, line_color);
         float ox, oy;

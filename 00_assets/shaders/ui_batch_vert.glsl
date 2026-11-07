@@ -14,7 +14,9 @@ void main()
 {
     vec2 corner = vec2(float(gl_VertexIndex & 1), float((gl_VertexIndex >> 1) & 1));
     vec2 p      = in_pos + corner * in_size;
-    gl_Position = vec4(p / pc.resolution * 2.0 - 1.0, 0.0, 1.0);
+    vec2 ndc    = vec2(p.x / pc.resolution.x * 2.0 - 1.0,
+                       1.0 - p.y / pc.resolution.y * 2.0);
+    gl_Position = vec4(ndc, 0.0, 1.0);
     v_color     = in_color;
     v_local     = (corner - 0.5) * in_size;
     v_half      = in_size.x * 0.5;

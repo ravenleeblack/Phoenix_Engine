@@ -41,6 +41,7 @@ bool start_program(void* h_instance_ptr)
 
     /* 4. engine, world registry, game. start_world_registry resets its own count, so it is safe before start_engine. */
     start_world_registry(&engine_context.world_state);
+    program_stage = program_boot_stage_engine;
     if (!start_engine(&engine_context)) {
         phoenix_engine_fatal("boot", "start_engine failed.");
         end_program();
@@ -61,6 +62,8 @@ bool start_program(void* h_instance_ptr)
     }
 
     /* 5. vulkan: instance, surface from hwnd_window_00, device, swapchain. calls g_editor.create_offscreen_* on the way. */
+    program_stage = program_boot_stage_render;     /* set first: a half built device must still be torn down */
+    phoenix_engine_info("boot", "starting the vulkan render frontend...");
     if (!start_render_frontend(program_window_title)) {
         phoenix_engine_fatal("boot", "vulkan render frontend failed to start.");
         end_program();
@@ -69,6 +72,7 @@ bool start_program(void* h_instance_ptr)
     program_stage = program_boot_stage_render;
 
     /* 6. job threads: the editor posts tasks, so they must exist before it starts */
+    program_stage = program_boot_stage_frame_jobs;
     if (!start_frame_jobs()) {
         phoenix_engine_fatal("boot", "frame jobs failed to start.");
         end_program();
@@ -77,6 +81,7 @@ bool start_program(void* h_instance_ptr)
     program_stage = program_boot_stage_frame_jobs;
 
     /* 7. editor: dock tree, object database, ui pipelines. needs the device and the job threads. */
+    program_stage = program_boot_stage_editor;
     if (!g_editor.start()) {
         phoenix_engine_fatal("boot", "editor failed to start.");
         end_program();
@@ -156,7 +161,10 @@ bool run_program(void)
    calling it twice does nothing: the stage is none after the first call. */
 void end_program(void)
 {
-    if (program_stage == program_boot_stage_none) return;
+    if (program_stage == program_boot_stage_none)
+    {
+        return;
+    }
 
     phoenix_engine_trace("program", "tracing the program 04: starting the shutdown program");
 
@@ -181,7 +189,10 @@ void end_program(void)
     }
 
     if (program_stage >= program_boot_stage_render) {
-        if (render_context.logical_device) vkDeviceWaitIdle(render_context.logical_device);
+        if (render_context.logical_device)
+        {
+            vkDeviceWaitIdle(render_context.logical_device);
+        }
         shutdown_render_frontend();   /* the backend calls the editor's offscreen shutdown, so the editor dll must still be loaded */
     }
 

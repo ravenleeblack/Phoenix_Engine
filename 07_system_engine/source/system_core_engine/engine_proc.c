@@ -47,6 +47,7 @@ LRESULT CALLBACK handle_window_message(HWND hwnd, UINT message, WPARAM wp, LPARA
         case WM_CLOSE:
         {
             /* end_program destroys the window, after vulkan let go of the surface */
+            phoenix_engine_warn("window", "WM_CLOSE received; stopping the engine loop.");
             program_state.is_running = false;
             return 0;
         }

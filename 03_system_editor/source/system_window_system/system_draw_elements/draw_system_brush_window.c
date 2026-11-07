@@ -83,7 +83,7 @@ static bool brush_tile(VkCommandBuffer cmd, system_element_context* ui_element, 
     if (nx < tx + 2) nx = tx + 2;
     draw_text_element(cmd, ui_element, name, nx, ty + br_tile - ui_font_h - 5, system_theme.button_text);
 
-    if (obj_vert_selected) draw_full_border(cmd, ui_element, tx, ty, br_tile, br_tile, 2, system_color_pure_white);
+    if (obj_vert_selected) draw_full_border(cmd, ui_element, tx, ty, br_tile, br_tile, 2, system_theme.system_text);
     return hovered && edge_to_face_array;
 }
 
@@ -122,7 +122,7 @@ void draw_system_brush_window(system_element_context* ui_ctx, system_dock_node* 
 
         const bool obj_vert_selected = (sculpt_get_brush() == brush);
         if (brush_tile(cmd, ui_ctx, edge_to_face_array, tx, ty, sculpt_brush_name(brush), obj_vert_selected,
-                       system_theme.system_accent, system_color_near_white)) {
+                       system_theme.system_accent, system_theme.system_text)) {
             sculpt_set_brush(brush);
             if (!sculpt_mode_is_active()) mode_menu_enter_mode(ui_ctx, mode_context_sculpt, false);   /* a brush needs Sculpt mode */
         }
@@ -149,7 +149,7 @@ void draw_system_brush_window(system_element_context* ui_ctx, system_dock_node* 
         const system_color dab = { .red = k_paint_brushes[slot].r, .green = k_paint_brushes[slot].g,
                                    .blue = k_paint_brushes[slot].b, .alpha = 1.0f };
         if (brush_tile(cmd, ui_ctx, edge_to_face_array, tx, ty, k_paint_brushes[slot].name, s_paint_brush == slot,
-                       system_color_amber, dab)) {
+                       system_theme.system_color_edit_mode_preview_color, dab)) {
             s_paint_brush = slot;
             if (!paint_mode_is_active()) mode_menu_enter_mode(ui_ctx, mode_context_paint, false);   /* a paint brush needs Paint mode */
         }
@@ -160,7 +160,7 @@ void draw_system_brush_window(system_element_context* ui_ctx, system_dock_node* 
     if (cursor + 14 > limit) return;
     char buf[96];
     snprintf(buf, sizeof(buf), "Sculpt: %s   Paint: %s", sculpt_brush_name(sculpt_get_brush()), k_paint_brushes[s_paint_brush].name);
-    draw_text_element(cmd, ui_ctx, buf, left, cursor, system_color_near_white);
+    draw_text_element(cmd, ui_ctx, buf, left, cursor, system_theme.system_text);
     if (!sculpt_mode_is_active() && !paint_mode_is_active() && cursor + 30 <= limit)
-        draw_text_element(cmd, ui_ctx, "Pick a brush to turn Sculpt or Paint mode on.", left, cursor + 16, system_color_amber);
+        draw_text_element(cmd, ui_ctx, "Pick a brush to turn Sculpt or Paint mode on.", left, cursor + 16, system_theme.system_color_edit_mode_preview_color);
 }

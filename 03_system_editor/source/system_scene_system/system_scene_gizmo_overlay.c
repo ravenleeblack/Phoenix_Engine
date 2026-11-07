@@ -28,7 +28,7 @@ void draw_sceneview_gimbal_overlay(VkCommandBuffer cmd, system_element_context* 
 {
     (void)object_origin; 
     
-    camera_component* active_cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* active_cam = &engine_context.world_state.editor_scene_camera;
     
     float center_x = (float)(bounds.offset_x) + 60.0f;
     float center_y = (float)(bounds.offset_y + bounds.height) - 60.0f;

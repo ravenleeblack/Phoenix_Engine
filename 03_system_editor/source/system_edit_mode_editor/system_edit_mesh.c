@@ -1,4 +1,5 @@
 #include "system_globals.h"
+#include "system_object_database.h"
 
 
 /* Set to 0 if upload_scene_object_mesh() already destroys the object's old buffers. */
@@ -546,7 +547,7 @@ edit_mode_mesh* em_registry_get_or_create(system_scene_object* obj)
     {
         const void* dv = NULL; const uint32_t* di = NULL;
         uint32_t dvs = 0, dvc = 0, dic = 0;
-        if (object_db_get_mesh(obj->id, &dv, &dvs, &dvc, &di, &dic) && dvs == sizeof(editor_vertex)) {
+        if (get_object_mesh_data(obj->id, &dv, &dvs, &dvc, &di, &dic) && dvs == sizeof(editor_vertex)) {
             if (em_build_from_triangles(&s->mesh, (const editor_vertex*)dv, dvc, di, dic, 1e-4f, true)) return &s->mesh;
             em_mesh_clear(&s->mesh);
         }
@@ -652,7 +653,7 @@ bool em_commit_to_gpu(edit_mode_mesh* mesh, system_scene_object* obj)
         if (!ok || n <= 30 || (n % 30) == 0)
             phoenix_info("EditMesh", "em_commit_to_gpu #%u '%s' (id %u): %u verts %u indices -> %s", n, obj->name, (unsigned)obj->id, (unsigned)vc, (unsigned)ic, ok ? "ok" : "UPLOAD FAILED");
     }
-    if (ok) object_db_set_mesh(obj->id, vert_to_edge_array, (uint32_t)sizeof(editor_vertex), vc, idx, ic);   /* keep the database copy in step */
+    if (ok) set_object_mesh_data(obj->id, vert_to_edge_array, (uint32_t)sizeof(editor_vertex), vc, idx, ic);   /* keep the database copy in step */
     free(vert_to_edge_array);
     free(idx);
 

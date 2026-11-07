@@ -6,8 +6,8 @@
 /* EXTRUDE obj_vert_selected faces                                                    */
 /* ========================================================================= */
 static float s_extrude_distance = 1.0f;
-void  edit_ops_set_extrude_distance(float d) { s_extrude_distance = d; }
-float edit_ops_get_extrude_distance(void)    { return s_extrude_distance; }
+void  set_edit_ops_extrude_distance(float d) { s_extrude_distance = d; }
+float get_edit_ops_extrude_distance(void)    { return s_extrude_distance; }
 
 bool edit_op_extrude(edit_mode_mesh* mesh, const char** err)
 {

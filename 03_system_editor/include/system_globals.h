@@ -4,6 +4,8 @@
 
 extern char status_bar_text_buffer[256];
 extern manage_sculpt_stroke g_sculpt_stroke;
+extern bool editor_frame_key_down;
+extern bool editor_home_key_down;
 
 /* ========================================================================= */
 /* system_globals.h : THE one header. Every editor .c file does              */
@@ -80,6 +82,8 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 
 /* ---- 8. Docking, menus, scene tools ---- */
 #include "system_dock.h"
+#include "system_menubar.h"
+#include "system_sceneview.h"
 #include "system_context_menu.h"
 #include "system_camera_prefs.h"
 #include "system_scene_look.h"
@@ -101,6 +105,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 
 #include "system_brush_element.h"
 #include "system_skin_gpu.h"
+
 
 
 /*==================================================================================================*/

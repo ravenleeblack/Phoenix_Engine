@@ -26,7 +26,6 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /* Needs editor_vec3 / editor_vertex / system_scene_object: include this from engine_globals.h AFTER the scene object and vertex types. */
 
 #define light_max_objects 64
-#define LIGHT_MAX_OBJECTS light_max_objects
 #define LIGHT_KIND_DIRECTIONAL 0
 #define phoenix_pi        3.14159265f
 

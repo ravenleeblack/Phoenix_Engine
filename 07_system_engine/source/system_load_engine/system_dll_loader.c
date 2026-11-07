@@ -30,21 +30,32 @@ bool load_editor_library(void)
     g_editor.update            = (update_editor_ptr)          resolve_system_symbol(system_editor_dll, name, "editor_update");
     g_editor.begin_frame_pass  = (begin_editor_frame_pass_ptr)resolve_system_symbol(system_editor_dll, name, "editor_begin_frame_pass");
     g_editor.draw_ui           = (draw_editor_ui_ptr)         resolve_system_symbol(system_editor_dll, name, "editor_draw_ui");
+    g_editor.draw_menubar      = (draw_editor_menubar_ptr)    resolve_system_symbol(system_editor_dll, name, "editor_draw_menubar");
+    g_editor.draw_toolbar      = (draw_editor_toolbar_ptr)    resolve_system_symbol(system_editor_dll, name, "editor_draw_toolbar");
+    g_editor.draw_dock         = (draw_editor_dock_ptr)       resolve_system_symbol(system_editor_dll, name, "editor_draw_dock");
+    g_editor.draw_statusbar    = (draw_editor_statusbar_ptr)  resolve_system_symbol(system_editor_dll, name, "editor_draw_statusbar");
+    g_editor.flush_ui          = (flush_editor_ui_ptr)        resolve_system_symbol(system_editor_dll, name, "editor_flush_ui");
     g_editor.end_frame_pass    = (end_editor_frame_pass_ptr)  resolve_system_symbol(system_editor_dll, name, "editor_end_frame_pass");
     g_editor.handle_message    = (handle_editor_message_ptr)  resolve_system_symbol(system_editor_dll, name, "editor_handle_message");
     g_editor.shutdown          = (shutdown_editor_ptr)        resolve_system_symbol(system_editor_dll, name, "editor_shutdown");
 
     /* the editor's offscreen scene pass: the vulkan backend calls these while it builds the device */
     g_editor.create_offscreen_renderpass  = (create_offscreen_renderpass_ptr) resolve_system_symbol(system_editor_dll, name, "offscreen_create_renderpass");
+    g_editor.get_offscreen_renderpass     = (get_offscreen_renderpass_ptr)    resolve_system_symbol(system_editor_dll, name, "offscreen_get_renderpass");
     g_editor.create_offscreen_resources   = (create_offscreen_resources_ptr)  resolve_system_symbol(system_editor_dll, name, "offscreen_create_resources");
     g_editor.shutdown_offscreen           = (shutdown_offscreen_ptr)          resolve_system_symbol(system_editor_dll, name, "offscreen_shutdown");
     g_editor.create_scene_object_pipeline = (create_scene_object_pipeline_ptr)resolve_system_symbol(system_editor_dll, name, "create_scene_object_pipeline");
+    g_editor.record_offscreen_frame       = (record_offscreen_frame_ptr)      resolve_system_symbol(system_editor_dll, name, "offscreen_record_frame");
 
     if (!g_editor.load_settings || !g_editor.save_settings || !g_editor.start || !g_editor.update ||
-        !g_editor.begin_frame_pass || !g_editor.draw_ui || !g_editor.end_frame_pass ||
+        !g_editor.begin_frame_pass || !g_editor.draw_ui || !g_editor.draw_menubar ||
+        !g_editor.draw_toolbar || !g_editor.draw_dock || !g_editor.draw_statusbar ||
+        !g_editor.flush_ui || !g_editor.end_frame_pass ||
         !g_editor.handle_message || !g_editor.shutdown ||
         !g_editor.create_offscreen_renderpass || !g_editor.create_offscreen_resources ||
-        !g_editor.shutdown_offscreen || !g_editor.create_scene_object_pipeline) {
+        !g_editor.get_offscreen_renderpass ||
+        !g_editor.shutdown_offscreen || !g_editor.create_scene_object_pipeline ||
+        !g_editor.record_offscreen_frame) {
         phoenix_engine_error("linker", "failed to resolve editor symbols in phoenix_editor.dll.");
         return false;
     }
@@ -95,9 +106,18 @@ bool load_game_library(void)
 
 bool load_subsystem_libraries(void)
 {
-    if (!load_editor_library()) return false;
-    if (!load_loader_library()) return false;
-    if (!load_game_library())   return false;
+    if (!load_editor_library())
+    {
+        return false;
+    }
+    if (!load_loader_library())
+    {
+        return false;
+    }
+    if (!load_game_library())
+    {
+        return false;
+    }
 
     phoenix_engine_info("linker", "editor, loader and game plugins linked and mapped.");
     return true;

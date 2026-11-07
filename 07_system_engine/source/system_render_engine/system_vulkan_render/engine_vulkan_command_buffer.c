@@ -16,12 +16,12 @@ void allocate_vulkan_command_buffer(
     allocate_info.commandBufferCount = 1;
     allocate_info.pNext = 0;
 
-    out_command_buffer->state = COMMAND_BUFFER_STATE_NOT_ALLOCATED;
+    out_command_buffer->state = vulkan_command_buffer_state_not_allocated;
     validate_vulkan_result(vkAllocateCommandBuffers(
         context->device.logical_device,
         &allocate_info,
         &out_command_buffer->handle));
-    out_command_buffer->state = COMMAND_BUFFER_STATE_READY;
+    out_command_buffer->state = vulkan_command_buffer_state_ready;
 }
 
 void free_vulkan_command_buffer(
@@ -35,7 +35,7 @@ void free_vulkan_command_buffer(
         &command_buffer->handle);
 
     command_buffer->handle = 0;
-    command_buffer->state = COMMAND_BUFFER_STATE_NOT_ALLOCATED;
+    command_buffer->state = vulkan_command_buffer_state_not_allocated;
 }
 
 void begin_vulkan_command_buffer(
@@ -57,20 +57,20 @@ void begin_vulkan_command_buffer(
     }
 
     validate_vulkan_result(vkBeginCommandBuffer(command_buffer->handle, &begin_info));
-    command_buffer->state = COMMAND_BUFFER_STATE_RECORDING;
+    command_buffer->state = vulkan_command_buffer_state_recording;
 }
 
 void end_vulkan_command_buffer(vulkan_command_buffer* command_buffer) {
     validate_vulkan_result(vkEndCommandBuffer(command_buffer->handle));
-    command_buffer->state = COMMAND_BUFFER_STATE_RECORDING_ENDED;
+    command_buffer->state = vulkan_command_buffer_state_recording_ended;
 }
 
 void update_vulkan_command_buffer(vulkan_command_buffer* command_buffer) {
-    command_buffer->state = COMMAND_BUFFER_STATE_SUBMITTED;
+    command_buffer->state = vulkan_command_buffer_state_submitted;
 }
 
 void reset_vulkan_command_buffer(vulkan_command_buffer* command_buffer) {
-    command_buffer->state = COMMAND_BUFFER_STATE_READY;
+    command_buffer->state = vulkan_command_buffer_state_ready;
 }
 
 void begin_vulkan_command_buffer_allocate_and_single_use(

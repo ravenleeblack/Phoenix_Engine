@@ -3,10 +3,10 @@
 
 extern int find_memory_index(unsigned int type_filter, unsigned int property_flags);
 
-/* scene_3d.glsl: half_extent_m = 2000, cell_size_m = 4 -> lines_per_axis = (2000*2)/4 + 1 = 1001, verts_per_axis = 2002, two axes = 4004.
+/* grid_vert.glsl: half_extent_m = 2000, cell_size_m = 4 -> lines_per_axis = (2000*2)/4 + 1 = 1001, verts_per_axis = 2002, two axes = 4004.
    If this is larger than the shader's real count, the extra vertices are drawn as more Z lines past x = +2000 and the grid stops being square.
-   Change half_extent_m / cell_size_m in scene_3d.glsl and this number together (same number lives in system_grid.c). */
-#define GRID_VERTEX_COUNT 4004   /* must match scene_3d.glsl: 1001 lines per axis * 2 axes * 2 verts */
+   Change half_extent_m / cell_size_m in grid_vert.glsl and this number together (same number lives in system_grid.c). */
+#define GRID_VERTEX_COUNT 4004   /* must match grid_vert.glsl: 1001 lines per axis * 2 axes * 2 verts */
 #define OFFSCREEN_MAX_DIM 8192u
 
 typedef struct {
@@ -30,7 +30,7 @@ typedef struct {
     bool     drawn;          /* rendered this frame: image is in SHADER_READ_ONLY and may be sampled */
 } offscreen_target;
 
-static offscreen_target g_target[OFFSCREEN_COUNT];
+static offscreen_target g_target[offscreen_count];
 static VkRenderPass     g_pass            = VK_NULL_HANDLE;
 static VkSampler        g_sampler         = VK_NULL_HANDLE;
 static VkDescriptorPool g_pool            = VK_NULL_HANDLE;
@@ -51,8 +51,9 @@ static bool format_has_stencil(VkFormat f)
 /* ------------------------------------------------------------------ */
 /* Render pass                                                         */
 /* ------------------------------------------------------------------ */
-bool create_offscreen_renderpass(VkFormat color_format, VkFormat depth_format)
+bool create_offscreen_renderpass(VkDevice device, VkFormat color_format, VkFormat depth_format)
 {
+    (void)device;
     if (g_pass != VK_NULL_HANDLE) return true;
     if (depth_format == VK_FORMAT_UNDEFINED) {
         phoenix_error("OFFSCREEN", "%s", "No depth format: cannot build the offscreen pass.");
@@ -61,7 +62,7 @@ bool create_offscreen_renderpass(VkFormat color_format, VkFormat depth_format)
 
     g_color_format = color_format;
     g_depth_format = depth_format;
-    g_samples      = get_msaa_sample_count();
+    g_samples      = get_render_msaa_sample_count();
     const bool msaa = (g_samples != VK_SAMPLE_COUNT_1_BIT);
 
     /* Attachment order: 0 = color (MSAA, or the resolved image itself when MSAA is off), 1 = depth, 2 = resolve (MSAA only) */
@@ -457,17 +458,17 @@ bool create_offscreen_resources(void)
     /* the FXAA pass is optional: if its shaders are missing the editor just runs without it */
     create_fxaa_objects();
 
-    VkDescriptorPoolSize ps = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, OFFSCREEN_COUNT * 2 };   /* scene set + FXAA set per target */
+    VkDescriptorPoolSize ps = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, offscreen_count * 2 };   /* scene set + FXAA set per target */
     VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     pi.poolSizeCount = 1;
     pi.pPoolSizes    = &ps;
-    pi.maxSets       = OFFSCREEN_COUNT * 2;
+    pi.maxSets       = offscreen_count * 2;
     if (vkCreateDescriptorPool(dev, &pi, render_context.allocator, &g_pool) != VK_SUCCESS) {
         phoenix_error("OFFSCREEN", "%s", "Failed to create the offscreen descriptor pool.");
         return false;
     }
 
-    for (int k = 0; k < OFFSCREEN_COUNT; k++) {
+    for (int k = 0; k < offscreen_count; k++) {
         VkDescriptorSetAllocateInfo ai = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
         ai.descriptorPool     = g_pool;
         ai.descriptorSetCount = 1;
@@ -489,7 +490,7 @@ void shutdown_offscreen(void)
     VkDevice dev = render_context.logical_device;
     if (dev == VK_NULL_HANDLE) return;
 
-    for (int k = 0; k < OFFSCREEN_COUNT; k++) {
+    for (int k = 0; k < offscreen_count; k++) {
         destroy_target_images(&g_target[k]);
         g_target[k].descriptor_set = VK_NULL_HANDLE;   /* freed with the pool */
         g_target[k].fxaa_set = VK_NULL_HANDLE;
@@ -508,7 +509,7 @@ void shutdown_offscreen(void)
 /* ------------------------------------------------------------------ */
 void request_offscreen_size(offscreen_kind kind, float width, float height)
 {
-    if (kind < 0 || kind >= OFFSCREEN_COUNT) return;
+    if (kind < 0 || kind >= offscreen_count) return;
     if (width < 1.0f || height < 1.0f) return;
 
     offscreen_target* t = &g_target[kind];
@@ -522,25 +523,25 @@ void request_offscreen_size(offscreen_kind kind, float width, float height)
 
 VkDescriptorSet get_offscreen_descriptor(offscreen_kind kind)
 {
-    if (kind < 0 || kind >= OFFSCREEN_COUNT) return VK_NULL_HANDLE;
+    if (kind < 0 || kind >= offscreen_count) return VK_NULL_HANDLE;
     if (!g_target[kind].drawn) return VK_NULL_HANDLE;
     return g_target[kind].fxaa_applied ? g_target[kind].fxaa_set : g_target[kind].descriptor_set;
 }
 
 static void draw_scene_view(VkCommandBuffer cmd, uint32_t w, uint32_t h)
 {
-    if (graphics_pipeline_grid == VK_NULL_HANDLE || pipeline_layout_grid == VK_NULL_HANDLE) return;
-
     editor_mat4 view, proj;
     build_scene_view_camera((float)w / (float)h, &view, &proj);   /* SYSTEM camera: the editor fly camera */
 
-    float pc[32];
-    memcpy(&pc[0],  &view.mesh[0][0], sizeof(float) * 16);
-    memcpy(&pc[16], &proj.mesh[0][0], sizeof(float) * 16);
+    if (graphics_pipeline_grid != VK_NULL_HANDLE && pipeline_layout_grid != VK_NULL_HANDLE) {
+        float pc[32];
+        memcpy(&pc[0],  &view.mesh[0][0], sizeof(float) * 16);
+        memcpy(&pc[16], &proj.mesh[0][0], sizeof(float) * 16);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_grid);
-    vkCmdPushConstants(cmd, pipeline_layout_grid, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
-    if (g_scene_view.show_grid) vkCmdDraw(cmd, GRID_VERTEX_COUNT, 1, 0, 0);   /* Grid button (includes the red / blue axis lines) */
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_grid);
+        vkCmdPushConstants(cmd, pipeline_layout_grid, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+        if (g_scene_view.show_grid) vkCmdDraw(cmd, GRID_VERTEX_COUNT, 1, 0, 0);   /* Grid button (includes the red / blue axis lines) */
+    }
 
     /* Meshes, camera glyphs, origin marker. Binds its own pipeline, so it comes after the grid. */
     draw_scene_objects(cmd, &view.mesh[0][0], &proj.mesh[0][0]);
@@ -583,7 +584,7 @@ void record_offscreen_frame(VkCommandBuffer cmd)
 {
     if (g_pass == VK_NULL_HANDLE) return;
 
-    for (int k = 0; k < OFFSCREEN_COUNT; k++) {
+    for (int k = 0; k < offscreen_count; k++) {
         offscreen_target* t = &g_target[k];
         t->drawn = false;
         t->fxaa_applied = false;
@@ -600,7 +601,7 @@ void record_offscreen_frame(VkCommandBuffer cmd)
         if (t->framebuffer == VK_NULL_HANDLE) continue;
 
         /* The Game view with no camera in the hierarchy draws nothing: skip the pass and the composite quad. */
-        if (k == OFFSCREEN_GAME) {
+        if (k == offscreen_game) {
             editor_mat4 vert_to_edge_array, p;
             if (!build_game_view_camera((float)t->width / (float)t->height, &vert_to_edge_array, &p)) continue;
         }
@@ -609,7 +610,7 @@ void record_offscreen_frame(VkCommandBuffer cmd)
         memset(clear, 0, sizeof(clear));
         /* Scene view: fallback colour under the gradient, follows the Preferences background even if the gradient pipeline is missing.
            Game view: the editor background is NOT used there (fixed dark colour until cameras get their own background setting). */
-        if (k == OFFSCREEN_SCENE) clear[0].color = (VkClearColorValue){{ g_scene_bg.top[0], g_scene_bg.top[1], g_scene_bg.top[2], 1.0f }};
+        if (k == offscreen_scene) clear[0].color = (VkClearColorValue){{ g_scene_bg.top[0], g_scene_bg.top[1], g_scene_bg.top[2], 1.0f }};
         else                      clear[0].color = (VkClearColorValue){{ 0.05f, 0.05f, 0.07f, 1.0f }};
         clear[1].depthStencil = (VkClearDepthStencilValue){ 1.0f, 0 };
 
@@ -627,7 +628,7 @@ void record_offscreen_frame(VkCommandBuffer cmd)
         vkCmdSetViewport(cmd, 0, 1, &vp);
         vkCmdSetScissor(cmd, 0, 1, &sc);
 
-        if (k == OFFSCREEN_SCENE) {
+        if (k == offscreen_scene) {
             scene_look_draw_background(cmd);   /* editor gradient from Preferences: Scene view only, after viewport + scissor, before the grid */
             draw_scene_view(cmd, t->width, t->height);
         } else {
@@ -645,11 +646,11 @@ void record_offscreen_frame(VkCommandBuffer cmd)
 
         /* one-time diagnostic: shows which image the UI will sample for this view */
         {
-            static bool s_logged[OFFSCREEN_COUNT];
+            static bool s_logged[offscreen_count];
             if (!s_logged[k]) {
                 s_logged[k] = true;
                 phoenix_info("OFFSCREEN", "%s view first drawn: %ux%u, %ux MSAA, FXAA applied=%d (prefs fxaa=%d, pipeline=%d)",
-                             (k == OFFSCREEN_SCENE) ? "Scene" : "Game", t->width, t->height, (unsigned)g_samples,
+                             (k == offscreen_scene) ? "Scene" : "Game", t->width, t->height, (unsigned)g_samples,
                              (int)t->fxaa_applied, (int)g_render_settings.fxaa, (int)(g_fxaa_pipeline != VK_NULL_HANDLE));
             }
         }

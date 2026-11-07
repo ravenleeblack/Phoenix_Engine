@@ -70,7 +70,7 @@ void editor_state_apply_from_db(void)
     get_color3("view.wire_on_shaded_color",  g_scene_view.wire_on_shaded_color);
 
     /* ---- editor camera (and its lock) ---- */
-    camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* cam = &engine_context.world_state.editor_scene_camera;
     get_vec3("view.camera_pos", &cam->position);
     get_vec3("view.camera_rot", &cam->rotation);
     get_vec3("view.lock_pos",   &g_scene_view.lock_position);
@@ -107,7 +107,7 @@ void editor_state_write_to_db(void)
     settings_db_set_floats("view.wire_color",           g_scene_view.wire_color, 3);
     settings_db_set_floats("view.wire_on_shaded_color", g_scene_view.wire_on_shaded_color, 3);
 
-    camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    world_camera* cam = &engine_context.world_state.editor_scene_camera;
     set_vec3("view.camera_pos", cam->position);
     set_vec3("view.camera_rot", cam->rotation);
     set_vec3("view.lock_pos",   g_scene_view.lock_position);

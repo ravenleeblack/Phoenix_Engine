@@ -183,7 +183,7 @@ void draw_scene_manipulator_overlay(VkCommandBuffer cmd, system_element_context*
             snprintf(snap, sizeof(snap), "Snap: Point");
         }
         const int tw = (int)strlen(snap) * mo_char_w;
-        draw_text_element(cmd, ui_element, snap, vx + vw - mo_margin - tw, next_y, system_color_mid_gray_2);
+        draw_text_element(cmd, ui_element, snap, vx + vw - mo_margin - tw, next_y, system_theme.system_text);
         next_y += 18;
     }
 

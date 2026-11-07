@@ -49,7 +49,7 @@ static bool remove_one(uint32_t id)
     /* GPU buffers may still be referenced by a command buffer recorded this frame: retire, don't destroy */
     em_gpu_retire(victim->vertex_buffer, victim->vertex_memory, victim->index_buffer, victim->index_memory);
     em_registry_remove(id);
-    object_db_remove(id, OBJECT_DATA_SKIN_REF);       /* the skin assignment dies with the object (ids are not reused, but do not leave blocks behind) */
+    object_db_remove(id, object_data_skin_ref);       /* the skin assignment dies with the object (ids are not reused, but do not leave blocks behind) */
 
     /* ordered removal: shift everything after it down one slot so hierarchy / camera order is preserved */
     system_scene_object* first_moved = &base[idx + 1];

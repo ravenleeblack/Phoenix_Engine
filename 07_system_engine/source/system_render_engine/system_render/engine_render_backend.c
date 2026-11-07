@@ -3,7 +3,7 @@
 bool create_render_backend(render_backend_type type, render_backend* out_renderer_backend) 
 {
     phoenix_trace("BACKEND SYSTEM", "TRACING THE PROGRAM 11: STARTING THE RENDER BACKEND SYSTEM");
-    if (type == RENDERER_BACKEND_TYPE_VULKAN) 
+    if (type == render_backend_type_vulkan) 
     {
         out_renderer_backend->start_render   = start_vulkan_render_backend;
         out_renderer_backend->shutdown_render= shutdown_vulkan_render_backend;

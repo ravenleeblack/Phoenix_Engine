@@ -98,5 +98,6 @@ void           texshop_describe_target(char* out, size_t cap);   /* "<object>: <
 
 /* once per frame from the window: rebuilds the obj_vert_selected skin's GPU copy when an edit changed it */
 void           texshop_sync_skin_gpu(void);
+void           export_texshop_skin(void);
 
 #endif

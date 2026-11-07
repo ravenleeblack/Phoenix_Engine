@@ -23,19 +23,19 @@ static const number_field_opts k_size_opts = { .step = 0.03125f, .quantum = 0.06
 /* ------------------------------------------------------------------------- */
 /* state changes                                                              */
 /* ------------------------------------------------------------------------- */
-void manip_set_show(system_element_context* ui_element, bool on)
+void set_manip_show(system_element_context* ui_element, bool on)
 {
     g_manip.show_manipulator = on;
     if (on && ui_element) ui_element->active_tool = tool_select;     /* the plain gizmo handles hide, the manipulator takes over */
 }
 
-void manip_set_snap(manip_snap_mode mode)
+void set_manip_snap(manip_snap_mode mode)
 {
     g_manip.snap = mode;
     phoenix_info("Manip", "snap mode %d (0 off, 1 point to point, 2 point to grid)", (int)mode);
 }
 
-void manip_scale_grid(float factor)
+void scale_manip_grid(float factor)
 {
     float g = g_manip.grid_size * factor;
     if (g < 0.125f) g = 0.125f;
@@ -44,7 +44,7 @@ void manip_scale_grid(float factor)
     phoenix_info("Manip", "grid size %.3f", g);
 }
 
-void manip_toggle_edit_tool(manip_edit_tool tool)
+void toggle_manip_edit_tool(manip_edit_tool tool)
 {
     g_manip.edit_tool = (g_manip.edit_tool == tool) ? manip_edit_none : tool;
 }
@@ -121,13 +121,13 @@ static void begin_frame_once(system_element_context* ui_element, int vx, int vy,
 
     const int mx = ui_element->input.mouse_x, my = ui_element->input.mouse_y;
     const bool in_view = mx >= vx && mx < vx + vw && my >= vy && my < vy + vh;
-    const bool free_ui = ui_element->active_id == 0 && !ui_element->input.camera_manipulating && !is_context_menu_open() && !number_field_is_active();
+    const bool free_ui = ui_element->active_id == 0 && !ui_element->input.camera_manipulating && !is_context_menu_open() && !is_number_field_active();
 
-    if (t_edge && in_view && free_ui) manip_set_show(ui_element, !g_manip.show_manipulator);     /* Maya: T */
-    if (esc_edge && !number_field_is_editing() && g_manip.edit_tool != manip_edit_none && !is_context_menu_open()) g_manip.edit_tool = manip_edit_none;
+    if (t_edge && in_view && free_ui) set_manip_show(ui_element, !g_manip.show_manipulator);     /* Maya: T */
+    if (esc_edge && !is_number_field_editing() && g_manip.edit_tool != manip_edit_none && !is_context_menu_open()) g_manip.edit_tool = manip_edit_none;
 }
 
-bool manip_overlay_wants_mouse(void) { return s_over || number_field_is_active(); }
+bool is_manip_overlay_using_mouse(void) { return s_over || is_number_field_active(); }
 
 /* ------------------------------------------------------------------------- */
 /* manipulator panel helpers                                                  */
@@ -187,7 +187,7 @@ void draw_scene_manipulator_overlay(VkCommandBuffer cmd, system_element_context*
         if (g_manip.snap == manip_snap_point_to_grid) snprintf(snap, sizeof(snap), "Snap: Grid %.2f", g_manip.grid_size);
         else                                          snprintf(snap, sizeof(snap), "Snap: Point");
         const int tw = (int)strlen(snap) * mo_char_w;
-        draw_text_element(cmd, ui_element, snap, vx + vw - mo_margin - tw, next_y, system_color_mid_gray_2);
+        draw_text_element(cmd, ui_element, snap, vx + vw - mo_margin - tw, next_y, system_theme.system_text);
         next_y += 18;
     }
 
@@ -196,7 +196,7 @@ void draw_scene_manipulator_overlay(VkCommandBuffer cmd, system_element_context*
     if (!has_obj) return;
 
     editor_vec3 size = { 0.0f, 0.0f, 0.0f };
-    const bool has_size = object_get_mesh_size(sel, &size);       /* false: terrain, empty, light ... */
+    const bool has_size = get_object_mesh_size(sel, &size);       /* false: terrain, empty, light ... */
 
     const int px = vx + vw - mo_margin - mo_panel_w;
     const int py = next_y;
@@ -221,7 +221,7 @@ void draw_scene_manipulator_overlay(VkCommandBuffer cmd, system_element_context*
             const int fx = px + 4 + mo_label_w + 2 + c * mo_field_w;
             float* vert_to_edge_array = field_ptr(sel, idx);
 
-            const number_field_result res = ui_number_field(cmd, ui_element, k_field_id_base + (uint32_t)idx,
+            const number_field_result res = draw_number_field(cmd, ui_element, k_field_id_base + (uint32_t)idx,
                                                             fx, ry, mo_field_w - 2, mo_row_h - 2, vert_to_edge_array, k_row_opts[r]);
 
             /* position goes through the snap while dragging. a typed number is exact and is never snapped. */
@@ -244,9 +244,9 @@ void draw_scene_manipulator_overlay(VkCommandBuffer cmd, system_element_context*
         float sz[3] = { size.x, size.y, size.z };
         for (int c = 0; c < 3; c++) {
             const int fx = px + 4 + mo_label_w + 2 + c * mo_field_w;
-            const number_field_result res = ui_number_field(cmd, ui_element, k_field_id_base + 9u + (uint32_t)c,
+            const number_field_result res = draw_number_field(cmd, ui_element, k_field_id_base + 9u + (uint32_t)c,
                                                             fx, ry, mo_field_w - 2, mo_row_h - 2, &sz[c], &k_size_opts);
-            if (res != number_field_none) object_set_mesh_size_axis(sel, c, sz[c]);
+            if (res != number_field_none) set_object_mesh_size_axis(sel, c, sz[c]);
         }
     }
 }

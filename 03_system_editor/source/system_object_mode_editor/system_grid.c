@@ -1,7 +1,7 @@
 #include "system_globals.h"
 
 /*
- * The grid is generated entirely inside scene_3d.glsl from gl_VertexIndex
+ * The grid is generated entirely inside grid_vert.glsl from gl_VertexIndex
  * (1001 lines per axis * 2 axes * 2 verts = 4004 vertices), so NO vertex buffer is needed.
  *
  * There is ONE camera: engine_context.world_state.editor_scene_camera.
@@ -9,7 +9,7 @@
  * and the WASD / Alt-drag input already use, so the grid, meshes and gizmo cannot disagree.
  * Convention: yaw 0 faces -Z, rotation.x is pitch (negative looks down).
  */
-#define GRID_VERTEX_COUNT   4004   /* must match scene_3d.glsl */
+#define GRID_VERTEX_COUNT   4004   /* must match grid_vert.glsl */
 #define ZOOM_MIN_DISTANCE   1.0f
 #define ZOOM_MAX_DISTANCE   50000.0f
 #define ZOOM_STEP_FACTOR    0.88f      /* one wheel notch */

@@ -21,10 +21,12 @@ void main() {
     vec2 local_pos = vertices[gl_VertexIndex];
     vec2 pixel_pos = push_constants.position + (local_pos * push_constants.size);
 
-    vec2 zero_to_two = (pixel_pos / push_constants.resolution) * 2.0;
-    vec2 clip_space  = zero_to_two - vec2(1.0, 1.0);
+    vec2 clip_space = vec2(
+        pixel_pos.x / push_constants.resolution.x * 2.0 - 1.0,
+        1.0 - pixel_pos.y / push_constants.resolution.y * 2.0
+    );
 
-    gl_Position = vec4(clip_space.x, clip_space.y, 0.0, 1.0);
+    gl_Position = vec4(clip_space, 0.0, 1.0);
 
     out_color = push_constants.color;
     out_uv    = local_pos;

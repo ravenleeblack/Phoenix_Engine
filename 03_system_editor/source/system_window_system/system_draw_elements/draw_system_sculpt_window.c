@@ -18,7 +18,7 @@ static bool sw_fits(const sw_panel* p, int h) { return p->y + h <= p->limit; }
 static void sw_header(sw_panel* p, const char* text)
 {
     if (!sw_fits(p, 20)) return;
-    draw_text_element(p->cmd, p->ui_element, text, p->x, p->y + 2, system_color_near_white);
+    draw_text_element(p->cmd, p->ui_element, text, p->x, p->y + 2, system_theme.system_text);
     push_quad_element(p->cmd, (float)p->x, (float)(p->y + 18), (float)p->w, 1.0f, system_theme.menu_separator);
     p->y += 24;
 }
@@ -119,8 +119,12 @@ void draw_sculpt_window(system_element_context* ui_ctx, system_dock_node* node, 
         char buf[96];
         if (has_mesh) snprintf(buf, sizeof(buf), "Subdivision level %d   %u faces", sculpt_subdiv_level(), (unsigned)faces);
         else          snprintf(buf, sizeof(buf), "Subdivision: select a mesh object");
-        sw_label(&p, buf, has_mesh ? system_color_light_gray_2 : system_color_amber);
-        if (has_mesh && faces < 200) sw_label(&p, "Few faces: press ++ in the bar above (or the first stroke subdivides for you).", system_color_mid_gray_2);
+        if (has_mesh) {
+            sw_label(&p, buf, system_theme.system_text);
+        } else {
+            sw_label(&p, buf, system_theme.system_color_edit_mode_preview_color);
+        }
+        if (has_mesh && faces < 200) sw_label(&p, "Few faces: press ++ in the bar above (or the first stroke subdivides for you).", system_theme.system_text);
     }
     p.y += 4;
 
@@ -141,7 +145,7 @@ void draw_sculpt_window(system_element_context* ui_ctx, system_dock_node* node, 
     sculpt_clamp_settings(s);
 
     /* status */
-    if (!sculpt_mode_is_active())            sw_label(&p, "Sculpt mode is off. Press Sc in the bar above.", system_color_amber);
-    else if (!sculpt_selected_mesh_counts(NULL, NULL)) sw_label(&p, "Select a mesh object to sculpt.", system_color_amber);
-    else                                     sw_label(&p, "Ready: drag on the mesh in the Scene view.", system_color_mid_gray_2);
+    if (!sculpt_mode_is_active())            sw_label(&p, "Sculpt mode is off. Press Sc in the bar above.", system_theme.system_color_edit_mode_preview_color);
+    else if (!sculpt_selected_mesh_counts(NULL, NULL)) sw_label(&p, "Select a mesh object to sculpt.", system_theme.system_color_edit_mode_preview_color);
+    else                                     sw_label(&p, "Ready: drag on the mesh in the Scene view.", system_theme.system_text);
 }

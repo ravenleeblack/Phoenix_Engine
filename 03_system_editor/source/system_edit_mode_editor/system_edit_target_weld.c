@@ -1,4 +1,5 @@
 #include "system_globals.h"
+#include "system_edit_manager.h"
 
 
 /* ========================================================================= */
@@ -26,7 +27,7 @@ bool edit_target_weld_dragging(void) { return s_weld_drag; }
 
 void edit_target_weld_cancel(system_element_context* ui_element)
 {
-    if (s_weld_drag && ui_element && ui_element->active_id == EDIT_OPS_LOCK_ID) ui_element->active_id = 0;
+    if (s_weld_drag && ui_element && ui_element->active_id == edit_ops_lock_id) ui_element->active_id = 0;
     s_weld_drag = false;
     s_weld_src = s_weld_hover = EM_NONE;
 }
@@ -35,7 +36,7 @@ bool edit_target_weld_toggle(system_element_context* ui_element)
 {
     if (g_mode_state.context != mode_context_edit) { edit_msg("Target Weld: switch to Edit mode first"); return false; }
     if (is_terrain_object(find_scene_object_by_id(g_scene_registry.selected_object_id))) { edit_msg("Target Weld: not on terrain (fixed height grid)"); return false; }
-    manip_toggle_edit_tool(manip_edit_target_weld);
+    toggle_manip_edit_tool(manip_edit_target_weld);
     edit_target_weld_cancel(ui_element);
     edit_multicut_cancel(ui_element);
     edit_insert_loop_cancel(ui_element);
@@ -43,7 +44,7 @@ bool edit_target_weld_toggle(system_element_context* ui_element)
     return true;
 }
 
-void edit_target_weld_update(const edit_frame* f)
+void update_edit_target_weld(const edit_frame* f)
 {
     system_element_context* ui_element = f->ui_element;
     edit_mode_mesh* mesh = f->mesh;
@@ -51,7 +52,7 @@ void edit_target_weld_update(const edit_frame* f)
     if (!s_weld_drag) {
         s_weld_hover = f->inside ? edit_pick_vert(mesh, f->mx, f->my, EM_NONE) : EM_NONE;
         if (f->press && f->inside && s_weld_hover != EM_NONE && ui_element->active_id == 0) {
-            s_weld_drag = true; s_weld_src = s_weld_hover; ui_element->active_id = EDIT_OPS_LOCK_ID;
+            s_weld_drag = true; s_weld_src = s_weld_hover; ui_element->active_id = edit_ops_lock_id;
         }
         return;
     }

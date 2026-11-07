@@ -1,8 +1,8 @@
 # 1. Environment and OS Detection
 ifeq ($(OS),Windows_NT)
-    CC = clang
+    CC = C:/msys64/ucrt64/bin/gcc.exe
     GLSLC = glslc
-    CFLAGS = -std=c17 -O2 -Wall -Wextra -Wpedantic -Wshadow -D_DEBUG -DUNICODE -D_UNICODE -DPHOENIX_STATIC_LINK
+    CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic -Wshadow -D_DEBUG -DUNICODE -D_UNICODE -DPHOENIX_STATIC_LINK -DVK_USE_64_BIT_PTR_DEFINES=1
     SHARED_FLAG = -shared
     EXE_FLAG = 
     LIBS = -luser32 -lgdi32 -lkernel32 -lwinmm -lshell32
@@ -14,7 +14,7 @@ ifeq ($(OS),Windows_NT)
     endif
 else
     CC = x86_64-w64-mingw32-gcc
-    CFLAGS = -std=c17 -O2 -Wall -Wextra -Wpedantic -Wshadow -D_DEBUG -DUNICODE -D_UNICODE -DPHOENIX_STATIC_LINK
+    CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic -Wshadow -D_DEBUG -DUNICODE -D_UNICODE -DPHOENIX_STATIC_LINK -DVK_USE_64_BIT_PTR_DEFINES=1
     SHARED_FLAG = -shared
     EXE_FLAG = 
     LIBS = -luser32 -lgdi32 -lkernel32 -lwinmm -lshell32
@@ -85,7 +85,7 @@ PHOENIX_LOADER_OBJ = $(OBJ_DIR)/system_phoenix_loader.o
 # Shaders Build Target Targets
 VERT_SPV = $(BIN_DIR)/object_vert.spv
 FRAG_SPV = $(BIN_DIR)/object_frag.spv
-3D_VERT_SPV = $(BIN_DIR)/scene_3d.spv
+GRID_VERT_SPV = $(BIN_DIR)/grid_vert.spv
 GRID_FRAG_SPV = $(BIN_DIR)/grid_frag.spv
 MESH_VERT_SPV = $(BIN_DIR)/mesh_vert.spv
 MESH_FRAG_SPV = $(BIN_DIR)/mesh_frag.spv
@@ -123,7 +123,7 @@ vpath %.c $(sort $(dir $(EDITOR_SRC) $(ENGINE_SRC) $(GAME_SRC)))
 # Build includes compiled shader binaries natively
 all: directories shaders $(ENGINE_EXE) $(EDITOR_DLL) $(PHOENIX_LOADER_DLL) $(GAME_DLL)
 
-shaders: $(VERT_SPV) $(FRAG_SPV) $(3D_VERT_SPV) $(GRID_FRAG_SPV) $(MESH_VERT_SPV) $(MESH_FRAG_SPV) $(BG_VERT_SPV) $(BG_FRAG_SPV) $(UIB_VERT_SPV) $(UIB_FRAG_SPV) $(FXAA_VERT_SPV) $(FXAA_FRAG_SPV)
+shaders: $(VERT_SPV) $(FRAG_SPV) $(GRID_VERT_SPV) $(GRID_FRAG_SPV) $(MESH_VERT_SPV) $(MESH_FRAG_SPV) $(BG_VERT_SPV) $(BG_FRAG_SPV) $(UIB_VERT_SPV) $(UIB_FRAG_SPV) $(FXAA_VERT_SPV) $(FXAA_FRAG_SPV)
 
 $(BIN_DIR)/object_vert.spv: 00_assets/shaders/object_vert.glsl
 	@echo [Compiling Shader] $< -> $@
@@ -133,7 +133,7 @@ $(BIN_DIR)/object_frag.spv: 00_assets/shaders/object_frag.glsl
 	@echo [Compiling Shader] $< -> $@
 	@$(GLSLC) -fshader-stage=fragment $< -o $@
 
-$(BIN_DIR)/scene_3d.spv: 00_assets/shaders/scene_3d.glsl
+$(BIN_DIR)/grid_vert.spv: 00_assets/shaders/grid_vert.glsl
 	@echo [Compiling Shader] $< -> $@
 	@$(GLSLC) -fshader-stage=vertex $< -o $@
 

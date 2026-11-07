@@ -1,4 +1,5 @@
 #include "system_globals.h"
+#include "system_object_database.h"
 
 /* Maya default shaded grey (sRGB 0.55). The mesh shader writes vertex colour as-is, so convert to linear
    when the swapchain is an sRGB format (same rule push_quad_element uses for UI colors). */
@@ -78,7 +79,7 @@ void create_system_cube(editor_vec3 position, float size, const char* name, VkDe
     }
 
     /* object database + edit mode first, so the cube is editable even if the GPU upload fails */
-    object_db_set_mesh(obj->id, vertices, (uint32_t)sizeof(editor_vertex), 24, indices, 36);
+    set_object_mesh_data(obj->id, vertices, (uint32_t)sizeof(editor_vertex), 24, indices, 36);
     em_registry_adopt_triangles(obj->id, vertices, 24, indices, 36);
 
     if (!upload_scene_object_mesh(obj, device, physical_device, vertices, 24, indices, 36)) {

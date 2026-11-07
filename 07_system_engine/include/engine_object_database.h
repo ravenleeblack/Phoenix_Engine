@@ -29,7 +29,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
    The scene registry stays the light list (id, name, transform, hierarchy). Heavy or type-specific data goes here. */
 
 enum { object_db_max_kinds = 8 };
-#define OBJECT_DB_MAX_KINDS object_db_max_kinds
+enum { object_database_file_magic = 0x4f584850u, object_database_file_version = 1u };
 
 typedef enum {
     object_data_none            = 0,
@@ -43,15 +43,8 @@ typedef enum {
     object_data_user            = 100   /* 100 and up are free for anything else */
 } enum_object_data_kind;
 
-#define OBJECT_DATA_NONE object_data_none
-#define OBJECT_DATA_SKIN_REF object_data_skin_ref
-#define OBJECT_DATA_MESH_BLOB object_data_mesh_blob
-#define OBJECT_DATA_TERRAIN object_data_terrain
-#define OBJECT_DATA_TERRAIN_COLOR object_data_terrain_color
-#define OBJECT_DATA_TERRAIN_REGION object_data_terrain_region
-#define OBJECT_DATA_TERRAIN_TUNNELS object_data_terrain_tunnels
 
-/* NOTE: engine_scene_delete.c uses OBJECT_DATA_SKIN_REF. It is not in this enum. Add  object_data_skin_ref = <free number>
+/* NOTE: engine_scene_delete.c uses object_data_skin_ref. It is not in this enum. Add  object_data_skin_ref = <free number>
    here (or wherever the skin system defines it) and use the lowercase name in the delete code. */
 
 phoenix_engine_api void start_object_database(void);       /* empties the database. optional: every call below starts it on first use */

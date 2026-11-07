@@ -85,26 +85,40 @@ void remove_object_data_all(uint32_t object_id)
         } else {
             i++;
         }
-
     }
 }
 
-bool object_db_set(uint32_t object_id, enum_object_data_kind kind, const void* data, uint32_t size)
+bool set_object_mesh_data(uint32_t object_id, const void* vertices, uint32_t vertex_size, uint32_t vertex_count,
+                          const uint32_t* indices, uint32_t index_count)
 {
-    return set_object_data(object_id, kind, data, size);
+    uint32_t vertex_bytes = vertex_size * vertex_count;
+    uint32_t index_bytes = sizeof(uint32_t) * index_count;
+    uint32_t blob_size = sizeof(uint32_t) * 4u + vertex_bytes + index_bytes;
+    uint32_t* blob = malloc(blob_size);
+    if (!blob) return false;
+
+    blob[0] = vertex_size;
+    blob[1] = vertex_count;
+    blob[2] = index_count;
+    blob[3] = 0;
+    memcpy(blob + 4, vertices, vertex_bytes);
+    memcpy((uint8_t*)(blob + 4) + vertex_bytes, indices, index_bytes);
+    bool ok = set_object_data(object_id, object_data_mesh_blob, blob, blob_size);
+    free(blob);
+    return ok;
 }
 
-void* object_db_get(uint32_t object_id, enum_object_data_kind kind, uint32_t* out_size)
+bool get_object_mesh_data(uint32_t object_id, const void** vertices, uint32_t* vertex_size, uint32_t* vertex_count,
+                          const uint32_t** indices, uint32_t* index_count)
 {
-    return get_object_data(object_id, kind, out_size);
-}
+    uint32_t blob_size = 0;
+    uint32_t* blob = get_object_data(object_id, object_data_mesh_blob, &blob_size);
+    if (!blob || blob_size < sizeof(uint32_t) * 4u) return false;
 
-bool object_db_remove(uint32_t object_id, enum_object_data_kind kind)
-{
-    return remove_object_data(object_id, kind);
-}
-
-void object_db_remove_object(uint32_t object_id)
-{
-    remove_object_data_all(object_id);
+    if (vertex_size) *vertex_size = blob[0];
+    if (vertex_count) *vertex_count = blob[1];
+    if (index_count) *index_count = blob[2];
+    if (vertices) *vertices = blob + 4;
+    if (indices) *indices = (const uint32_t*)((uint8_t*)(blob + 4) + blob[0] * blob[1]);
+    return true;
 }

@@ -100,6 +100,34 @@ extern VkPipeline       graphics_pipeline_grid;
 
 extern engine_render_settings g_render_settings;
 
+/* ---- vulkan backend state (engine_vulkan_backend.c), were file statics ---- */
+extern unsigned int          g_cached_framebuffer_width;
+extern unsigned int          g_cached_framebuffer_height;
+extern unsigned long long    g_framebuffer_size_generation;
+extern unsigned long long    g_framebuffer_size_last_generation;
+extern bool                  g_recreating_swapchain;
+extern uint32_t              g_current_inflight_cpu_frame;   /* cpu pacing ring index, independent of the swapchain image index */
+extern VkDebugUtilsMessengerEXT g_debug_messenger;
+extern vulkan_system_context g_vulkan_runtime_context;       /* was a function static in start_vulkan_render_backend */
+
+/* ---- fallback ui texture (engine_vulkan_backend.c), were file statics ---- */
+extern VkImage          g_ui_fallback_image;
+extern VkDeviceMemory   g_ui_fallback_memory;
+extern VkImageView      g_ui_fallback_view;
+extern VkSampler        g_ui_fallback_sampler;
+extern VkDescriptorPool g_ui_fallback_pool;
+extern VkDescriptorSet  g_ui_fallback_set;
+
+/* ---- swapchain targets (engine_vulkan_swapchain.c), were file statics ---- */
+extern bool           g_swapchain_is_srgb;
+extern vulkan_image   g_swapchain_depth_image;
+extern VkImage        g_msaa_image;
+extern VkDeviceMemory g_msaa_memory;
+extern VkImageView    g_msaa_view;
+
+/* ---- shader search folders (engine_vulkan_pipeline.c), was a file static ---- */
+extern const char* const g_shader_dirs[shader_directory_count];
+
 /* ---- modeler (engine_objects.h) ---- */
 extern system_object_database object_database;       /* modeler objects database. need an object? get it from the editor. */
 extern manage_modeler         edit_object_workspace;  /* global instance handle for the modeler workspace data */
@@ -129,7 +157,15 @@ extern const char* program_window_title;
 extern system_clock          main_clock;
 extern system_program        program_state;
 extern system_render_context render_context;
+system_render_context* get_engine_render_context(void);
+system_program* get_engine_program_state(void);
+VkPipeline get_engine_grid_pipeline(void);
+VkPipelineLayout get_engine_grid_pipeline_layout(void);
 extern system_engine_context engine_context;
+
+void em_gpu_retire(uint64_t vertex_buffer, uint64_t vertex_memory,
+                   uint64_t index_buffer, uint64_t index_memory);
+void em_mesh_free(edit_mode_mesh* mesh);
 extern system_element_context element_context;
 
 

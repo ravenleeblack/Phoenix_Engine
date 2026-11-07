@@ -1,34 +1,23 @@
 #include "system_globals.h"
 
 
-/* Set to 0 if your renderer multiplies a child's transform by its parent's.
-   1 = every region object carries the Terrain's world position itself (what Edit Mode assumes: it only reads obj->position). */
-#define TERRAIN_REGIONS_USE_WORLD_POSITION 1
-
 system_terrain   g_terrain;
 terrain_settings g_terrain_ui;
 
 /* ------------------------------------------------------------------------- */
 /* helpers                                                                   */
 /* ------------------------------------------------------------------------- */
-#define imax terrain_editor_imax
-static int   terrain_editor_imax(int a, int b)   { return a > b ? a : b; }
-#define imin terrain_editor_imin
-#define clampi terrain_editor_clampi
-#define clampf terrain_editor_clampf
-#define lerpf terrain_editor_lerpf
-#define smoothstepf terrain_editor_smoothstepf
-static int   terrain_editor_imin(int a, int b)   { return a < b ? a : b; }
-static int   terrain_editor_clampi(int vert_to_edge_array, int lo, int hi) { return vert_to_edge_array < lo ? lo : (vert_to_edge_array > hi ? hi : vert_to_edge_array); }
-static float terrain_editor_clampf(float vert_to_edge_array, float lo, float hi) { return vert_to_edge_array < lo ? lo : (vert_to_edge_array > hi ? hi : vert_to_edge_array); }
-static float terrain_editor_lerpf(float a, float b, float t) { return a + (b - a) * t; }
-static float terrain_editor_smoothstepf(float e0, float e1, float x)
+int terrain_editor_imax(int a, int b) { return a > b ? a : b; }
+int terrain_editor_imin(int a, int b) { return a < b ? a : b; }
+int terrain_editor_clampi(int value, int lo, int hi) { return value < lo ? lo : (value > hi ? hi : value); }
+float terrain_editor_clampf(float value, float lo, float hi) { return value < lo ? lo : (value > hi ? hi : value); }
+float terrain_editor_lerpf(float a, float b, float t) { return a + (b - a) * t; }
+float terrain_editor_smoothstepf(float e0, float e1, float x)
 {
     float t = terrain_editor_clampf((x - e0) / (e1 - e0), 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
-#define sandbox_snap terrain_editor_sandbox_snap
-static inline float terrain_editor_sandbox_snap(float h, float unit) { return floorf(h / unit + 0.5f) * unit; }
+float terrain_editor_sandbox_snap(float h, float unit) { return floorf(h / unit + 0.5f) * unit; }
 
 /* ------------------------------------------------------------------------- */
 /* settings / dimensions                                                     */
@@ -36,10 +25,10 @@ static inline float terrain_editor_sandbox_snap(float h, float unit) { return fl
 void terrain_settings_defaults(terrain_settings* s)
 {
     memset(s, 0, sizeof(*s));
-    s->mode          = TERRAIN_MODE_SANDBOX;    /* cube columns */
-    s->region_chunks = TERRAIN_DEFAULT_REGION_CHUNKS;
-    s->chunk_cells   = TERRAIN_CHUNK_CELLS;
-    s->cells_x       = s->region_chunks * TERRAIN_REGION_GRID * TERRAIN_CHUNK_CELLS;
+    s->mode          = terrain_mode_sandbox;    /* cube columns */
+    s->region_chunks = terrain_default_region_chunks;
+    s->chunk_cells   = terrain_chunk_cells;
+    s->cells_x       = s->region_chunks * terrain_region_grid * terrain_chunk_cells;
     s->cells_z       = s->cells_x;
     s->cells_y       = 400;                     /* 400 cubes high */
     s->cell_size_m   = system_unit_m;           /* one cell = one 4 mesh cube */
@@ -62,14 +51,14 @@ terrain_dims terrain_resolve_dims(const terrain_settings* s)
     terrain_dims d;
     memset(&d, 0, sizeof(d));
     float cs = (s->cell_size_m >= 0.0625f) ? s->cell_size_m : system_unit_m;
-    d.region_chunks = clampi(s->region_chunks, 1, TERRAIN_MAX_REGION_CHUNKS);
-    d.chunk_cells   = TERRAIN_CHUNK_CELLS;
+    d.region_chunks = terrain_editor_clampi(s->region_chunks, 1, terrain_max_region_chunks);
+    d.chunk_cells   = terrain_chunk_cells;
     d.region_cells  = d.region_chunks * d.chunk_cells;
-    d.chunks_x      = d.region_chunks * TERRAIN_REGION_GRID;
+    d.chunks_x      = d.region_chunks * terrain_region_grid;
     d.chunks_z      = d.chunks_x;
     d.cells_x       = d.chunks_x * d.chunk_cells;
     d.cells_z       = d.cells_x;
-    d.cells_y       = imax(16, s->cells_y);
+    d.cells_y       = terrain_editor_imax(16, s->cells_y);
     d.evenly_divisible = true;
     d.origin_x      = d.cells_x / 2;       /* world (0,0) = the middle of region_04 */
     d.origin_z      = d.cells_z / 2;
@@ -81,18 +70,18 @@ terrain_dims terrain_resolve_dims(const terrain_settings* s)
 
 const char* terrain_layer_name(int layer)
 {
-    static const char* names[TERRAIN_MAX_LAYERS] = {
+    static const char* names[terrain_max_layers] = {
         "1 Terrain", "2 Trees", "3 Grass", "4 Buildings", "5 Props",
         "6 Fog / Atmosphere / Lighting", "7 Underground Tunnels",
         "8 Tunnel Lighting", "9 NPCs", "10 NPCs"
     };
-    return (layer >= 0 && layer < TERRAIN_MAX_LAYERS) ? names[layer] : "?";
+    return (layer >= 0 && layer < terrain_max_layers) ? names[layer] : "?";
 }
 
 void terrain_region_name(int region, char* out, size_t out_size)
 {
     if (!out || out_size == 0) return;
-    snprintf(out, out_size, "region_%02d", clampi(region, 0, TERRAIN_REGION_COUNT - 1));
+    snprintf(out, out_size, "region_%02d", terrain_editor_clampi(region, 0, terrain_region_count - 1));
 }
 
 static terrain_chunk* chunk_ptr(const system_terrain* t, int layer, int cx, int cz)
@@ -104,9 +93,9 @@ static terrain_chunk* chunk_ptr(const system_terrain* t, int layer, int cx, int 
 
 static int region_of_chunk(const system_terrain* t, int cx, int cz)
 {
-    int rx = imin(cx / t->dims.region_chunks, TERRAIN_REGION_GRID - 1);
-    int rz = imin(cz / t->dims.region_chunks, TERRAIN_REGION_GRID - 1);
-    return rz * TERRAIN_REGION_GRID + rx;
+    int rx = terrain_editor_imin(cx / t->dims.region_chunks, terrain_region_grid - 1);
+    int rz = terrain_editor_imin(cz / t->dims.region_chunks, terrain_region_grid - 1);
+    return rz * terrain_region_grid + rx;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -123,7 +112,7 @@ static bool chunk_region_on(const system_terrain* t, int cx, int cz)
 int region_of_terrain_object(uint32_t id)
 {
     if (!g_terrain.exists || id == 0) return -1;
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) if (g_terrain.region_ids[r] == id) return r;
+    for (int r = 0; r < terrain_region_count; r++) if (g_terrain.region_ids[r] == id) return r;
     return -1;
 }
 
@@ -136,13 +125,13 @@ int terrain_camera_region(void)
 
 bool terrain_region_is_enabled(int r)
 {
-    return g_terrain.exists && r >= 0 && r < TERRAIN_REGION_COUNT && !g_terrain.region_off[r];
+    return g_terrain.exists && r >= 0 && r < terrain_region_count && !g_terrain.region_off[r];
 }
 
 void terrain_region_set_enabled(int r, bool on)
 {
     system_terrain* t = &g_terrain;
-    if (!t->exists || r < 0 || r >= TERRAIN_REGION_COUNT) return;
+    if (!t->exists || r < 0 || r >= terrain_region_count) return;
     if (t->region_off[r] == !on) return;
     t->region_off[r] = !on;
     phoenix_info("Terrain", "region %d switched %s", r, on ? "ON" : "OFF");
@@ -152,12 +141,12 @@ void terrain_region_set_enabled(int r, bool on)
 
 void terrain_region_solo(int r)
 {
-    for (int k = 0; k < TERRAIN_REGION_COUNT; k++) terrain_region_set_enabled(k, k == r);
+    for (int k = 0; k < terrain_region_count; k++) terrain_region_set_enabled(k, k == r);
 }
 
 void terrain_region_show_all(void)
 {
-    for (int k = 0; k < TERRAIN_REGION_COUNT; k++) terrain_region_set_enabled(k, true);
+    for (int k = 0; k < terrain_region_count; k++) terrain_region_set_enabled(k, true);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -169,23 +158,19 @@ void terrain_region_show_all(void)
 /* In SANDBOX mode the value at corner (gx,gz) is the height of the cube      */
 /* column (gx,gz).                                                           */
 /* ------------------------------------------------------------------------- */
-#define REGION_MAGIC   0x4E474552u      /* "REGN" */
-#define REGION_VERSION 1u
-#define REGION_HEADER  16u
-
-static float*   s_h[TERRAIN_REGION_COUNT];     /* pointers INTO the database blocks, refreshed every frame */
-static uint8_t* s_c[TERRAIN_REGION_COUNT];     /* paint layer of each region (RGBA8 per cell), NULL until the region was painted */
+static float*   s_h[terrain_region_count];     /* pointers INTO the database blocks, refreshed every frame */
+static uint8_t* s_c[terrain_region_count];     /* paint layer of each region (RGBA8 per cell), NULL until the region was painted */
 
 static void refresh_height_cache(const system_terrain* t)
 {
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
+    for (int r = 0; r < terrain_region_count; r++) {
         s_h[r] = NULL; s_c[r] = NULL;
         if (!t->exists || !t->region_ids[r]) continue;
         uint32_t sz = 0;
-        uint8_t* b = (uint8_t*)object_db_get(t->region_ids[r], OBJECT_DATA_TERRAIN_REGION, &sz);
-        if (b && sz >= REGION_HEADER) s_h[r] = (float*)(void*)(b + REGION_HEADER);
+        uint8_t* b = (uint8_t*)object_db_get(t->region_ids[r], object_data_terrain_region, &sz);
+        if (b && sz >= terrain_region_file_header) s_h[r] = (float*)(void*)(b + terrain_region_file_header);
         sz = 0;
-        uint8_t* c = (uint8_t*)object_db_get(t->region_ids[r], OBJECT_DATA_TERRAIN_COLOR, &sz);
+        uint8_t* c = (uint8_t*)object_db_get(t->region_ids[r], object_data_terrain_color, &sz);
         if (c && sz == (uint32_t)t->dims.region_cells * (uint32_t)t->dims.region_cells * 4u) s_c[r] = c;
     }
 }
@@ -194,11 +179,11 @@ static float limit_m(const system_terrain* t) { return t->dims.size_y_m * 0.5f -
 
 static float corner_h(const system_terrain* t, int gx, int gz)
 {
-    gx = clampi(gx, 0, t->dims.cells_x);
-    gz = clampi(gz, 0, t->dims.cells_z);
+    gx = terrain_editor_clampi(gx, 0, t->dims.cells_x);
+    gz = terrain_editor_clampi(gz, 0, t->dims.cells_z);
     const int rc = t->dims.region_cells;
-    int rx = imin(gx / rc, TERRAIN_REGION_GRID - 1), rz = imin(gz / rc, TERRAIN_REGION_GRID - 1);
-    const float* h = s_h[rz * TERRAIN_REGION_GRID + rx];
+    int rx = terrain_editor_imin(gx / rc, terrain_region_grid - 1), rz = terrain_editor_imin(gz / rc, terrain_region_grid - 1);
+    const float* h = s_h[rz * terrain_region_grid + rx];
     if (!h) return 0.0f;
     return h[(size_t)(gz - rz * rc) * (size_t)(rc + 1) + (size_t)(gx - rx * rc)];
 }
@@ -206,7 +191,7 @@ static float corner_h(const system_terrain* t, int gx, int gz)
 /* height of the surface over cell (gx,gz): SANDBOX = the column top (a whole cube), OPENWORLD = average of the 4 corners */
 static float get_cell_surface_height(const system_terrain* t, int gx, int gz)
 {
-    if (t->settings.mode == TERRAIN_MODE_SANDBOX) return sandbox_snap(corner_h(t, gx, gz), t->settings.cell_size_m);
+    if (t->settings.mode == terrain_mode_sandbox) return terrain_editor_sandbox_snap(corner_h(t, gx, gz), t->settings.cell_size_m);
     return (corner_h(t, gx, gz) + corner_h(t, gx + 1, gz) + corner_h(t, gx, gz + 1) + corner_h(t, gx + 1, gz + 1)) * 0.25f;
 }
 
@@ -221,15 +206,15 @@ void terrain_set_corner_height(int gx, int gz, float y)
     if (!t->exists) return;
     if (gx < 0 || gz < 0 || gx > t->dims.cells_x || gz > t->dims.cells_z) return;
     const int rc = t->dims.region_cells;
-    int rx = imin(gx / rc, TERRAIN_REGION_GRID - 1), rz = imin(gz / rc, TERRAIN_REGION_GRID - 1);
-    float* h = s_h[rz * TERRAIN_REGION_GRID + rx];
+    int rx = terrain_editor_imin(gx / rc, terrain_region_grid - 1), rz = terrain_editor_imin(gz / rc, terrain_region_grid - 1);
+    float* h = s_h[rz * terrain_region_grid + rx];
     if (!h) return;
 
-    if (t->settings.mode == TERRAIN_MODE_SANDBOX) {
-        float unit = t->settings.cell_size_m / (float)TERRAIN_SUBSTEPS;
+    if (t->settings.mode == terrain_mode_sandbox) {
+        float unit = t->settings.cell_size_m / (float)terrain_substeps;
         y = floorf(y / unit + 0.5f) * unit;
     }
-    y = clampf(y, -limit_m(t), limit_m(t));
+    y = terrain_editor_clampf(y, -limit_m(t), limit_m(t));
     h[(size_t)(gz - rz * rc) * (size_t)(rc + 1) + (size_t)(gx - rx * rc)] = y;
 }
 
@@ -239,14 +224,14 @@ float terrain_sample_height_m(float lx, float lz)
     if (!t->exists) return 0.0f;
     const float cs = t->settings.cell_size_m;
     float fx = lx / cs + (float)t->dims.origin_x, fz = lz / cs + (float)t->dims.origin_z;
-    fx = clampf(fx, 0.0f, (float)t->dims.cells_x); fz = clampf(fz, 0.0f, (float)t->dims.cells_z);
+    fx = terrain_editor_clampf(fx, 0.0f, (float)t->dims.cells_x); fz = terrain_editor_clampf(fz, 0.0f, (float)t->dims.cells_z);
     int gx = (int)floorf(fx), gz = (int)floorf(fz);
-    if (t->settings.mode == TERRAIN_MODE_SANDBOX)       /* cubes: you stand on the column top, not on a slope */
-        return get_cell_surface_height(t, imin(gx, t->dims.cells_x - 1), imin(gz, t->dims.cells_z - 1));
+    if (t->settings.mode == terrain_mode_sandbox)       /* cubes: you stand on the column top, not on a slope */
+        return get_cell_surface_height(t, terrain_editor_imin(gx, t->dims.cells_x - 1), terrain_editor_imin(gz, t->dims.cells_z - 1));
     float tx = fx - (float)gx, tz = fz - (float)gz;
-    float a = lerpf(corner_h(t, gx, gz),     corner_h(t, gx + 1, gz),     tx);
-    float b = lerpf(corner_h(t, gx, gz + 1), corner_h(t, gx + 1, gz + 1), tx);
-    return lerpf(a, b, tz);
+    float a = terrain_editor_lerpf(corner_h(t, gx, gz),     corner_h(t, gx + 1, gz),     tx);
+    float b = terrain_editor_lerpf(corner_h(t, gx, gz + 1), corner_h(t, gx + 1, gz + 1), tx);
+    return terrain_editor_lerpf(a, b, tz);
 }
 
 /* corner rect changed: every chunk whose cells touch it (and its neighbours, for sandbox walls / normals) is dirty */
@@ -255,11 +240,11 @@ void terrain_mark_dirty_rect(int gx0, int gz0, int gx1, int gz1)
     system_terrain* t = &g_terrain;
     if (!t->exists) return;
     const int cc = t->dims.chunk_cells;
-    gx0 = imax(0, gx0 - 2); gz0 = imax(0, gz0 - 2);
-    gx1 = imin(t->dims.cells_x - 1, gx1 + 1); gz1 = imin(t->dims.cells_z - 1, gz1 + 1);
+    gx0 = terrain_editor_imax(0, gx0 - 2); gz0 = terrain_editor_imax(0, gz0 - 2);
+    gx1 = terrain_editor_imin(t->dims.cells_x - 1, gx1 + 1); gz1 = terrain_editor_imin(t->dims.cells_z - 1, gz1 + 1);
     for (int cz = gz0 / cc; cz <= gz1 / cc; cz++)
         for (int cx = gx0 / cc; cx <= gx1 / cc; cx++) {
-            terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+            terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
             if (c) { c->dirty = true; c->modified = true; }
         }
 }
@@ -288,24 +273,24 @@ static size_t chunk_local_index(const system_terrain* t, int lx, int ly, int lz)
 
 uint8_t terrain_get_cell(const system_terrain* t, int layer, int gx, int gy, int gz)
 {
-    if (!t->exists || layer < 0 || layer >= TERRAIN_MAX_LAYERS) return TERRAIN_CELL_AIR;
-    if (gy < 0)                 return TERRAIN_CELL_STONE;
-    if (gy >= t->dims.cells_y)  return TERRAIN_CELL_AIR;
-    gx = clampi(gx, 0, t->dims.cells_x - 1);
-    gz = clampi(gz, 0, t->dims.cells_z - 1);
+    if (!t->exists || layer < 0 || layer >= terrain_max_layers) return terrain_cell_air;
+    if (gy < 0)                 return terrain_cell_stone;
+    if (gy >= t->dims.cells_y)  return terrain_cell_air;
+    gx = terrain_editor_clampi(gx, 0, t->dims.cells_x - 1);
+    gz = terrain_editor_clampi(gz, 0, t->dims.cells_z - 1);
 
-    if (layer == TERRAIN_LAYER_TERRAIN) {
+    if (layer == terrain_layer_terrain) {
         const float cs = t->settings.cell_size_m;
         float h = get_cell_surface_height(t, gx, gz);
         float y = ((float)gy + 0.5f) * cs - t->dims.size_y_m * 0.5f;
-        if (y >= h)             return TERRAIN_CELL_AIR;
-        if (y + cs >= h)        return (h < t->settings.sand_line_m) ? TERRAIN_CELL_SAND : TERRAIN_CELL_GRASS;
-        if (y + 3.0f * cs >= h) return TERRAIN_CELL_DIRT;
-        return TERRAIN_CELL_STONE;
+        if (y >= h)             return terrain_cell_air;
+        if (y + cs >= h)        return (h < t->settings.sand_line_m) ? terrain_cell_sand : terrain_cell_grass;
+        if (y + 3.0f * cs >= h) return terrain_cell_dirt;
+        return terrain_cell_stone;
     }
     const int cc = t->dims.chunk_cells;
     const terrain_chunk* c = chunk_ptr(t, layer, gx / cc, gz / cc);
-    if (!c || !c->cells) return TERRAIN_CELL_AIR;
+    if (!c || !c->cells) return terrain_cell_air;
     return c->cells[chunk_local_index(t, gx % cc, gy, gz % cc)];
 }
 
@@ -332,14 +317,10 @@ static float srgb_to_linear_terrain(float c)
     return (c <= 0.04045f) ? (c / 12.92f) : powf((c + 0.055f) / 1.055f, 2.4f);
 }
 
-/* 0 = terrain has NO baked skin: every vertex gets the neutral empty-skin grey (system_skin_default.h) and the look comes from the skin
-   assigned to the Terrain (shader profile). 1 = the old grass / rock / sand / snow bake. */
-#define TERRAIN_BAKE_SKIN_COLOR 0
-
 static void surface_color(const terrain_settings* s, float h_m, float slope_deg, const float n[3], float out[3])
 {
     (void)n;
-#if !TERRAIN_BAKE_SKIN_COLOR
+#if 1
     (void)s; (void)h_m; (void)slope_deg;
     out[0] = out[1] = out[2] = skin_empty_grey_linear();
     return;
@@ -350,19 +331,19 @@ static void surface_color(const terrain_settings* s, float h_m, float slope_deg,
     static const float snow[3]  = {0.93f, 0.95f, 0.97f};
     float c[3] = { grass[0], grass[1], grass[2] };
 
-    float dry = smoothstepf(0.0f, 300.0f, h_m) * 0.25f;
+    float dry = terrain_editor_smoothstepf(0.0f, 300.0f, h_m) * 0.25f;
     for (int i = 0; i < 3; i++) c[i] *= (1.0f - dry);
 
-    float ts = smoothstepf(s->sand_line_m + 5.0f, s->sand_line_m - 5.0f, h_m);
-    for (int i = 0; i < 3; i++) c[i] = lerpf(c[i], sand[i], ts);
+    float ts = terrain_editor_smoothstepf(s->sand_line_m + 5.0f, s->sand_line_m - 5.0f, h_m);
+    for (int i = 0; i < 3; i++) c[i] = terrain_editor_lerpf(c[i], sand[i], ts);
 
-    float tr = smoothstepf(s->rock_slope_deg - 6.0f, s->rock_slope_deg + 6.0f, slope_deg);
-    for (int i = 0; i < 3; i++) c[i] = lerpf(c[i], stone[i], tr);
+    float tr = terrain_editor_smoothstepf(s->rock_slope_deg - 6.0f, s->rock_slope_deg + 6.0f, slope_deg);
+    for (int i = 0; i < 3; i++) c[i] = terrain_editor_lerpf(c[i], stone[i], tr);
 
     if (s->snow_line_m < 9000.0f) {
-        float tw = smoothstepf(s->snow_line_m, s->snow_line_m + 30.0f, h_m)
-                 * (1.0f - smoothstepf(s->rock_slope_deg + 4.0f, s->rock_slope_deg + 22.0f, slope_deg));
-        for (int i = 0; i < 3; i++) c[i] = lerpf(c[i], snow[i], tw);
+        float tw = terrain_editor_smoothstepf(s->snow_line_m, s->snow_line_m + 30.0f, h_m)
+                 * (1.0f - terrain_editor_smoothstepf(s->rock_slope_deg + 4.0f, s->rock_slope_deg + 22.0f, slope_deg));
+        for (int i = 0; i < 3; i++) c[i] = terrain_editor_lerpf(c[i], snow[i], tw);
     }
 
     for (int i = 0; i < 3; i++) out[i] = srgb_to_linear_terrain(c[i]);
@@ -375,15 +356,15 @@ static void surface_color(const terrain_settings* s, float h_m, float slope_deg,
 /* ------------------------------------------------------------------------- */
 static void apply_paint(const system_terrain* t, int gx, int gz, float col[3])
 {
-    gx = clampi(gx, 0, t->dims.cells_x - 1); gz = clampi(gz, 0, t->dims.cells_z - 1);
+    gx = terrain_editor_clampi(gx, 0, t->dims.cells_x - 1); gz = terrain_editor_clampi(gz, 0, t->dims.cells_z - 1);
     const int rc = t->dims.region_cells;
-    const int rx = imin(gx / rc, TERRAIN_REGION_GRID - 1), rz = imin(gz / rc, TERRAIN_REGION_GRID - 1);
-    const uint8_t* blk = s_c[rz * TERRAIN_REGION_GRID + rx];
+    const int rx = terrain_editor_imin(gx / rc, terrain_region_grid - 1), rz = terrain_editor_imin(gz / rc, terrain_region_grid - 1);
+    const uint8_t* blk = s_c[rz * terrain_region_grid + rx];
     if (!blk) return;
     const uint8_t* p = blk + ((size_t)(gz - rz * rc) * (size_t)rc + (size_t)(gx - rx * rc)) * 4u;
     if (!p[3]) return;
     const float a = (float)p[3] / 255.0f;
-    for (int i = 0; i < 3; i++) col[i] = lerpf(col[i], srgb_to_linear_terrain((float)p[i] / 255.0f), a);
+    for (int i = 0; i < 3; i++) col[i] = terrain_editor_lerpf(col[i], srgb_to_linear_terrain((float)p[i] / 255.0f), a);
 }
 
 bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float opacity, float hardness, bool erase, int only_region)
@@ -398,14 +379,14 @@ bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float 
 
     const float cs = t->settings.cell_size_m;
     if (radius < 0.01f) radius = 0.01f;
-    hardness = clampf(hardness, 0.0f, 0.99f);
-    opacity  = clampf(opacity, 0.0f, 1.0f);
+    hardness = terrain_editor_clampf(hardness, 0.0f, 0.99f);
+    opacity  = terrain_editor_clampf(opacity, 0.0f, 1.0f);
 
     const float fx = c.x / cs + (float)t->dims.origin_x, fz = c.z / cs + (float)t->dims.origin_z;
-    const int gx0 = clampi((int)floorf(fx - radius / cs), 0, t->dims.cells_x - 1);
-    const int gx1 = clampi((int)ceilf (fx + radius / cs), 0, t->dims.cells_x - 1);
-    const int gz0 = clampi((int)floorf(fz - radius / cs), 0, t->dims.cells_z - 1);
-    const int gz1 = clampi((int)ceilf (fz + radius / cs), 0, t->dims.cells_z - 1);
+    const int gx0 = terrain_editor_clampi((int)floorf(fx - radius / cs), 0, t->dims.cells_x - 1);
+    const int gx1 = terrain_editor_clampi((int)ceilf (fx + radius / cs), 0, t->dims.cells_x - 1);
+    const int gz0 = terrain_editor_clampi((int)floorf(fz - radius / cs), 0, t->dims.cells_z - 1);
+    const int gz1 = terrain_editor_clampi((int)ceilf (fz + radius / cs), 0, t->dims.cells_z - 1);
     const int hgx = (int)floorf(fx), hgz = (int)floorf(fz);       /* the column under the cursor */
     const int rc = t->dims.region_cells;
     static bool warned = false;
@@ -418,8 +399,8 @@ bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float 
             const bool  hit_cell = (gx == hgx && gz == hgz);       /* the column under the cursor always gets the full dab */
             if (!hit_cell && dist >= radius) continue;
 
-            const int rx = imin(gx / rc, TERRAIN_REGION_GRID - 1), rz = imin(gz / rc, TERRAIN_REGION_GRID - 1);
-            const int r = rz * TERRAIN_REGION_GRID + rx;
+            const int rx = terrain_editor_imin(gx / rc, terrain_region_grid - 1), rz = terrain_editor_imin(gz / rc, terrain_region_grid - 1);
+            const int r = rz * terrain_region_grid + rx;
             if (only_region >= 0 && r != only_region) continue;
 
             float w = 1.0f;
@@ -431,7 +412,7 @@ bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float 
             if (!s_c[r]) {                                    /* first paint in this region: zeroed block = nothing painted */
                 if (erase) continue;
                 const uint32_t bytes = (uint32_t)rc * (uint32_t)rc * 4u;
-                if (!object_db_set(t->region_ids[r], OBJECT_DATA_TERRAIN_COLOR, NULL, bytes)) {
+                if (!object_db_set(t->region_ids[r], object_data_terrain_color, NULL, bytes)) {
                     if (!warned) { warned = true; phoenix_warn("Terrain", "Could not allocate the paint layer of region %d.", r); }
                     continue;
                 }
@@ -449,8 +430,8 @@ bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float 
             } else {
                 const float new_a = old_a + a * (1.0f - old_a);
                 const float k = new_a > 0.0f ? a / new_a : 1.0f;
-                for (int i = 0; i < 3; i++) n[i] = (uint8_t)(clampf(lerpf((float)p[i] / 255.0f, color[i], k), 0.0f, 1.0f) * 255.0f + 0.5f);
-                n[3] = (uint8_t)(clampf(new_a, 0.0f, 1.0f) * 255.0f + 0.5f);
+                for (int i = 0; i < 3; i++) n[i] = (uint8_t)(terrain_editor_clampf(terrain_editor_lerpf((float)p[i] / 255.0f, color[i], k), 0.0f, 1.0f) * 255.0f + 0.5f);
+                n[3] = (uint8_t)(terrain_editor_clampf(new_a, 0.0f, 1.0f) * 255.0f + 0.5f);
             }
             if (memcmp(n, p, 4) != 0) { memcpy(p, n, 4); changed = true; }
         }
@@ -469,8 +450,6 @@ bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float 
 /* ------------------------------------------------------------------------- */
 /* Tunnels: holes in the surface + a tube                                    */
 /* ------------------------------------------------------------------------- */
-#define TUBE_SEGMENTS 12
-
 static bool cell_is_hole(const system_terrain* t, float wx, float wz)
 {
     for (int i = 0; i < t->tunnel_count; i++) {
@@ -485,8 +464,8 @@ static bool cell_is_hole(const system_terrain* t, float wx, float wz)
 static bool tunnel_start_in_chunk(const system_terrain* t, const terrain_tunnel* k, int cx, int cz)
 {
     const float cs = t->settings.cell_size_m;
-    int gx = clampi((int)floorf(k->ax / cs + (float)t->dims.origin_x), 0, t->dims.cells_x - 1);
-    int gz = clampi((int)floorf(k->az / cs + (float)t->dims.origin_z), 0, t->dims.cells_z - 1);
+    int gx = terrain_editor_clampi((int)floorf(k->ax / cs + (float)t->dims.origin_x), 0, t->dims.cells_x - 1);
+    int gz = terrain_editor_clampi((int)floorf(k->az / cs + (float)t->dims.origin_z), 0, t->dims.cells_z - 1);
     return gx / t->dims.chunk_cells == cx && gz / t->dims.chunk_cells == cz;
 }
 
@@ -499,7 +478,7 @@ static int tubes_in_chunk(const system_terrain* t, int cx, int cz)
 
 static void emit_tubes(const system_terrain* t, int cx, int cz, editor_vertex* vert_to_edge_array, uint32_t* vi, uint32_t* idx, uint32_t* ii)
 {
-#if TERRAIN_BAKE_SKIN_COLOR
+#if 0
     float col[3] = { srgb_to_linear_terrain(0.24f), srgb_to_linear_terrain(0.21f), srgb_to_linear_terrain(0.19f) };
 #else
     const float grey = skin_empty_grey_linear();
@@ -523,23 +502,23 @@ static void emit_tubes(const system_terrain* t, int cx, int cz, editor_vertex* v
         uint32_t base = *vi;
         for (int ring = 0; ring < 2; ring++) {
             const float* p = ring ? &k->bx : &k->ax;
-            for (int s = 0; s < TUBE_SEGMENTS; s++) {
-                float a = 6.2831853f * (float)s / (float)TUBE_SEGMENTS, ca = cosf(a) * k->radius, sa = sinf(a) * k->radius;
+            for (int s = 0; s < terrain_tube_segments; s++) {
+                float a = 6.2831853f * (float)s / (float)terrain_tube_segments, ca = cosf(a) * k->radius, sa = sinf(a) * k->radius;
                 editor_vertex* o = &vert_to_edge_array[(*vi)++];
                 o->x = p[0] + u[0] * ca + w[0] * sa;
                 o->y = p[1] + u[1] * ca + w[1] * sa;
                 o->z = p[2] + u[2] * ca + w[2] * sa;
                 o->r = col[0]; o->g = col[1]; o->b = col[2]; o->a = 1.0f;
                 /* round the tube: normal points away from the axis, uv = (around, ring 0/1) */
-                set_vertex_attributes(o, (float)s / (float)TUBE_SEGMENTS, (float)ring,
+                set_vertex_attributes(o, (float)s / (float)terrain_tube_segments, (float)ring,
                                       (u[0] * ca + w[0] * sa) / k->radius,
                                       (u[1] * ca + w[1] * sa) / k->radius,
                                       (u[2] * ca + w[2] * sa) / k->radius);
             }
         }
-        for (int s = 0; s < TUBE_SEGMENTS; s++) {      /* double sided: the inside is what you see */
-            uint32_t a0 = base + s, a1 = base + (s + 1) % TUBE_SEGMENTS;
-            uint32_t b0 = a0 + TUBE_SEGMENTS, b1 = a1 + TUBE_SEGMENTS;
+        for (int s = 0; s < terrain_tube_segments; s++) {      /* double sided: the inside is what you see */
+            uint32_t a0 = base + s, a1 = base + (s + 1) % terrain_tube_segments;
+            uint32_t b0 = a0 + terrain_tube_segments, b1 = a1 + terrain_tube_segments;
             idx[(*ii)++] = a0; idx[(*ii)++] = a1; idx[(*ii)++] = b1;
             idx[(*ii)++] = b1; idx[(*ii)++] = b0; idx[(*ii)++] = a0;
             idx[(*ii)++] = a0; idx[(*ii)++] = b1; idx[(*ii)++] = a1;
@@ -558,7 +537,7 @@ static void corner_normal(const system_terrain* t, int gx, int gz, float n[3], f
     float dhdz = (corner_h(t, gx, gz + 1) - corner_h(t, gx, gz - 1)) / (2.0f * cs);
     float inv = 1.0f / sqrtf(dhdx * dhdx + 1.0f + dhdz * dhdz);
     n[0] = -dhdx * inv; n[1] = inv; n[2] = -dhdz * inv;
-    *slope_deg = acosf(clampf(n[1], -1.0f, 1.0f)) * 57.2957795f;
+    *slope_deg = acosf(terrain_editor_clampf(n[1], -1.0f, 1.0f)) * 57.2957795f;
 }
 
 /* OPENWORLD: one smooth vertex per corner */
@@ -570,12 +549,12 @@ static bool build_smooth_chunk(const system_terrain* t, int cx, int cz,
     const int cc = t->dims.chunk_cells;
     const float cs = s->cell_size_m;
     const int x0 = cx * cc, z0 = cz * cc;
-    const int wc = imin(cc, t->dims.cells_x - x0), dc = imin(cc, t->dims.cells_z - z0);
+    const int wc = terrain_editor_imin(cc, t->dims.cells_x - x0), dc = terrain_editor_imin(cc, t->dims.cells_z - z0);
     if (wc < 1 || dc < 1) return true;
 
     const int tubes = tubes_in_chunk(t, cx, cz);
-    const size_t vn = (size_t)(wc + 1) * (dc + 1) + (size_t)tubes * 2 * TUBE_SEGMENTS;
-    const size_t in = (size_t)wc * dc * 6 + (size_t)tubes * TUBE_SEGMENTS * 12;
+    const size_t vn = (size_t)(wc + 1) * (dc + 1) + (size_t)tubes * 2 * terrain_tube_segments;
+    const size_t in = (size_t)wc * dc * 6 + (size_t)tubes * terrain_tube_segments * 12;
     editor_vertex* vert_to_edge_array = (editor_vertex*)malloc(vn * sizeof(editor_vertex) + 1);
     uint32_t*     ix = (uint32_t*)malloc(in * sizeof(uint32_t) + 1);
     if (!vert_to_edge_array || !ix) { phoenix_error("Terrain", "Out of memory building chunk %d,%d.", cx, cz); free(vert_to_edge_array); free(ix); return false; }
@@ -616,19 +595,17 @@ static bool build_smooth_chunk(const system_terrain* t, int cx, int cz,
 /*   - one wall face per cube where the neighbouring column is lower (so a 5 cube cliff = 5 faces, each 4 x 4 mesh) */
 /* Those faces are the terrain_quad array of the chunk. The mesh is built FROM that array: 4 verts per quad.   */
 /* ------------------------------------------------------------------------- */
-#define TERRAIN_NO_LAYER (-1000000)
-
 /* top cube layer of a column whose top is at top_m. Layer 0 starts at the bottom of the world. */
 static int calc_cube_layer(const system_terrain* t, float top_m)
 {
     const int layer = (int)floorf((top_m + t->dims.size_y_m * 0.5f) / t->settings.cell_size_m + 0.5f) - 1;
-    return clampi(layer, 0, t->dims.cells_y - 1);
+    return terrain_editor_clampi(layer, 0, t->dims.cells_y - 1);
 }
 
 static int read_column_layer(const system_terrain* t, int gx, int gz)
 {
-    if (gx < 0 || gz < 0 || gx >= t->dims.cells_x || gz >= t->dims.cells_z) return TERRAIN_NO_LAYER;
-    return calc_cube_layer(t, sandbox_snap(corner_h(t, gx, gz), t->settings.cell_size_m));
+    if (gx < 0 || gz < 0 || gx >= t->dims.cells_x || gz >= t->dims.cells_z) return terrain_no_layer;
+    return calc_cube_layer(t, terrain_editor_sandbox_snap(corner_h(t, gx, gz), t->settings.cell_size_m));
 }
 
 static void add_chunk_quad(terrain_quad* q, size_t* n, int lx, int lz, int ly, int face, int material)
@@ -647,7 +624,7 @@ static bool build_chunk_quads(const system_terrain* t, int cx, int cz, terrain_q
     *out_q = NULL; *out_n = 0;
     const int cc = t->dims.chunk_cells;
     const int x0 = cx * cc, z0 = cz * cc;
-    const int wc = imin(cc, t->dims.cells_x - x0), dc = imin(cc, t->dims.cells_z - z0);
+    const int wc = terrain_editor_imin(cc, t->dims.cells_x - x0), dc = terrain_editor_imin(cc, t->dims.cells_z - z0);
     if (wc < 1 || dc < 1) return true;
 
     /* top layer of every column in the chunk plus a 1 column halo, so walls match across chunk borders */
@@ -661,7 +638,7 @@ static bool build_chunk_quads(const system_terrain* t, int cx, int cz, terrain_q
     const float cs = t->settings.cell_size_m;
     const float ox = (float)t->dims.origin_x, oz = (float)t->dims.origin_z;
     static const struct { int face, di, dj; } dirs[4] = {
-        { TERRAIN_FACE_WEST, -1, 0 }, { TERRAIN_FACE_EAST, 1, 0 }, { TERRAIN_FACE_NORTH, 0, -1 }, { TERRAIN_FACE_SOUTH, 0, 1 }
+        { terrain_face_west, -1, 0 }, { terrain_face_east, 1, 0 }, { terrain_face_north, 0, -1 }, { terrain_face_south, 0, 1 }
     };
 
     terrain_quad* q = NULL;
@@ -675,12 +652,12 @@ static bool build_chunk_quads(const system_terrain* t, int cx, int cz, terrain_q
 
                 const size_t r = (size_t)(j + 1) * tw + (size_t)(i + 1);
                 const int top = L[r];
-                add_chunk_quad(q, &n, i, j, top, TERRAIN_FACE_TOP, TERRAIN_CELL_GRASS);
+                add_chunk_quad(q, &n, i, j, top, terrain_face_top, terrain_cell_grass);
                 for (int d = 0; d < 4; d++) {
                     const int ln = L[(size_t)(j + 1 + dirs[d].dj) * tw + (size_t)(i + 1 + dirs[d].di)];
-                    if (ln == TERRAIN_NO_LAYER) continue;
+                    if (ln == terrain_no_layer) continue;
                     for (int ly = ln + 1; ly <= top; ly++)   /* one 4 x 4 mesh face per cube of drop */
-                        add_chunk_quad(q, &n, i, j, ly, dirs[d].face, TERRAIN_CELL_DIRT);
+                        add_chunk_quad(q, &n, i, j, ly, dirs[d].face, terrain_cell_dirt);
                 }
             }
         if (pass == 0) {
@@ -708,27 +685,27 @@ static void get_quad_corners(const system_terrain* t, int cx, int cz, const terr
     const float y0 = (float)q->ly * cs - t->dims.size_y_m * 0.5f, y1 = y0 + cs;
 
     switch (q->face) {
-    case TERRAIN_FACE_BOTTOM:
+    case terrain_face_bottom:
         set_quad_corner(p, 0, x0, y0, z0); set_quad_corner(p, 1, x1, y0, z0);
         set_quad_corner(p, 2, x1, y0, z1); set_quad_corner(p, 3, x0, y0, z1); break;
-    case TERRAIN_FACE_WEST:
+    case terrain_face_west:
         set_quad_corner(p, 0, x0, y0, z1); set_quad_corner(p, 1, x0, y1, z1);
         set_quad_corner(p, 2, x0, y1, z0); set_quad_corner(p, 3, x0, y0, z0); break;
-    case TERRAIN_FACE_EAST:
+    case terrain_face_east:
         set_quad_corner(p, 0, x1, y0, z0); set_quad_corner(p, 1, x1, y1, z0);
         set_quad_corner(p, 2, x1, y1, z1); set_quad_corner(p, 3, x1, y0, z1); break;
-    case TERRAIN_FACE_NORTH:
+    case terrain_face_north:
         set_quad_corner(p, 0, x0, y0, z0); set_quad_corner(p, 1, x0, y1, z0);
         set_quad_corner(p, 2, x1, y1, z0); set_quad_corner(p, 3, x1, y0, z0); break;
-    case TERRAIN_FACE_SOUTH:
+    case terrain_face_south:
         set_quad_corner(p, 0, x1, y0, z1); set_quad_corner(p, 1, x1, y1, z1);
         set_quad_corner(p, 2, x0, y1, z1); set_quad_corner(p, 3, x0, y0, z1); break;
-    case TERRAIN_FACE_TOP:
+    case terrain_face_top:
     default:
         set_quad_corner(p, 0, x0, y1, z0); set_quad_corner(p, 1, x0, y1, z1);
         set_quad_corner(p, 2, x1, y1, z1); set_quad_corner(p, 3, x1, y1, z0);
         for (int k = 0; k < 4; k++)                 /* sub heights: each top corner can sit up to 16/16 of a cube higher */
-            p[k][1] += (float)clampi(q->sub[k], 0, TERRAIN_SUB_STEPS) * cs / (float)TERRAIN_SUB_STEPS;
+            p[k][1] += (float)terrain_editor_clampi(q->sub[k], 0, terrain_substeps) * cs / (float)terrain_substeps;
         break;
     }
 }
@@ -743,7 +720,7 @@ uint32_t get_terrain_chunk_quads(int cx, int cz, const terrain_quad** out)
 {
     if (out) *out = NULL;
     if (!g_terrain.exists) return 0;
-    const terrain_chunk* c = chunk_ptr(&g_terrain, TERRAIN_LAYER_TERRAIN, cx, cz);
+    const terrain_chunk* c = chunk_ptr(&g_terrain, terrain_layer_terrain, cx, cz);
     if (!c || !c->quads) return 0;
     if (out) *out = c->quads;
     return c->quad_count;
@@ -754,7 +731,7 @@ static bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
                                 terrain_quad** out_q, uint32_t* out_qn)
 {
     *out_v = NULL; *out_vc = 0; *out_i = NULL; *out_ic = 0; *out_q = NULL; *out_qn = 0;
-    static const float face_normal[TERRAIN_FACE_COUNT][3] = {
+    static const float face_normal[terrain_face_count][3] = {
         { 0, 1, 0 }, { 0, -1, 0 }, { -1, 0, 0 }, { 1, 0, 0 }, { 0, 0, -1 }, { 0, 0, 1 }
     };
     static const float corner_u[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
@@ -765,8 +742,8 @@ static bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
     if (!build_chunk_quads(t, cx, cz, &q, &qn)) return false;
 
     const int tubes = tubes_in_chunk(t, cx, cz);
-    const size_t vn = (size_t)qn * 4 + (size_t)tubes * 2 * TUBE_SEGMENTS;
-    const size_t in = (size_t)qn * 6 + (size_t)tubes * TUBE_SEGMENTS * 12;
+    const size_t vn = (size_t)qn * 4 + (size_t)tubes * 2 * terrain_tube_segments;
+    const size_t in = (size_t)qn * 6 + (size_t)tubes * terrain_tube_segments * 12;
     editor_vertex* vert_to_edge_array  = (editor_vertex*)malloc(vn * sizeof(editor_vertex) + 1);
     uint32_t*      ix = (uint32_t*)malloc(in * sizeof(uint32_t) + 1);
     if (!vert_to_edge_array || !ix) { phoenix_error("Terrain", "Out of memory building chunk %d,%d.", cx, cz); free(q); free(vert_to_edge_array); free(ix); return false; }
@@ -775,10 +752,10 @@ static bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
     for (uint32_t k = 0; k < qn; k++) {
         float p[4][3], col[3];
         get_quad_corners(t, cx, cz, &q[k], p);
-        const int face = (q[k].face < TERRAIN_FACE_COUNT) ? q[k].face : TERRAIN_FACE_TOP;
+        const int face = (q[k].face < terrain_face_count) ? q[k].face : terrain_face_top;
         float nrm_top[3];
         const float* nrm = face_normal[face];
-        if (face == TERRAIN_FACE_TOP) {            /* a sloped top (sub heights) gets its real normal: cross of the two diagonals */
+        if (face == terrain_face_top) {            /* a sloped top (sub heights) gets its real normal: cross of the two diagonals */
             const float d1[3] = { p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2] };
             const float d2[3] = { p[3][0] - p[1][0], p[3][1] - p[1][1], p[3][2] - p[1][2] };
             float nx = d1[1] * d2[2] - d1[2] * d2[1], ny = d1[2] * d2[0] - d1[0] * d2[2], nz = d1[0] * d2[1] - d1[1] * d2[0];
@@ -788,7 +765,7 @@ static bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
                 nrm_top[0] = nx / l; nrm_top[1] = ny / l; nrm_top[2] = nz / l; nrm = nrm_top;
             }
         }
-        surface_color(s, p[1][1], face == TERRAIN_FACE_TOP ? 0.0f : 90.0f, nrm, col);
+        surface_color(s, p[1][1], face == terrain_face_top ? 0.0f : 90.0f, nrm, col);
         apply_paint(t, cx * t->dims.chunk_cells + q[k].lx, cz * t->dims.chunk_cells + q[k].lz, col);
 
         const uint32_t base = vi;
@@ -813,7 +790,7 @@ static bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
 /* ------------------------------------------------------------------------- */
 static void camera_local_xz(const system_terrain* t, float* lx, float* lz)
 {
-    const camera_component* cam = &engine_context.world_state.editor_scene_camera;
+    const world_camera* cam = &engine_context.world_state.editor_scene_camera;
     const system_scene_object* obj = find_scene_object_by_id(t->scene_object_id);
     *lx = cam->position.x - (obj ? obj->position.x : 0.0f);
     *lz = cam->position.z - (obj ? obj->position.z : 0.0f);
@@ -824,8 +801,8 @@ static void terrain_center_chunk(const system_terrain* t, int* out_cx, int* out_
     float lx, lz;
     camera_local_xz(t, &lx, &lz);
     const float cs = t->settings.cell_size_m;
-    int gx = clampi((int)floorf(lx / cs + (float)t->dims.origin_x), 0, t->dims.cells_x - 1);
-    int gz = clampi((int)floorf(lz / cs + (float)t->dims.origin_z), 0, t->dims.cells_z - 1);
+    int gx = terrain_editor_clampi((int)floorf(lx / cs + (float)t->dims.origin_x), 0, t->dims.cells_x - 1);
+    int gz = terrain_editor_clampi((int)floorf(lz / cs + (float)t->dims.origin_z), 0, t->dims.cells_z - 1);
     int cx = gx / t->dims.chunk_cells, cz = gz / t->dims.chunk_cells;
 
     /* The camera may be over a region that is switched off (Solo on another region). Then the window moves to the nearest
@@ -833,10 +810,10 @@ static void terrain_center_chunk(const system_terrain* t, int* out_cx, int* out_
     if (t->region_off[region_of_chunk(t, cx, cz)]) {
         const int rc = t->dims.region_chunks;
         long best = -1; int bx = cx, bz = cz;
-        for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
+        for (int r = 0; r < terrain_region_count; r++) {
             if (t->region_off[r]) continue;
-            const int rx = r % TERRAIN_REGION_GRID, rz = r / TERRAIN_REGION_GRID;
-            const int px = clampi(cx, rx * rc, (rx + 1) * rc - 1), pz = clampi(cz, rz * rc, (rz + 1) * rc - 1);
+            const int rx = r % terrain_region_grid, rz = r / terrain_region_grid;
+            const int px = terrain_editor_clampi(cx, rx * rc, (rx + 1) * rc - 1), pz = terrain_editor_clampi(cz, rz * rc, (rz + 1) * rc - 1);
             const long d = (long)(px - cx) * (px - cx) + (long)(pz - cz) * (pz - cz);
             if (best < 0 || d < best) { best = d; bx = px; bz = pz; }
         }
@@ -858,14 +835,14 @@ static bool upload_region(system_terrain* t, int r, int cx0, int cx1, int cz0, i
 {
     system_scene_object* obj = find_scene_object_by_id(t->region_ids[r]);
     if (!obj) { phoenix_error("Terrain", "upload_region: region %d has no scene object (id %u).", r, (unsigned)t->region_ids[r]); return false; }
-    const int rc = t->dims.region_chunks, rx = r % TERRAIN_REGION_GRID, rz = r / TERRAIN_REGION_GRID;
-    const int ax = imax(cx0, rx * rc), bx = imin(cx1, (rx + 1) * rc);
-    const int az = imax(cz0, rz * rc), bz = imin(cz1, (rz + 1) * rc);
+    const int rc = t->dims.region_chunks, rx = r % terrain_region_grid, rz = r / terrain_region_grid;
+    const int ax = terrain_editor_imax(cx0, rx * rc), bx = terrain_editor_imin(cx1, (rx + 1) * rc);
+    const int az = terrain_editor_imax(cz0, rz * rc), bz = terrain_editor_imin(cz1, (rz + 1) * rc);
 
     uint64_t tv = 0, ti = 0; int n = 0;
     for (int cz = az; cz < bz; cz++)
         for (int cx = ax; cx < bx; cx++) {
-            const terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+            const terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
             if (c && c->mesh_built) { tv += c->mesh_vc; ti += c->mesh_ic; n++; }
         }
     t->region_resident[r] = n;
@@ -880,7 +857,7 @@ static bool upload_region(system_terrain* t, int r, int cx0, int cx1, int cz0, i
         uint32_t vo = 0, io = 0;
         for (int cz = az; cz < bz; cz++)
             for (int cx = ax; cx < bx; cx++) {
-                const terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+                const terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
                 if (!c || !c->mesh_built || !c->mesh_vc) continue;
                 memcpy(&vert_to_edge_array[vo], c->mesh_v, (size_t)c->mesh_vc * sizeof(editor_vertex));
                 for (uint32_t k = 0; k < c->mesh_ic; k++) ix[io + k] = c->mesh_i[k] + vo;
@@ -905,12 +882,12 @@ bool rebuild_terrain_mesh(void)
     refresh_height_cache(t);
 
     /* No LOD: every resident chunk is the same full detail mesh, so every cell is the same size everywhere. */
-    const int S = TERRAIN_REGION_SIDE_CHUNKS;      /* the window is the 3 x 3 chunk REGION the camera is over (9 chunks), aligned to region borders */
+    const int S = terrain_region_side_chunks;      /* the window is the 3 x 3 chunk REGION the camera is over (9 chunks), aligned to region borders */
     const int r = S;
     int ccx, ccz;
     terrain_center_chunk(t, &ccx, &ccz);
-    const int cx0 = (ccx / S) * S, cx1 = imin(t->dims.chunks_x, cx0 + S);
-    const int cz0 = (ccz / S) * S, cz1 = imin(t->dims.chunks_z, cz0 + S);
+    const int cx0 = (ccx / S) * S, cx1 = terrain_editor_imin(t->dims.chunks_x, cx0 + S);
+    const int cz0 = (ccz / S) * S, cz1 = terrain_editor_imin(t->dims.chunks_z, cz0 + S);
     {
         static int lw0 = -1, lw1 = -1, lz0 = -1, lz1 = -1;
         if (cx0 != lw0 || cx1 != lw1 || cz0 != lz0 || cz1 != lz1) {
@@ -925,7 +902,7 @@ bool rebuild_terrain_mesh(void)
         for (int cz = t->region_cz0; cz < t->region_cz1; cz++)
             for (int cx = t->region_cx0; cx < t->region_cx1; cx++) {
                 if (cx >= cx0 && cx < cx1 && cz >= cz0 && cz < cz1) continue;
-                terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+                terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
                 if (!c) continue;
                 if (c->mesh_built) t->region_dirty[region_of_chunk(t, cx, cz)] = true;
                 phoenix_info("Terrain", "chunk %d,%d left the window: mesh freed", cx, cz);
@@ -935,13 +912,13 @@ bool rebuild_terrain_mesh(void)
             }
     }
 
-    const bool sandbox = (t->settings.mode == TERRAIN_MODE_SANDBOX);
+    const bool sandbox = (t->settings.mode == terrain_mode_sandbox);
     int built = 0;
     const int pending = 0;
 
     for (int cz = cz0; cz < cz1; cz++)
         for (int cx = cx0; cx < cx1; cx++) {
-            terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+            terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
             if (!c) continue;
             c->resident = true;
             if (!chunk_region_on(t, cx, cz)) {            /* region is off: no mesh at all */
@@ -981,7 +958,7 @@ bool rebuild_terrain_mesh(void)
         static int last_cx = -1, last_cz = -1;
         if (ccx != last_cx || ccz != last_cz) {
             last_cx = ccx; last_cz = ccz;
-            const terrain_chunk* cc0 = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, ccx, ccz);
+            const terrain_chunk* cc0 = chunk_ptr(t, terrain_layer_terrain, ccx, ccz);
             const int rg = region_of_chunk(t, ccx, ccz);
             const system_scene_object* ro = find_scene_object_by_id(t->region_ids[rg]);
             phoenix_info("Terrain", "camera chunk %d,%d region %d: region_off=%d mesh_built=%d verts=%u idx=%u dirty=%d tunnels=%d region_index_count=%u",
@@ -991,16 +968,16 @@ bool rebuild_terrain_mesh(void)
     }
 
     bool all_ok = true, any = false;
-    for (int k = 0; k < TERRAIN_REGION_COUNT; k++) if (t->region_dirty[k]) any = true;
+    for (int k = 0; k < terrain_region_count; k++) if (t->region_dirty[k]) any = true;
     if (any) {
-        for (int k = 0; k < TERRAIN_REGION_COUNT; k++)
+        for (int k = 0; k < terrain_region_count; k++)
             if (t->region_dirty[k]) {
                 if (upload_region(t, k, cx0, cx1, cz0, cz1)) t->region_dirty[k] = false; else all_ok = false;
             }
         t->last_vertex_count = 0; t->last_index_count = 0;        /* totals for the UI: every resident chunk */
         for (int cz = cz0; cz < cz1; cz++)
             for (int cx = cx0; cx < cx1; cx++) {
-                const terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+                const terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
                 if (c && c->mesh_built) { t->last_vertex_count += c->mesh_vc; t->last_index_count += c->mesh_ic; }
             }
         /* one line when the window is complete, not one per frame while it fills up */
@@ -1024,11 +1001,11 @@ void update_terrain_streaming(void)
 
     int ccx, ccz;
     terrain_center_chunk(t, &ccx, &ccz);
-    const int S_ = TERRAIN_REGION_SIDE_CHUNKS;
+    const int S_ = terrain_region_side_chunks;
     bool need = !t->region_valid || ccx / S_ != t->center_cx / S_ || ccz / S_ != t->center_cz / S_ || s_regions_changed;
     for (int cz = t->region_cz0; cz < t->region_cz1 && !need; cz++)
         for (int cx = t->region_cx0; cx < t->region_cx1; cx++) {
-            const terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, cx, cz);
+            const terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, cx, cz);
             if (c && chunk_region_on(t, cx, cz) && (!c->mesh_built || c->dirty)) { need = true; break; }
         }
     if (need && !rebuild_terrain_mesh()) {
@@ -1043,19 +1020,19 @@ void update_terrain_streaming(void)
 static void persist_settings(void)
 {
     if (!g_terrain.exists) return;
-    object_db_set(g_terrain.scene_object_id, OBJECT_DATA_TERRAIN, &g_terrain.settings, (uint32_t)sizeof(g_terrain.settings));
+    object_db_set(g_terrain.scene_object_id, object_data_terrain, &g_terrain.settings, (uint32_t)sizeof(g_terrain.settings));
 }
 
 void terrain_apply_location(void)
 {
     system_terrain* t = &g_terrain;
     if (!t->exists) return;
-    const float k = 1.0f / (float)TERRAIN_UNITS_PER_METER;
+    const float k = 1.0f / (float)terrain_units_per_meter;
     editor_vec3 p = { (float)t->settings.location.x * k, (float)t->settings.location.y * k, (float)t->settings.location.z * k };
     system_scene_object* root = find_scene_object_by_id(t->scene_object_id);
     if (root) root->position = p;
-#if TERRAIN_REGIONS_USE_WORLD_POSITION
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
+#if terrain_regions_use_world_position
+    for (int r = 0; r < terrain_region_count; r++) {
         system_scene_object* o = find_scene_object_by_id(t->region_ids[r]);
         if (o) o->position = p;
     }
@@ -1099,7 +1076,7 @@ bool is_terrain_object(const system_scene_object* obj)
 {
     if (!obj || !g_terrain.exists) return false;
     if (obj->id == g_terrain.scene_object_id) return true;
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) if (obj->id == g_terrain.region_ids[r]) return true;
+    for (int r = 0; r < terrain_region_count; r++) if (obj->id == g_terrain.region_ids[r]) return true;
     return false;
 }
 
@@ -1114,7 +1091,7 @@ void bind_terrain_builder(uint32_t object_id)
 /* ------------------------------------------------------------------------- */
 static void terrain_free_cpu(system_terrain* t)
 {
-    for (int l = 0; l < TERRAIN_MAX_LAYERS; l++) {
+    for (int l = 0; l < terrain_max_layers; l++) {
         terrain_layer* L = &t->layers[l];
         if (L->chunks) {
             int n = t->dims.chunks_x * t->dims.chunks_z;
@@ -1138,15 +1115,15 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
 {
     system_terrain* t = &g_terrain;
     terrain_settings s = *s_in;
-    s.chunk_cells   = TERRAIN_CHUNK_CELLS;
-    s.region_chunks = clampi(s.region_chunks, 1, TERRAIN_MAX_REGION_CHUNKS);
+    s.chunk_cells   = terrain_chunk_cells;
+    s.region_chunks = terrain_editor_clampi(s.region_chunks, 1, terrain_max_region_chunks);
     if (s.cell_size_m < 0.0625f) s.cell_size_m = system_unit_m;
     s.edit_stride = 1;                          /* one edit vertex per cell: every edit face is one cell */
     terrain_dims d = terrain_resolve_dims(&s);
     s.cells_x = d.cells_x; s.cells_z = d.cells_z; s.cells_y = d.cells_y;
 
     const bool had = t->exists;
-    if (!had && g_scene_registry.object_count + 1 + TERRAIN_REGION_COUNT > max_scene_objects) {
+    if (!had && g_scene_registry.object_count + 1 + terrain_region_count > max_scene_objects) {
         phoenix_warn("Terrain", "Scene registry has no room for the Terrain and its 9 regions.");
         return false;
     }
@@ -1163,9 +1140,9 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
     memset(t->region_resident, 0, sizeof(t->region_resident));
     t->last_vertex_count = t->last_index_count = 0;
 
-    for (int l = 0; l < TERRAIN_MAX_LAYERS; l++) { t->layers[l].visible = true; t->layers[l].chunks = NULL; }
-    t->layers[TERRAIN_LAYER_TERRAIN].chunks = (terrain_chunk*)calloc((size_t)d.chunks_x * d.chunks_z, sizeof(terrain_chunk));
-    if (!t->layers[TERRAIN_LAYER_TERRAIN].chunks) { phoenix_error("Terrain", "Out of memory allocating chunk table."); t->exists = false; return false; }
+    for (int l = 0; l < terrain_max_layers; l++) { t->layers[l].visible = true; t->layers[l].chunks = NULL; }
+    t->layers[terrain_layer_terrain].chunks = (terrain_chunk*)calloc((size_t)d.chunks_x * d.chunks_z, sizeof(terrain_chunk));
+    if (!t->layers[terrain_layer_terrain].chunks) { phoenix_error("Terrain", "Out of memory allocating chunk table."); t->exists = false; return false; }
     t->layers[terrain_light_layer].chunks = (terrain_chunk*)calloc((size_t)d.chunks_x * d.chunks_z, sizeof(terrain_chunk));
     if (!t->layers[terrain_light_layer].chunks) phoenix_warn("Terrain", "Out of memory allocating the light layer chunk table. Lighting disabled.");
 
@@ -1177,7 +1154,7 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
         root->type = scene_object_empty;
         root->scale = (editor_vec3){1.0f, 1.0f, 1.0f};
         t->scene_object_id = root->id;
-        for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
+        for (int r = 0; r < terrain_region_count; r++) {
             char name[16]; terrain_region_name(r, name, sizeof(name));
             system_scene_object* o = spawn_new_scene_object(name, zero);
             if (!o) { phoenix_error("Terrain", "Could not create %s.", name); terrain_free_cpu(t); return false; }
@@ -1188,28 +1165,28 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
             link_child(find_scene_object_by_id(t->scene_object_id), o);
         }
     } else {
-        for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
+        for (int r = 0; r < terrain_region_count; r++) {
             system_scene_object* o = find_scene_object_by_id(t->region_ids[r]);
             if (o) o->index_count = 0;
         }
     }
     t->exists = true;
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
+    for (int r = 0; r < terrain_region_count; r++) {
         t->region_off[r] = false;                                            /* every region on */
-        object_db_remove(t->region_ids[r], OBJECT_DATA_TERRAIN_COLOR);       /* a flat reset also clears the paint */
+        object_db_remove(t->region_ids[r], object_data_terrain_color);       /* a flat reset also clears the paint */
     }
     s_regions_changed = false;
 
     /* flat height blocks: a zeroed block is height 0 everywhere */
     const uint32_t side = (uint32_t)d.region_cells + 1u;
-    const uint64_t bytes = REGION_HEADER + (uint64_t)side * side * sizeof(float);
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) {
-        if (bytes > 64ull * 1024 * 1024 || !object_db_set(t->region_ids[r], OBJECT_DATA_TERRAIN_REGION, NULL, (uint32_t)bytes)) {
+    const uint64_t bytes = terrain_region_file_header + (uint64_t)side * side * sizeof(float);
+    for (int r = 0; r < terrain_region_count; r++) {
+        if (bytes > 64ull * 1024 * 1024 || !object_db_set(t->region_ids[r], object_data_terrain_region, NULL, (uint32_t)bytes)) {
             phoenix_error("Terrain", "Object database refused the %u byte block for region %d.", (unsigned)bytes, r);
             t->exists = false; terrain_free_cpu(t);
             return false;
         }
-        region_header* h = (region_header*)object_db_get(t->region_ids[r], OBJECT_DATA_TERRAIN_REGION, NULL);
+        region_header* h = (region_header*)object_db_get(t->region_ids[r], object_data_terrain_region, NULL);
         if (!h) {
             phoenix_error("Terrain", "Region %d height block missing right after creation.", r);
             t->exists = false; terrain_free_cpu(t);
@@ -1218,20 +1195,20 @@ bool spawn_terrain_system(const terrain_settings* s_in, VkDevice device, VkPhysi
         /* FLAT NO MATTER WHAT: zero the whole block ourselves. A block that was loaded from the database file, or one that
            object_db_set reused, can still hold old heights. Every height is 0 after creation / reset, always. */
         memset(h, 0, (size_t)bytes);
-        h->magic = REGION_MAGIC; h->version = REGION_VERSION; h->side = side;
+        h->magic = terrain_region_file_magic; h->version = terrain_region_file_version; h->side = side;
     }
-    object_db_remove(t->scene_object_id, OBJECT_DATA_TERRAIN_TUNNELS);
+    object_db_remove(t->scene_object_id, object_data_terrain_tunnels);
     persist_settings();
     refresh_height_cache(t);
     terrain_apply_location();
 
     phoenix_info("Terrain", "%s terrain, flat: 3x3 regions of %dx%d chunks (%d cubes each side), chunks of %dx%d cubes, %d cubes high, %.0f mesh cubes, %.0f x %.0f mesh.",
-                 s.mode == TERRAIN_MODE_SANDBOX ? "Sandbox" : "Open-world", d.region_chunks, d.region_chunks, d.region_cells,
+                 s.mode == terrain_mode_sandbox ? "Sandbox" : "Open-world", d.region_chunks, d.region_chunks, d.region_cells,
                  d.chunk_cells, d.chunk_cells, d.cells_y, s.cell_size_m, d.size_x_m, d.size_z_m);
     {
         float lx, lz; camera_local_xz(t, &lx, &lz);
         phoenix_info("Terrain", "spawn: cells %dx%d, %d regions of %d chunk(s), camera local x=%.1f z=%.1f y=%.1f, terrain object id %u",
-                     d.cells_x, d.cells_z, TERRAIN_REGION_COUNT, d.region_chunks, lx, lz, engine_context.world_state.editor_scene_camera.position.y, (unsigned)t->scene_object_id);
+                     d.cells_x, d.cells_z, terrain_region_count, d.region_chunks, lx, lz, engine_context.world_state.editor_scene_camera.position.y, (unsigned)t->scene_object_id);
     }
     return rebuild_terrain_mesh();
 }
@@ -1278,9 +1255,9 @@ bool delete_terrain(void)
     if (!t->exists) return false;
 
     const uint32_t root = t->scene_object_id;
-    uint32_t ids[TERRAIN_REGION_COUNT];
+    uint32_t ids[terrain_region_count];
     memcpy(ids, t->region_ids, sizeof(ids));
-    phoenix_info("Terrain", "Deleting the terrain (object %u and %d regions)", (unsigned)root, TERRAIN_REGION_COUNT);
+    phoenix_info("Terrain", "Deleting the terrain (object %u and %d regions)", (unsigned)root, terrain_region_count);
 
     shutdown_terrain_system();                       /* exists = false: nothing counts as "the terrain" any more */
     t->scene_object_id = 0;
@@ -1292,11 +1269,11 @@ bool delete_terrain(void)
     t->edit_revision++;
     s_regions_changed = false;
 
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) object_db_remove_object(ids[r]);
+    for (int r = 0; r < terrain_region_count; r++) object_db_remove_object(ids[r]);
     object_db_remove_object(root);
 
     g_scene_registry.selected_object_id = 0;
-    for (int r = 0; r < TERRAIN_REGION_COUNT; r++) delete_scene_object(ids[r]);
+    for (int r = 0; r < terrain_region_count; r++) delete_scene_object(ids[r]);
     const bool ok = delete_scene_object(root);
     if (!ok || find_scene_object_by_id(root)) {
         phoenix_warn("Terrain", "The Terrain object is still in the scene: delete_scene_object() refused it. Remove its terrain check (see system_scene_delete.h).");
@@ -1315,11 +1292,11 @@ void set_terrain_mode(terrain_mode mode)
     g_terrain_ui.mode = mode;
     if (!t->exists || t->settings.mode == mode) return;
     t->settings.mode = mode;
-    phoenix_info("Terrain", "mode changed to %s", mode == TERRAIN_MODE_SANDBOX ? "sandbox" : "open-world");
+    phoenix_info("Terrain", "mode changed to %s", mode == terrain_mode_sandbox ? "sandbox" : "open-world");
     persist_settings();
     const int n = t->dims.chunks_x * t->dims.chunks_z;
-    for (int i = 0; i < n; i++) t->layers[TERRAIN_LAYER_TERRAIN].chunks[i].dirty = true;   /* same heights, other mesher */
-    if (mode == TERRAIN_MODE_SANDBOX && t->edited) {   /* snap what exists to whole cubes so edit mode and the mesh agree */
+    for (int i = 0; i < n; i++) t->layers[terrain_layer_terrain].chunks[i].dirty = true;   /* same heights, other mesher */
+    if (mode == terrain_mode_sandbox && t->edited) {   /* snap what exists to whole cubes so edit mode and the mesh agree */
         for (int gz = 0; gz <= t->dims.cells_z; gz++)
             for (int gx = 0; gx <= t->dims.cells_x; gx++)
                 terrain_set_corner_height(gx, gz, corner_h(t, gx, gz));
@@ -1330,7 +1307,7 @@ void set_terrain_mode(terrain_mode mode)
 bool set_terrain_region_chunks(int rc)
 {
     system_terrain* t = &g_terrain;
-    rc = clampi(rc, 1, TERRAIN_MAX_REGION_CHUNKS);
+    rc = terrain_editor_clampi(rc, 1, terrain_max_region_chunks);
     g_terrain_ui.region_chunks = rc;
     if (!t->exists) return true;
     if (t->edited) return false;                // changing the size re-creates the world: refuse while it holds edits
@@ -1344,7 +1321,7 @@ bool set_terrain_region_chunks(int rc)
 
 void set_terrain_load_radius(int radius)
 {
-    radius = clampi(radius, 0, TERRAIN_MAX_LOAD_RADIUS);
+    radius = terrain_editor_clampi(radius, 0, terrain_max_load_radius);
     g_terrain_ui.load_radius = radius;
     if (!g_terrain.exists) return;
     g_terrain.settings.load_radius = radius;
@@ -1354,11 +1331,11 @@ void set_terrain_load_radius(int radius)
 bool terrain_add_tunnel(const terrain_tunnel* k)
 {
     system_terrain* t = &g_terrain;
-    if (!t->exists || !k || t->tunnel_count >= TERRAIN_MAX_TUNNELS) return false;
+    if (!t->exists || !k || t->tunnel_count >= terrain_max_tunnels) return false;
     t->tunnels[t->tunnel_count++] = *k;
     phoenix_info("Terrain", "tunnel #%d added: (%.1f,%.1f,%.1f) -> (%.1f,%.1f,%.1f) radius %.1f (cuts a hole in the surface at both ends)",
                  t->tunnel_count, k->ax, k->ay, k->az, k->bx, k->by, k->bz, k->radius);
-    object_db_set(t->scene_object_id, OBJECT_DATA_TERRAIN_TUNNELS, t->tunnels, (uint32_t)(t->tunnel_count * sizeof(terrain_tunnel)));
+    object_db_set(t->scene_object_id, object_data_terrain_tunnels, t->tunnels, (uint32_t)(t->tunnel_count * sizeof(terrain_tunnel)));
 
     const float cs = t->settings.cell_size_m;
     const float xs[2] = { k->ax, k->bx }, zs[2] = { k->az, k->bz };
@@ -1368,9 +1345,9 @@ bool terrain_add_tunnel(const terrain_tunnel* k)
         terrain_mark_dirty_rect(gx - mesh, gz - mesh, gx + mesh, gz + mesh);
     }
     {   /* the tube lives in the chunk that holds its start */
-        int gx = clampi((int)floorf(k->ax / cs + (float)t->dims.origin_x), 0, t->dims.cells_x - 1);
-        int gz = clampi((int)floorf(k->az / cs + (float)t->dims.origin_z), 0, t->dims.cells_z - 1);
-        terrain_chunk* c = chunk_ptr(t, TERRAIN_LAYER_TERRAIN, gx / t->dims.chunk_cells, gz / t->dims.chunk_cells);
+        int gx = terrain_editor_clampi((int)floorf(k->ax / cs + (float)t->dims.origin_x), 0, t->dims.cells_x - 1);
+        int gz = terrain_editor_clampi((int)floorf(k->az / cs + (float)t->dims.origin_z), 0, t->dims.cells_z - 1);
+        terrain_chunk* c = chunk_ptr(t, terrain_layer_terrain, gx / t->dims.chunk_cells, gz / t->dims.chunk_cells);
         if (c) { c->dirty = true; c->modified = true; }
     }
     t->edited = true;
@@ -1381,7 +1358,7 @@ bool terrain_add_tunnel(const terrain_tunnel* k)
 /* Edit Mode bridge                                                          */
 /*                                                                           */
 /* Edit Mode works on ONE chunk at a time. The chunk is shown as a control    */
-/* grid with one vertex per cube column (TERRAIN_CHUNK_CELLS x TERRAIN_CHUNK_CELLS quads, every face is one   */
+/* grid with one vertex per cube column (terrain_chunk_cells x terrain_chunk_cells quads, every face is one   */
 /* cell = system_unit_m x system_unit_m in XZ). In SANDBOX mode vertex (i,j)  */
 /* IS the height of column (i,j). Only Y is used; X/Z drags are put back on   */
 /* commit.                                                                   */
@@ -1395,7 +1372,7 @@ static uint32_t s_ebase_cap = 0;
 static int edit_stride_ok(int st) { (void)st; return 1; }
 
 /* Edit Mode works on one REGION: 3 x 3 chunks = 300 x 300 cells, one vertex per cell column. s_ecx / s_ecz = its first chunk. */
-static int edit_span_cells(const system_terrain* t) { return t->dims.chunk_cells * TERRAIN_REGION_SIDE_CHUNKS; }
+static int edit_span_cells(const system_terrain* t) { return t->dims.chunk_cells * terrain_region_side_chunks; }
 
 static void edit_sync_positions(const system_terrain* t)
 {
@@ -1406,7 +1383,7 @@ static void edit_sync_positions(const system_terrain* t)
             uint32_t idx = (uint32_t)(j * (n + 1) + i);
             int gx = s_ecx * cc + i * st, gz = s_ecz * cc + j * st;
             float y = corner_h(t, gx, gz);
-            if (t->settings.mode == TERRAIN_MODE_SANDBOX) y = sandbox_snap(y, cs);   /* the cube top drawn for this column is snapped: the overlay must sit on it, not on the raw height */
+            if (t->settings.mode == terrain_mode_sandbox) y = terrain_editor_sandbox_snap(y, cs);   /* the cube top drawn for this column is snapped: the overlay must sit on it, not on the raw height */
             s_edit.verts[idx].obj_vert_pos.x = ((float)gx - ox) * cs;
             s_edit.verts[idx].obj_vert_pos.y = y;
             s_edit.verts[idx].obj_vert_pos.z = ((float)gz - oz) * cs;
@@ -1418,8 +1395,8 @@ void set_terrain_edit_chunk(int cx, int cz)
 {
     system_terrain* t = &g_terrain;
     if (!t->exists) return;
-    t->edit_cx = (clampi(cx, 0, t->dims.chunks_x - 1) / TERRAIN_REGION_SIDE_CHUNKS) * TERRAIN_REGION_SIDE_CHUNKS;
-    t->edit_cz = (clampi(cz, 0, t->dims.chunks_z - 1) / TERRAIN_REGION_SIDE_CHUNKS) * TERRAIN_REGION_SIDE_CHUNKS;
+    t->edit_cx = (terrain_editor_clampi(cx, 0, t->dims.chunks_x - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;
+    t->edit_cz = (terrain_editor_clampi(cz, 0, t->dims.chunks_z - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;
     t->edit_follow = false;
 }
 
@@ -1442,8 +1419,8 @@ edit_mode_mesh* terrain_edit_mesh_acquire(system_scene_object* obj)
         if (!s_edit_have || nv == 0) { tcx = t->center_cx; tcz = t->center_cz; }
         else { tcx = s_ecx; tcz = s_ecz; }
     }
-    tcx = (clampi(tcx, 0, t->dims.chunks_x - 1) / TERRAIN_REGION_SIDE_CHUNKS) * TERRAIN_REGION_SIDE_CHUNKS;   /* snap to the region's first chunk */
-    tcz = (clampi(tcz, 0, t->dims.chunks_z - 1) / TERRAIN_REGION_SIDE_CHUNKS) * TERRAIN_REGION_SIDE_CHUNKS;
+    tcx = (terrain_editor_clampi(tcx, 0, t->dims.chunks_x - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;   /* snap to the region's first chunk */
+    tcz = (terrain_editor_clampi(tcz, 0, t->dims.chunks_z - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;
     t->edit_cx = tcx; t->edit_cz = tcz;
     const int st = edit_stride_ok(t->settings.edit_stride);
 
@@ -1485,12 +1462,12 @@ bool terrain_commit_edit_mesh(edit_mode_mesh* mesh, system_scene_object* obj)
         const int x0 = s_ecx * cc, z0 = s_ecz * cc;
         float* base = s_ebase;
         for (int gz = 0; gz <= ec; gz++) {
-            float fz = (float)gz / (float)st; int j = imin((int)fz, n - 1); float tz = fz - (float)j;
+            float fz = (float)gz / (float)st; int j = terrain_editor_imin((int)fz, n - 1); float tz = fz - (float)j;
             for (int gx = 0; gx <= ec; gx++) {
-                float fx = (float)gx / (float)st; int i = imin((int)fx, n - 1); float tx = fx - (float)i;
+                float fx = (float)gx / (float)st; int i = terrain_editor_imin((int)fx, n - 1); float tx = fx - (float)i;
                 #define DELTA(ii, jj) (mesh->verts[(jj) * (n + 1) + (ii)].obj_vert_pos.y - base[(jj) * (n + 1) + (ii)])
-                float d = lerpf(lerpf(DELTA(i, j),     DELTA(i + 1, j),     tx),
-                                lerpf(DELTA(i, j + 1), DELTA(i + 1, j + 1), tx), tz);
+                float d = terrain_editor_lerpf(terrain_editor_lerpf(DELTA(i, j),     DELTA(i + 1, j),     tx),
+                                terrain_editor_lerpf(DELTA(i, j + 1), DELTA(i + 1, j + 1), tx), tz);
                 #undef DELTA
                 if (fabsf(d) > 1e-6f) terrain_set_corner_height(x0 + gx, z0 + gz, corner_h(t, x0 + gx, z0 + gz) + d);
             }

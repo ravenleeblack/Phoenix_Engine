@@ -52,15 +52,22 @@ typedef bool            (*start_editor_ptr)(void);
 typedef void            (*update_editor_ptr)(float delta_time);
 typedef VkCommandBuffer (*begin_editor_frame_pass_ptr)(void);
 typedef void            (*draw_editor_ui_ptr)(VkCommandBuffer cmd, float delta_time);
+typedef void            (*draw_editor_menubar_ptr)(VkCommandBuffer cmd);
+typedef void            (*draw_editor_toolbar_ptr)(VkCommandBuffer cmd);
+typedef void            (*draw_editor_dock_ptr)(VkCommandBuffer cmd);
+typedef void            (*draw_editor_statusbar_ptr)(VkCommandBuffer cmd);
+typedef void            (*flush_editor_ui_ptr)(VkCommandBuffer cmd);
 typedef void            (*end_editor_frame_pass_ptr)(VkCommandBuffer cmd);
 typedef bool            (*handle_editor_message_ptr)(HWND hwnd, UINT message, WPARAM wp, LPARAM lp, LRESULT* result);
 typedef void            (*shutdown_editor_ptr)(void);
 
 /* called by the vulkan backend while it builds the device (the offscreen scene pass belongs to the editor) */
-typedef bool (*create_offscreen_renderpass_ptr)(VkFormat color_format, VkFormat depth_format);
+typedef bool (*create_offscreen_renderpass_ptr)(VkDevice device, VkFormat color_format, VkFormat depth_format);
+typedef VkRenderPass (*get_offscreen_renderpass_ptr)(void);
 typedef bool (*create_offscreen_resources_ptr)(void);
 typedef void (*shutdown_offscreen_ptr)(void);
-typedef bool (*create_scene_object_pipeline_ptr)(VkDevice device, VkRenderPass offscreen_renderpass, bool enable_depth);
+typedef bool (*create_scene_object_pipeline_ptr)(VkPhysicalDevice physical_device, VkDevice device, VkRenderPass offscreen_renderpass, bool enable_depth);
+typedef void (*record_offscreen_frame_ptr)(VkCommandBuffer command_buffer);
 
 typedef struct editor_plugin
 {
@@ -70,14 +77,21 @@ typedef struct editor_plugin
     update_editor_ptr                update;
     begin_editor_frame_pass_ptr      begin_frame_pass;
     draw_editor_ui_ptr               draw_ui;
+    draw_editor_menubar_ptr          draw_menubar;
+    draw_editor_toolbar_ptr          draw_toolbar;
+    draw_editor_dock_ptr             draw_dock;
+    draw_editor_statusbar_ptr        draw_statusbar;
+    flush_editor_ui_ptr              flush_ui;
     end_editor_frame_pass_ptr        end_frame_pass;
     handle_editor_message_ptr        handle_message;
     shutdown_editor_ptr              shutdown;
 
     create_offscreen_renderpass_ptr  create_offscreen_renderpass;
+    get_offscreen_renderpass_ptr     get_offscreen_renderpass;
     create_offscreen_resources_ptr   create_offscreen_resources;
     shutdown_offscreen_ptr           shutdown_offscreen;
     create_scene_object_pipeline_ptr create_scene_object_pipeline;
+    record_offscreen_frame_ptr record_offscreen_frame;
 } editor_plugin;
 
 /* ---- settings the renderer needs before the editor exists. the editor writes them (sync_render_settings in phoenix_editor.dll) ---- */

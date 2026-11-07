@@ -25,30 +25,23 @@ static inline editor_vec3 v3_norm(editor_vec3 a)
 static const char* const k_brush_names[sculpt_brush_count] = {
     "Clay Buildup", "Clay Soften", "Standard", "Carve", "Grab", "Polish", "Inflate", "Smooth", "Flatten"
 };
-
-#define M_R   sculpt_setting_radius
-#define M_S   sculpt_setting_strength
-#define M_H   sculpt_setting_hardness
-#define M_P   sculpt_setting_plane_offset
-#define M_N   sculpt_setting_smooth_passes
-#define M_SP  sculpt_setting_spacing
 static const uint32_t k_brush_masks[sculpt_brush_count] = {
-    M_R | M_S | M_H | M_P | M_SP,        /* clay buildup */
-    M_R | M_S | M_H | M_N | M_SP,        /* clay soften  */
-    M_R | M_S | M_H | M_SP,              /* standard     */
-    M_R | M_S | M_H | M_SP,              /* carve        */
-    M_R | M_H,                           /* grab         */
-    M_R | M_S | M_H | M_N | M_SP,        /* polish       */
-    M_R | M_S | M_H | M_SP,              /* inflate      */
-    M_R | M_S | M_H | M_N | M_SP,        /* smooth       */
-    M_R | M_S | M_H | M_P | M_SP         /* flatten      */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_plane_offset | sculpt_setting_spacing,        /* clay buildup */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_smooth_passes | sculpt_setting_spacing,        /* clay soften  */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_spacing,              /* standard     */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_spacing,              /* carve        */
+    sculpt_setting_radius | sculpt_setting_hardness,                           /* grab         */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_smooth_passes | sculpt_setting_spacing,        /* polish       */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_spacing,              /* inflate      */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_smooth_passes | sculpt_setting_spacing,        /* smooth       */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_plane_offset | sculpt_setting_spacing         /* flatten      */
 };
-#undef M_R
-#undef M_S
-#undef M_H
-#undef M_P
-#undef M_N
-#undef M_SP
+#undef sculpt_setting_radius
+#undef sculpt_setting_strength
+#undef sculpt_setting_hardness
+#undef sculpt_setting_plane_offset
+#undef sculpt_setting_smooth_passes
+#undef sculpt_setting_spacing
 
 const char* sculpt_brush_name(enum_sculpt_brush b)
 {

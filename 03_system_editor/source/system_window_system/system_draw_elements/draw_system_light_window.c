@@ -129,7 +129,7 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
 
     /* the drop down geometry is needed up front (outside click closes it, everything else is masked while it is open) */
     const int dd_x = x + lw_label_w, dd_w = w - lw_label_w, dd_y = y;
-    const int list_n = TERRAIN_MAX_LAYERS - 1;                     /* layers 1..9, never the height layer */
+    const int list_n = terrain_max_layers - 1;                     /* layers 1..9, never the height layer */
     const int list_y = dd_y + lw_row_h + 2, list_h = list_n * lw_row_h + 4;
     if (s_layer_open && pressed) {
         const int mx = ui_ctx->input.mouse_x, my = ui_ctx->input.mouse_y;
@@ -142,7 +142,7 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
     {
         char cap[64];
         const int cur = get_terrain_light_layer();
-        snprintf(cap, sizeof(cap), "%d  %s  %s", cur + 1, terrain_layer_name(cur), s_layer_open ? "^" : "vert_to_edge_array");
+        snprintf(cap, sizeof(cap), "%d  %s  %s", cur + 1, get_terrain_layer_name(cur), s_layer_open ? "^" : "vert_to_edge_array");
         if (draw_button_element(cmd, ui_ctx, lw_id_layer, cap, dd_x, dd_y, dd_w, lw_row_h, system_theme.tab_sub_menubar_button))
             s_layer_open = !s_layer_open;
     }
@@ -168,7 +168,7 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
         y += ui_font_h + 10;
 
         const char* driver = NULL;
-        const bool driven = light_sun_is_driven(&driver);
+        const bool driven = is_light_sun_driven(&driver);
         bool changed = false;
 
         if (driven) {
@@ -194,13 +194,13 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
         y += ui_font_h + 10;
 
         if (lw_slider(cmd, ui_ctx, lw_id_slider + 3, "Min light", x, y, w, &g_light.min_light, 0.0f, 1.0f, 100.0f, true)) {
-            terrain_light_rebuild_all();                 /* baked into vertex colour: re-bake once the drag ends */
+            rebuild_terrain_light_all();                 /* baked into vertex colour: re-bake once the drag ends */
             s_save_pending = true;
         }
         y += lw_row_h;
 
         const int bw = (w - lw_gap) / 2;
-        if (lw_button(cmd, ui_ctx, lw_id_rebuild, "Rebuild",     x,                y, bw, false)) terrain_light_rebuild_all();
+        if (lw_button(cmd, ui_ctx, lw_id_rebuild, "Rebuild",     x,                y, bw, false)) rebuild_terrain_light_all();
         if (lw_button(cmd, ui_ctx, lw_id_clear,   "Clear layer", x + bw + lw_gap,  y, bw, false)) clear_terrain_light_layer();
         y += lw_row_h + lw_gap;
     }
@@ -218,21 +218,21 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
         }
         y += lw_row_h + 2;
 
-        for (int i = 0; i < light_object_count() && room(y, lw_row_h, limit); i++) {
-            const light_object* lo = light_object_at(i);
+        for (int i = 0; i < get_light_object_count() && room(y, lw_row_h, limit); i++) {
+            const light_object* lo = get_light_object_at(i);
             if (!lo) break;
             const int sel_w = 52, on_w = 40;
             const int name_w = w - sel_w - on_w - lw_gap * 2;
             char nm[40];
-            snprintf(nm, sizeof(nm), "%.*s", name_w > 0 ? name_w / ui_font_w : 0, light_object_name(i));
+            snprintf(nm, sizeof(nm), "%.*s", name_w > 0 ? name_w / ui_font_w : 0, get_light_object_name(i));
             draw_text_element(cmd, ui_ctx, nm, x, y + (lw_btn_h - ui_font_h) / 2,
                               lo->enabled ? system_theme.system_active_text : system_theme.system_text);
             if (lw_button(cmd, ui_ctx, (uint32_t)(lw_id_light_on  + i * 2), lo->enabled ? "On" : "Off",
                           x + name_w + lw_gap, y, on_w, lo->enabled))
-                light_object_set_enabled(i, !lo->enabled);
+                set_light_object_enabled(i, !lo->enabled);
             if (lw_button(cmd, ui_ctx, (uint32_t)(lw_id_light_sel + i * 2), "Select",
                           x + name_w + on_w + lw_gap * 2, y, sel_w, false))
-                light_object_select(i);
+                select_light_object(i);
             y += lw_row_h;
         }
     }
@@ -247,7 +247,7 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
         for (int i = 0; i < list_n; i++) {
             const int layer = i + 1;
             char item[64];
-            snprintf(item, sizeof(item), "%d  %s", layer + 1, terrain_layer_name(layer));
+            snprintf(item, sizeof(item), "%d  %s", layer + 1, get_terrain_layer_name(layer));
             const bool cur = (layer == get_terrain_light_layer());
             if (draw_button_element(cmd, ui_ctx, (uint32_t)(lw_id_layer_it + i), item, dd_x + 2, list_y + 2 + i * lw_row_h,
                                     dd_w - 4, lw_row_h - 2, cur ? system_theme.system_accent : system_theme.menu_open)) {

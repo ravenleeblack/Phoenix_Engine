@@ -220,6 +220,7 @@ void evaluate_dock_interaction(manage_docking* mesh, system_element_context* ui_
         if (ui_element->input.mouse_down) return;
 
         /* released: drop */
+        ui_element->active_id = 0;
         bool placed = false;
         const enum_drop_zone_type zone = mesh->active_drop_zone;
         if (leaf && zone == drop_zone_center) {

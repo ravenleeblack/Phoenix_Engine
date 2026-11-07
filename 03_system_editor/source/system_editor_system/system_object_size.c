@@ -1,4 +1,5 @@
 #include "system_globals.h"
+#include "system_edit_manager.h"
 
 bool object_get_local_bounds(system_scene_object* o, editor_vec3* out_min, editor_vec3* out_max)
 {
@@ -22,7 +23,7 @@ bool object_get_local_bounds(system_scene_object* o, editor_vec3* out_min, edito
     return true;
 }
 
-bool object_get_mesh_size(system_scene_object* o, editor_vec3* out_size)
+bool get_object_mesh_size(system_scene_object* o, editor_vec3* out_size)
 {
     editor_vec3 lo, hi;
     if (!out_size || !object_get_local_bounds(o, &lo, &hi)) return false;
@@ -32,7 +33,7 @@ bool object_get_mesh_size(system_scene_object* o, editor_vec3* out_size)
     return true;
 }
 
-bool object_set_mesh_size_axis(system_scene_object* o, int axis, float size)
+bool set_object_mesh_size_axis(system_scene_object* o, int axis, float size)
 {
     if (axis < 0 || axis > 2 || size <= 0.0f) return false;
     editor_vec3 lo, hi;
@@ -49,8 +50,8 @@ bool object_set_mesh_size_axis(system_scene_object* o, int axis, float size)
 
 bool object_set_mesh_size(system_scene_object* o, editor_vec3 size)
 {
-    const bool x = object_set_mesh_size_axis(o, 0, size.x);
-    const bool y = object_set_mesh_size_axis(o, 1, size.y);
-    const bool z = object_set_mesh_size_axis(o, 2, size.z);
+    const bool x = set_object_mesh_size_axis(o, 0, size.x);
+    const bool y = set_object_mesh_size_axis(o, 1, size.y);
+    const bool z = set_object_mesh_size_axis(o, 2, size.z);
     return x && y && z;
 }

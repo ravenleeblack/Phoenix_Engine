@@ -75,16 +75,16 @@ void draw_scene_archive_node(VkCommandBuffer cmd, system_element_context* system
 
     /* region_xx rows: chunk face_type, On / Off, Solo. Off = the region is not meshed at all (big speed win). */
     {
-        const int reg = region_of_terrain_object(obj->id);
+        const int reg = get_terrain_region_of_object(obj->id);
         if (reg >= 0) {
-            const bool on = terrain_region_is_enabled(reg);
+            const bool on = is_terrain_region_enabled(reg);
             const int bw = 36, by = *current_y + 2, bx = x + window_w - bw * 2 - 8;
             const int mx = system_ui->input.mouse_x, my = system_ui->input.mouse_y;
             const bool h_on   = validate_rectangle_hit(mx, my, bx, by, bw, 16);
             const bool h_solo = validate_rectangle_hit(mx, my, bx + bw + 4, by, bw, 16);
 
             char info[32];
-            snprintf(info, sizeof(info), "%s%d ch", reg == terrain_camera_region() ? "here  " : "", g_terrain.region_resident[reg]);
+            snprintf(info, sizeof(info), "%s%d ch", reg == get_terrain_camera_region() ? "here  " : "", g_terrain.region_resident[reg]);
             draw_text_element(cmd, system_ui, info, bx - (int)strlen(info) * 8 - 6, *current_y + 4, get_theme_hint_color());
 
             push_quad_element(cmd, (float)bx, (float)by, (float)bw, 16.0f, on ? system_theme.strip_button_selected : (h_on ? system_theme.tab_item : system_theme.strip_button));
@@ -92,8 +92,8 @@ void draw_scene_archive_node(VkCommandBuffer cmd, system_element_context* system
             push_quad_element(cmd, (float)(bx + bw + 4), (float)by, (float)bw, 16.0f, h_solo ? system_theme.tab_item : system_theme.strip_button);
             draw_text_element(cmd, system_ui, "Solo", bx + bw + 8, by + 2, system_theme.button_text);
 
-            if (s_click_edge && h_on)   { terrain_region_set_enabled(reg, !on); set_scene_archive_status("%s: %s.", obj->name, on ? "off (not meshed)" : "on"); }
-            if (s_click_edge && h_solo) { terrain_region_solo(reg);             set_scene_archive_status("%s: solo.", obj->name); }
+            if (s_click_edge && h_on)   { set_terrain_region_enabled(reg, !on); set_scene_archive_status("%s: %s.", obj->name, on ? "off (not meshed)" : "on"); }
+            if (s_click_edge && h_solo) { solo_terrain_region(reg);             set_scene_archive_status("%s: solo.", obj->name); }
         }
     }
 
