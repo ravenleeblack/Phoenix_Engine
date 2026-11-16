@@ -125,7 +125,7 @@ system_scene_registry g_scene_registry = {0};
  
 /* Maya-like defaults: lighter blue-grey at the top fading to a dark grey at the bottom. */
 scene_background g_scene_bg  = { { 0.43f, 0.49f, 0.57f }, { 0.16f, 0.17f, 0.19f } };
-scene_sun        g_scene_sun = { 40.0f, 50.0f, 0.30f };
+scene_sun        g_scene_sun = { 40.0f, 50.0f, 0.60f };
  
 const scene_look_preset g_scene_look_presets[scene_look_preset_count] = {
     { "Maya", { 0.43f, 0.49f, 0.57f }, { 0.16f, 0.17f, 0.19f } },

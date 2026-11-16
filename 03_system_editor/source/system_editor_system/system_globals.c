@@ -18,6 +18,12 @@ char status_bar_text_buffer[256] = "System Idle";
 char menu_bar_text_buffer[512] = "";
 
 bool is_game_running = false;
+
+/* the editor module's own light list (see system_directional_light.c) */
+light_object editor_lights[light_max_objects] = {0};
+int          editor_light_count               = 0;
+int          editor_light_driver              = -1;
+glyph        editor_sun_glyph                 = {0};
 bool is_engine_running = true;
 bool editor_frame_key_down = false;
 bool editor_home_key_down = false;

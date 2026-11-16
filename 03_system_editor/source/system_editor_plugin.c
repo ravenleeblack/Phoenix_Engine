@@ -11,7 +11,7 @@ extern void shutdown_editor_offscreen(void);
 
 void update_editor_camera_hotkeys(void)
 {
-    bool frame_down = (GetAsyncKeyState(0x46) & 0x8000) != 0;
+    bool frame_down = ((GetAsyncKeyState(0x46) & 0x8000) != 0) && ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
     bool home_down = (GetAsyncKeyState(VK_HOME) & 0x8000) != 0;
 
     if (frame_down && !editor_frame_key_down) {

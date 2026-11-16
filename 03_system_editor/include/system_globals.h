@@ -118,6 +118,12 @@ extern char menu_bar_text_buffer[512];
 
 /* ---- run state ---- */
 extern bool is_game_running;
+
+/* ---- editor light list (defined in system_globals.c, used by system_directional_light.c) ---- */
+extern light_object editor_lights[light_max_objects];
+extern int          editor_light_count;
+extern int          editor_light_driver;
+extern glyph        editor_sun_glyph;
 extern bool is_engine_running;
 
 /* element_context is declared in engine_globals.h. */

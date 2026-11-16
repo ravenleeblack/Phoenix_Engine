@@ -40,6 +40,44 @@ bool is_cursor_in_scene_view(void)
                                   b->offset_x, b->offset_y, b->width, b->height);
 }
 
+/* Ctrl+F / Home button: third person view of the selected object (or the world origin), looking down at it from a distance
+   that grows with the object's size. Moves the editor's own camera copy, the one the scene view renders from. */
+void focus_system_grid_on_selected_object(void)
+{
+    editor_vec3 target = { 0.0f, 0.0f, 0.0f };
+    float radius = 2.0f;
+
+    system_scene_object* selected = find_scene_object_by_id(g_scene_registry.selected_object_id);
+    if (selected && selected != &g_scene_registry.objects[0]) {
+        target = selected->position;
+        float largest_scale = fabsf(selected->scale.x);
+        if (fabsf(selected->scale.y) > largest_scale) {
+            largest_scale = fabsf(selected->scale.y);
+        }
+        if (fabsf(selected->scale.z) > largest_scale) {
+            largest_scale = fabsf(selected->scale.z);
+        }
+        if (selected->bounds_radius > 0.0f && largest_scale > 0.0f) {
+            radius = selected->bounds_radius * largest_scale;
+        }
+    }
+
+    float distance = radius * 6.0f;
+    if (distance < 40.0f) {
+        distance = 40.0f;
+    }
+    if (distance > ZOOM_MAX_DISTANCE) {
+        distance = ZOOM_MAX_DISTANCE;
+    }
+
+    world_camera* cam = editor_camera();
+    cam->rotation.x = -0.5f;
+    editor_vec3 forward = camera_forward(cam);
+    cam->position.x = target.x - forward.x * distance;
+    cam->position.y = target.y - forward.y * distance;
+    cam->position.z = target.z - forward.z * distance;
+}
+
 /* Point the camera zooms toward: the obj_vert_selected object, or the world origin. */
 editor_vec3 get_zoom_target(void)
 {

@@ -2,7 +2,7 @@
 
 /* Maya-like defaults: lighter blue-grey at the top fading to a dark grey at the bottom. */
 scene_background g_scene_bg  = { { 0.43f, 0.49f, 0.57f }, { 0.16f, 0.17f, 0.19f } };
-scene_sun        g_scene_sun = { 40.0f, 50.0f, 0.30f };
+scene_sun        g_scene_sun = { 40.0f, 50.0f, 0.60f };
 
 static VkPipeline       g_bg_pipeline = VK_NULL_HANDLE;
 static VkPipelineLayout g_bg_layout   = VK_NULL_HANDLE;

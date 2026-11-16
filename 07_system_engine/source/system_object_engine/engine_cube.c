@@ -1,10 +1,5 @@
 #include "engine_globals.h"
 
-float skin_empty_grey_linear(void)
-{
-    return 0.216f;
-}
-
 /* Maya default shaded grey (sRGB 0.55). The mesh shader writes vertex colour as-is, so convert to linear
    when the swapchain is an sRGB format (same rule push_quad_element uses for UI colors). */
 #define CUBE_MAYA_GREY_SRGB 0.55f
@@ -13,6 +8,12 @@ static float convert_srgb_to_linear(float c)
 {
     if (!g_swapchain_is_srgb) return c;
     return (c <= 0.04045f) ? (c / 12.92f) : powf((c + 0.055f) / 1.055f, 2.4f);
+}
+
+/* the grey of every object without a skin: the cube, the terrain, anything else untextured */
+float skin_empty_grey_linear(void)
+{
+    return convert_srgb_to_linear(CUBE_MAYA_GREY_SRGB);
 }
 
 /* size is a multiple of the system unit: 1.0f = one 4 mesh cube */
