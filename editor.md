@@ -18,6 +18,24 @@ The editor currently provides:
 - Texture Shop and node-based texture work
 - UV, paint-map, and skin UI foundations
 - Editor preference and view-state persistence
+- File > Import / Export: `.fbx` models and `.png` images through the loader, with an export options window
+- Object-mode right-click Skin menu: assign the `.sprof` selected in the File Archive to the selected object
+- Window focus: the scene view keeps the keyboard after a click; hotkeys and held keys are ignored while another app has focus
+
+## Import and Export
+
+File > Import opens the Windows file dialog.
+
+- `.fbx` (binary or ASCII, mesh geometry only) is copied to `assets/models` and added to the scene.
+- `.png` is copied to `assets/textures` and a skin is created from its average color in `assets/skins`.
+
+File > Export opens an options window: export the selected object or the selected archive file, as FBX binary, FBX ASCII, or PNG. Export... then opens the save dialog. Objects are written in object space, in meters.
+
+The editor loads `phoenix_loader.dll` at run time (`06_system_loader/`), so the editor itself links nothing extra.
+
+## Assign Skin
+
+Select a `.sprof` in the File Archive, select an object, then right-click in the scene view (object mode) > Skin > Assign Skin from Archive. Textureshop does not need to be open.
 
 ## Source Layout
 

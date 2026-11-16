@@ -104,13 +104,15 @@ void update_element_input(system_element_context* context, int mouse_x, int mous
     context->input.mouse_y    = mouse_y;
     context->input.mouse_down = mouse_down;
 
-    /* physical key states from windows */
-    context->input.alt_pressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    context->input.middle_down = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+    /* physical key states from windows. only while this window has the keyboard: Alt or a middle click in another app must not move the camera */
+    const bool window_focused = check_window_focus();
+    context->input.alt_pressed = window_focused && ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0);
+    context->input.middle_down = window_focused && ((GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0);
 
     /* Scene-view movement uses the same frame-delivered key state as the rest of the editor.
-       Keep it horizontal when forward/backward keys are held, so WASD remains predictable in flight. */
-    if (is_cursor_in_scene_view()) {
+       Keep it horizontal when forward/backward keys are held, so WASD remains predictable in flight.
+       the scene view keeps the keyboard after a click in it, until another panel is clicked (a number field being typed in takes it back). */
+    if (is_cursor_in_scene_view() || (scene_view_has_focus && !is_number_field_active())) {
         const float move_speed = 0.75f;
         float forward_amount = (input_is_key_down(phoenix_key_w) ? 1.0f : 0.0f)
                              - (input_is_key_down(phoenix_key_s) ? 1.0f : 0.0f);

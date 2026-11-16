@@ -11,8 +11,10 @@ extern void shutdown_editor_offscreen(void);
 
 void update_editor_camera_hotkeys(void)
 {
-    bool frame_down = ((GetAsyncKeyState(0x46) & 0x8000) != 0) && ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
-    bool home_down = (GetAsyncKeyState(VK_HOME) & 0x8000) != 0;
+    /* hotkeys only while this window has the keyboard: Ctrl+F or Home pressed in another app must not move the camera */
+    const bool window_focused = check_window_focus();
+    bool frame_down = window_focused && ((GetAsyncKeyState(0x46) & 0x8000) != 0) && ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
+    bool home_down = window_focused && ((GetAsyncKeyState(VK_HOME) & 0x8000) != 0);
 
     if (frame_down && !editor_frame_key_down) {
         focus_system_grid_on_selected_object();
@@ -89,6 +91,7 @@ __declspec(dllexport) void editor_update(float delta_time)
                          element_context.input.mouse_down);
     system_wheel_hook_update();
     preferences_begin_frame(&element_context);
+    export_begin_frame(&element_context);
 }
 
 __declspec(dllexport) VkCommandBuffer editor_begin_frame_pass(void)
@@ -105,6 +108,7 @@ __declspec(dllexport) void editor_draw_ui(VkCommandBuffer cmd, float delta_time)
     editor_draw_menubar(cmd);
     editor_flush_ui(cmd);
     preferences_end_frame(&element_context);
+    export_end_frame(&element_context);
 }
 
 __declspec(dllexport) void editor_draw_menubar(VkCommandBuffer cmd)
@@ -134,6 +138,7 @@ __declspec(dllexport) void editor_flush_ui(VkCommandBuffer cmd)
                             render_context.swapchain_main.extent,
                             render_context.pipeline_layout);
     preferences_end_frame(&element_context);
+    export_end_frame(&element_context);
 }
 
 __declspec(dllexport) void editor_end_frame_pass(VkCommandBuffer cmd)
@@ -141,9 +146,18 @@ __declspec(dllexport) void editor_end_frame_pass(VkCommandBuffer cmd)
     end_frontend_main_pass(cmd);
 }
 
+/* the editor lost the mouse or the keyboard (another window took it, a dialog opened): nothing may stay held down */
+void clear_editor_input_state(void)
+{
+    element_context.input.mouse_down = false;
+    element_context.input.mouse_pressed = false;
+    element_context.input.middle_down = false;
+    element_context.input.camera_manipulating = false;
+    element_context.active_id = 0;
+}
+
 __declspec(dllexport) bool editor_handle_message(HWND hwnd, UINT message, WPARAM wp, LPARAM lp, LRESULT* result)
 {
-    (void)hwnd;
     (void)wp;
     (void)lp;
     if (result) *result = 0;
@@ -153,20 +167,45 @@ __declspec(dllexport) bool editor_handle_message(HWND hwnd, UINT message, WPARAM
             element_context.input.mouse_x = (int)(short)LOWORD(lp);
             element_context.input.mouse_y = (int)(short)HIWORD(lp);
             break;
-        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDOWN: {
             element_context.input.mouse_x = (int)(short)LOWORD(lp);
             element_context.input.mouse_y = (int)(short)HIWORD(lp);
             element_context.input.mouse_down = true;
             element_context.input.mouse_pressed = true;
-            phoenix_trace("EditorInput", "left button down at (%d,%d)", element_context.input.mouse_x, element_context.input.mouse_y);
+
+            /* the panel that was clicked keeps the keyboard until another one is clicked */
+            const struct_viewport_bounds* view = &element_context.scene_view;
+            scene_view_has_focus = view->width > 0 && view->height > 0 &&
+                validate_rectangle_hit(element_context.input.mouse_x, element_context.input.mouse_y,
+                                       view->offset_x, view->offset_y, view->width, view->height);
+
+            SetCapture(hwnd);                                  /* the button up is delivered here even when the cursor left the window */
+            phoenix_trace("EditorInput", "left button down at (%d,%d) scene_focus=%d", element_context.input.mouse_x, element_context.input.mouse_y, (int)scene_view_has_focus);
             if (result) *result = 0;
             return true;
+        }
         case WM_LBUTTONUP:
             element_context.input.mouse_x = (int)(short)LOWORD(lp);
             element_context.input.mouse_y = (int)(short)HIWORD(lp);
             element_context.input.mouse_down = false;
+            if (GetCapture() == hwnd) {
+                ReleaseCapture();
+            }
             if (result) *result = 0;
             return true;
+        case WM_CAPTURECHANGED:
+            if (lp != 0 && (HWND)lp != hwnd) {
+                clear_editor_input_state();                    /* another window took the mouse: the button up will not come to us */
+            }
+            return false;
+        case WM_KILLFOCUS:
+            clear_editor_input_state();
+            return false;
+        case WM_ACTIVATEAPP:
+            if (wp == FALSE) {
+                clear_editor_input_state();                    /* alt tab away: nothing stays held. the scene view keeps its keyboard focus for the way back */
+            }
+            return false;
         case WM_MBUTTONDOWN:
             element_context.input.middle_down = true;
             if (result) *result = 0;

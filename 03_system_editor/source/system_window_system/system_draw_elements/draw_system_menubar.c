@@ -32,8 +32,8 @@ const struct_menu_item file_menu_items[] = {
     { "Save Project",   menu_action_save_project, false },
     { "Save All",       menu_action_save_all,     false },
     { NULL,              menu_action_none,        false },
-    { "Import...",      menu_action_import,       false },
-    { "Export...",      menu_action_export,       false },
+    { "Import...",      menu_action_import,       true },
+    { "Export...",      menu_action_export,       true },
     { "Preferences",    menu_action_preferences_submenu, true },
     { NULL,              menu_action_none,        false },
     { "Build",          menu_action_build,        false },
@@ -220,6 +220,12 @@ void run_menu_action(const struct_menu_item* item, system_element_context* ui_ct
     case menu_action_preferences:
         open_preferences_window();
         set_menubar_status("Preferences opened.");
+        break;
+    case menu_action_import:
+        import_asset_from_dialog();
+        break;
+    case menu_action_export:
+        open_export_window();
         break;
     case menu_action_window_hierarchy:
         toggle_menubar_window(view_type_hierarchy, view_type_scene, view_type_inspector);
@@ -606,4 +612,5 @@ void draw_preferences_overlay(VkCommandBuffer cmd, system_element_context* ui_ct
 {
     draw_menubar_dropdown(cmd, ui_ctx);
     draw_preferences_window(cmd, ui_ctx, (int)swapchain->extent.width, (int)swapchain->extent.height);
+    draw_export_window(cmd, ui_ctx, (int)swapchain->extent.width, (int)swapchain->extent.height);
 }

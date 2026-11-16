@@ -50,6 +50,7 @@ VkSampleCountFlagBits get_msaa_sample_count(void);
 /* Preferences window (modal). */
 void open_preferences_window(void);
 bool is_preferences_window_open(void);
+extern bool preferences_window_open;
 void preferences_begin_frame(system_element_context* ui_ctx);   /* start of the UI pass, BEFORE the dock: swallows the mouse button while the window is open */
 void preferences_end_frame(system_element_context* ui_ctx);
 void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ctx, int screen_w, int screen_h);   /* end of the UI pass, draws on top */

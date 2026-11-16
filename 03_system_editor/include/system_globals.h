@@ -66,6 +66,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #include "system_object_database.h"
 #include "system_settings_database.h"
 #include "system_preferences.h"
+#include "system_import_export.h"
 
 /* ---- 5. Scene objects ---- */
 #include "system_scene_objects.h"
@@ -118,6 +119,7 @@ extern char menu_bar_text_buffer[512];
 
 /* ---- run state ---- */
 extern bool is_game_running;
+extern bool scene_view_has_focus;
 
 /* ---- editor light list (defined in system_globals.c, used by system_directional_light.c) ---- */
 extern light_object editor_lights[light_max_objects];

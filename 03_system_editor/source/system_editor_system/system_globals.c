@@ -18,6 +18,7 @@ char status_bar_text_buffer[256] = "System Idle";
 char menu_bar_text_buffer[512] = "";
 
 bool is_game_running = false;
+bool scene_view_has_focus = false;       /* the last click landed in the scene view: it keeps the keyboard while the cursor is elsewhere */
 
 /* the editor module's own light list (see system_directional_light.c) */
 light_object editor_lights[light_max_objects] = {0};

@@ -30,7 +30,7 @@ The complete documentation lives in the [Phoenix Engine Wiki](https://github.com
 | Engine | `phoenix_engine.exe` | Windowing, Vulkan, runtime scene, rendering, services, plugin loading |
 | Editor | `phoenix_editor.dll` | UI, docking, modeler, sculpting, painting, scene tools, authoring |
 | Game | `system_game.dll` | Gameplay, simulation, and project-specific runtime behavior |
-| Loader | `phoenix_loader.dll` | Native image and 3D asset import/export support |
+| Loader | `phoenix_loader.dll` | PNG and FBX (binary and ASCII mesh) import and export, no external dependencies |
 
 ## Quick Build
 
@@ -76,7 +76,9 @@ See [Phoenix Engine Wiki](https://github.com/ravenleeblack/Phoenix_Engine/wiki) 
 
 ## Current Release
 
-- **Version:** 1.1
-- **Tag:** [v1.1](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.1)
+- **Version:** 1.3
+- **Tag:** [v1.3](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.3)
+
+What is new in 1.3: File > Import / Export for `.fbx` and `.png`, an export options window, object-mode Assign Skin from the File Archive, and editor window focus handling.
 
 Phoenix is under active development. Public APIs and editor workflows may change between releases.

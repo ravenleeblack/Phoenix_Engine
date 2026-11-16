@@ -37,6 +37,7 @@ typedef enum {
     action_texshop_new_skin, action_texshop_copy_skin, action_texshop_delete_skin,
     action_texshop_next_skin, action_texshop_prev_skin,
     action_texshop_assign_skin, action_texshop_clear_skin,
+    action_assign_archive_skin,
 
     /* sculpt */
     action_sculpt_radius_up, action_sculpt_radius_down, action_sculpt_strength_up, action_sculpt_strength_down,
@@ -144,10 +145,13 @@ static const menu_item it_snap_grid[] = { {"Grid Size +", action_snap_grid_up}, 
 static const menu_item it_mask[]      = { {"Mask", action_none} };
 
 /* ---- scene view: object mode ---- */
+static const menu_item obj_skin[] = { {"Assign Skin from Archive", action_assign_archive_skin}, {"Clear Skin", action_texshop_clear_skin} };
+
 static const menu_def k_scene_object = { "Obj", {
     MODE_COLUMN_SLOTS,
     TRANSFORM_ROW_SLOTS,
     [slot_right_1] = SLOT("Snap", it_snap),
+    [slot_right_2] = SLOT("Skin", obj_skin),
 }, 0 };
 
 /* ---- scene view: edit mode ---- */
@@ -365,6 +369,7 @@ static void run_action(system_element_context* ui_element, menu_action a)
     case action_texshop_prev_skin:   step_texshop_skin(-1);      break;
     case action_texshop_assign_skin: assign_texshop_skin_to_selected(); break;
     case action_texshop_clear_skin:  clear_texshop_skin_on_selected();  break;
+    case action_assign_archive_skin: assign_archive_skin_to_selected(); break;
 
     /* sculpt: g_sculpt is the source of truth (g_mode_state.sculpt is mirrored from it every frame) */
     case action_sculpt_radius_up:     { sculpt_brush_settings* s = sculpt_current_settings(); s->radius   *= 1.25f; sculpt_clamp_settings(s); } break;

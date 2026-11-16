@@ -223,6 +223,7 @@ void update_system_preference(void)
 
 void open_preferences_window(void)
 {
+    export_window_open          = false;                    /* two modal windows at once would fight over the mouse */
     preferences_pending         = g_prefs;
     preferences_window_open     = true;
     phoenix_info("Prefs", "open_preferences_window: window_open=%d", (int)preferences_window_open);
@@ -355,7 +356,7 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
     sep_color.alpha = 1.0f;
 
     /* Esc closes */
-    bool esc = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+    bool esc = check_window_focus() && ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0);
     if (esc && !preferences_prev_esc) preferences_window_open = false;
     preferences_prev_esc = esc;
 

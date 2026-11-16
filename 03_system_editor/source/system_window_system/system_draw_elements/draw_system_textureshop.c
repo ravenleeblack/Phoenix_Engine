@@ -319,6 +319,32 @@ void create_texshop_skin(void)
     set_texshop_status("New skin. Edit it, then Export.");
 }
 
+/* a skin with one color layer, written to assets/skins so it shows in the File Archive. the PNG import uses this
+   (the skin system has colors only, so the image's average color becomes the layer color). */
+bool create_texshop_skin_from_color(const char* base_name, const float color[3])
+{
+    check_texshop_ready();
+    if (g_texshop.skin_count >= texshop_max_skins) {
+        set_texshop_status("Skin limit is 32.");
+        return false;
+    }
+    char name[texshop_name_len];
+    make_unique_skin_name(name, base_name);
+
+    texshop_skin* s = &g_texshop.skins[g_texshop.skin_count];
+    fill_texshop_skin(s, name);
+    s->id = g_texshop.next_skin_id++;
+    s->layers[0].color[0] = color[0];
+    s->layers[0].color[1] = color[1];
+    s->layers[0].color[2] = color[2];
+    s->layers[0].color[3] = 1.0f;
+    s->layers[0].opacity = 1.0f;
+    g_texshop.selected_skin = g_texshop.skin_count;
+    g_texshop.skin_count++;
+    export_texshop_skin();
+    return true;
+}
+
 void duplicate_texshop_skin(void)
 {
     check_texshop_ready();
@@ -470,6 +496,40 @@ void assign_texshop_skin_to_selected(void)
     char text[96];
     snprintf(text, sizeof(text), "Assigned '%.20s' to '%.20s'. Scene tab: Textured shows it.", s->name, o->name);
     set_texshop_status(text);
+}
+
+/* the skin file picked in the File Archive -> the object picked in the scene. No Textureshop window needed. */
+bool assign_archive_skin_to_selected(void)
+{
+    check_texshop_ready();
+
+    const int node_index = file_archive_selected();
+    const file_archive_node* node = file_archive_node_at(node_index);
+    if (!node || node->kind != file_node_file) {
+        set_statusbar_message("%s", "Select a skin file in the File Archive first.");
+        return false;
+    }
+
+    char skin_name[file_archive_name_max];
+    snprintf(skin_name, sizeof(skin_name), "%s", node->name);
+    char* dot = strrchr(skin_name, '.');
+    if (!dot || _stricmp(dot, TEXSHOP_SKIN_EXT) != 0) {
+        set_statusbar_message("%s", "The selected archive file is not a skin (.sprof).");
+        return false;
+    }
+    *dot = '\0';
+
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        if (_stricmp(g_texshop.skins[i].name, skin_name) == 0) {
+            g_texshop.selected_skin = i;
+            assign_texshop_skin_to_selected();
+            set_statusbar_message("%s", g_texshop.status);
+            return true;
+        }
+    }
+
+    set_statusbar_message("%s", "That skin file is not loaded. Open Textureshop once or refresh the archive.");
+    return false;
 }
 
 void clear_texshop_skin_on_selected(void)
