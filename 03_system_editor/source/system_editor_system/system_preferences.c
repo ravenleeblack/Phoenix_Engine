@@ -191,6 +191,7 @@ VkSampleCountFlagBits get_msaa_sample_count(void)
 bool         preferences_window_open       = false;
 editor_prefs preferences_pending;
 bool         preferences_real_down  = false;
+bool         preferences_input_hidden = false;   /* begin_frame hid the mouse button this frame, end_frame must give it back */
 bool         preferences_prev_down  = false;
 bool         preferences_pressed    = false;
 bool         preferences_prev_esc   = false;
@@ -243,12 +244,14 @@ void preferences_begin_frame(system_element_context* ui_ctx)
     preferences_pressed   = preferences_real_down && !preferences_prev_down;
     preferences_prev_down = preferences_real_down;
     ui_ctx->input.mouse_down = false;      /* modal: dock, toolbar and menubar see no button while we are open */
+    preferences_input_hidden = true;
 }
 
 void preferences_end_frame(system_element_context* ui_ctx)
 {
-    if (ui_ctx) {
+    if (ui_ctx && preferences_input_hidden) {
         ui_ctx->input.mouse_down = preferences_real_down;
+        preferences_input_hidden = false;
     }
 }
 

@@ -22,7 +22,7 @@ void shutdown_engine(system_engine_context* context)
 void start_engine_input(system_engine_context* context, float delta_time)
 {
     (void)context;
-    (void)delta_time;
+    update_input_system((double)delta_time);   /* keys and mouse polled once per frame, before the editor reads them */
 }
 
 bool create_program_window(HINSTANCE instance)
