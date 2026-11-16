@@ -23,7 +23,7 @@ void main() {
 
     vec2 clip_space = vec2(
         pixel_pos.x / push_constants.resolution.x * 2.0 - 1.0,
-        1.0 - pixel_pos.y / push_constants.resolution.y * 2.0
+        pixel_pos.y / push_constants.resolution.y * 2.0 - 1.0
     );
 
     gl_Position = vec4(clip_space, 0.0, 1.0);

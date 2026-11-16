@@ -298,9 +298,6 @@ void draw_scene_sub_menu(system_element_context* ui_element, system_dock_node* n
 
 void draw_sceneview_window(system_element_context* ui_ctx, system_dock_node* node, int content_y, int content_h, VkCommandBuffer current_cmd)
 {
-    phoenix_info("SCENE_VIEW", "draw_sceneview_window: node=%dx%d at (%d,%d), content_h=%d", 
-                 node->w, node->h, node->x, content_y, content_h);
-    
     /* this window's own tab sub menubar + buttons */
     draw_scene_sub_menu(ui_ctx, node, current_cmd);
 
@@ -310,13 +307,9 @@ void draw_sceneview_window(system_element_context* ui_ctx, system_dock_node* nod
     ui_ctx->scene_view.offset_x = node->x;
     ui_ctx->scene_view.offset_y = content_y;
 
-    phoenix_info("SCENE_VIEW", "Requesting offscreen size: %dx%d", node->w, content_h);
-    phoenix_info("SCENE_VIEW", "About to call offscreen_request_size with (0, %.0f, %.0f)", (double)node->w, (double)content_h);
     offscreen_request_size(offscreen_scene, (double)node->w, (double)content_h);
-    phoenix_info("SCENE_VIEW", "Returned from offscreen_request_size");
 
     VkDescriptorSet texture_set = render_context.scene_viewport_target.descriptor_set;
-    phoenix_info("SCENE_VIEW", "Viewport descriptor: %p", (void*)texture_set);
 
     // 1. Submit offscreen viewport image target presentation regions to queue commands
     draw_sceneview_viewport(ui_ctx, current_cmd, node->x, content_y, node->w, content_h, texture_set);

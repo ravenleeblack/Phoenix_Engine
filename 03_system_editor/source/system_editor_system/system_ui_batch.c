@@ -140,8 +140,8 @@ static void draw_one(VkCommandBuffer cmd, ui_push_constant* q, VkExtent2D extent
 
     if (viewport) {
         const offscreen_kind kind = (q->color[3] > 2.5f) ? offscreen_game : offscreen_scene;
-        request_offscreen_size(kind, q->size[0], q->size[1]);   /* tells the NEXT frame how big the target must be */
-        tex = get_offscreen_descriptor(kind);
+        offscreen_request_size(kind, q->size[0], q->size[1]);   /* tells the NEXT frame how big the target must be */
+        tex = offscreen_get_descriptor(kind);
         if (tex == VK_NULL_HANDLE) {
             phoenix_warn("ViewportUI", "%s viewport descriptor is not ready (%.0fx%.0f).",
                          kind == offscreen_scene ? "Scene" : "Game", q->size[0], q->size[1]);

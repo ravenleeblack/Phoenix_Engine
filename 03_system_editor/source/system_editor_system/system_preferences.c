@@ -224,6 +224,7 @@ void open_preferences_window(void)
 {
     preferences_pending         = g_prefs;
     preferences_window_open     = true;
+    phoenix_info("Prefs", "open_preferences_window: window_open=%d", (int)preferences_window_open);
     preferences_prev_down       = true;
     preferences_saved_note      = false;
     preferences_pressed         = false;

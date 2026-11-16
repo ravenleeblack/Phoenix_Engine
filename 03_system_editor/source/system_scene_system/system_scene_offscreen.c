@@ -28,6 +28,9 @@ typedef struct {
     bool     requested;      /* a viewport quad of this kind was flushed last frame */
     uint32_t req_w, req_h;
     bool     drawn;          /* rendered this frame: image is in SHADER_READ_ONLY and may be sampled */
+
+    bool     logged_idle;    /* one-time trace: target was not requested yet */
+    bool     logged_first_draw;   /* one-time info: first frame this target was drawn */
 } offscreen_target;
 
 static offscreen_target g_target[offscreen_count];
@@ -536,9 +539,16 @@ void offscreen_request_size(int kind, double width, double height)
     if (w > OFFSCREEN_MAX_DIM) w = OFFSCREEN_MAX_DIM;
     if (h > OFFSCREEN_MAX_DIM) h = OFFSCREEN_MAX_DIM;
 
-    phoenix_info("OFFSCREEN_REQUEST", "Setting requested=true, req_w=%u, req_h=%u (was requested=%d)", w, h, t->requested);
     /* Several viewports of one kind (e.g. multiple game views): the first one of the frame sets the size. */
-    if (!t->requested) { t->req_w = w; t->req_h = h; t->requested = true; }
+    if (!t->requested) {
+        t->req_w = w;
+        t->req_h = h;
+        t->requested = true;
+    }
+    /* Viewports request every frame; log only when the allocated size is about to change. */
+    if (t->width != t->req_w || t->height != t->req_h) {
+        phoenix_info("OFFSCREEN_REQUEST", "resize requested: %ux%u -> %ux%u", t->width, t->height, t->req_w, t->req_h);
+    }
 }
 
 VkDescriptorSet offscreen_get_descriptor(offscreen_kind kind)
@@ -550,7 +560,6 @@ VkDescriptorSet offscreen_get_descriptor(offscreen_kind kind)
 
 static void draw_scene_view(VkCommandBuffer cmd, uint32_t w, uint32_t h)
 {
-    phoenix_info("SCENE_DRAW", "draw_scene_view called for %ux%u", w, h);
     editor_mat4 view, proj;
     build_scene_view_camera((float)w / (float)h, &view, &proj);   /* SYSTEM camera: the editor fly camera */
 
@@ -562,7 +571,6 @@ static void draw_scene_view(VkCommandBuffer cmd, uint32_t w, uint32_t h)
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_grid);
         vkCmdPushConstants(cmd, pipeline_layout_grid, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
         if (g_scene_view.show_grid) {
-            phoenix_info("SCENE_DRAW", "Drawing grid: %d vertices", GRID_VERTEX_COUNT);
             vkCmdDraw(cmd, GRID_VERTEX_COUNT, 1, 0, 0);
         }
     } else {
@@ -570,7 +578,6 @@ static void draw_scene_view(VkCommandBuffer cmd, uint32_t w, uint32_t h)
     }
 
     /* Meshes, camera glyphs, origin marker. Binds its own pipeline, so it comes after the grid. */
-    phoenix_info("SCENE_DRAW", "Drawing scene objects");
     draw_scene_objects(cmd, &view.mesh[0][0], &proj.mesh[0][0]);
 }
 
@@ -614,20 +621,19 @@ void record_editor_offscreen_frame(VkCommandBuffer cmd)
         return;
     }
 
-    static bool s_logged_any[offscreen_count];
-
     for (int k = 0; k < offscreen_count; k++) {
         offscreen_target* t = &g_target[k];
         t->drawn = false;
         t->fxaa_applied = false;
 
         if (!t->requested) {
-            if (!s_logged_any[k]) {
+            if (!t->logged_idle) {
                 phoenix_trace("OFFSCREEN_RECORD", "%s target not requested this frame.", k == offscreen_scene ? "Scene" : "Game");
+                t->logged_idle = true;
             }
             continue;
         }
-        s_logged_any[k] = true;
+        t->logged_idle = false;
         t->requested = false;
 
         if (t->width != t->req_w || t->height != t->req_h) {
@@ -691,14 +697,11 @@ void record_editor_offscreen_frame(VkCommandBuffer cmd)
         t->drawn = true;
 
         /* one-time diagnostic: shows which image the UI will sample for this view */
-        {
-            static bool s_logged[offscreen_count];
-            if (!s_logged[k]) {
-                s_logged[k] = true;
-                phoenix_info("OFFSCREEN", "%s view first drawn: %ux%u, %ux MSAA, FXAA applied=%d (prefs fxaa=%d, pipeline=%d)",
-                             (k == offscreen_scene) ? "Scene" : "Game", t->width, t->height, (unsigned)g_samples,
-                             (int)t->fxaa_applied, (int)g_prefs.fxaa, (int)(g_fxaa_pipeline != VK_NULL_HANDLE));
-            }
+        if (!t->logged_first_draw) {
+            t->logged_first_draw = true;
+            phoenix_info("OFFSCREEN", "%s view first drawn: %ux%u, %ux MSAA, FXAA applied=%d (prefs fxaa=%d, pipeline=%d)",
+                         (k == offscreen_scene) ? "Scene" : "Game", t->width, t->height, (unsigned)g_samples,
+                         (int)t->fxaa_applied, (int)g_prefs.fxaa, (int)(g_fxaa_pipeline != VK_NULL_HANDLE));
         }
     }
 }

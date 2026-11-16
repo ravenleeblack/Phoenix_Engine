@@ -301,6 +301,8 @@ void draw_text_element(VkCommandBuffer cmd, system_element_context* context, con
 
 /* Frame Layout System Compositors */
 void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, struct editor_window_swapchain* swapchain);
+void draw_preferences_overlay(VkCommandBuffer cmd, system_element_context* ui_ctx, struct editor_window_swapchain* swapchain);
+void draw_menubar_dropdown(VkCommandBuffer cmd, system_element_context* ui_ctx);
 void draw_system_toolbar(VkCommandBuffer cmd, system_element_context* ui_ctx, struct editor_window_swapchain* swapchain);
 void draw_system_statusbar(VkCommandBuffer cmd, system_element_context* ui_ctx, struct editor_window_swapchain* swapchain, bool is_running);
 void draw_system_viewports(VkCommandBuffer cmd, system_element_context* ui_ctx, struct editor_window_swapchain* swapchain);

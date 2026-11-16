@@ -4,6 +4,13 @@
    anything it does not take lands here. */
 LRESULT CALLBACK handle_window_message(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
 {
+    if (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP)
+    {
+        phoenix_engine_info("input", "wm 0x%04X at (%d,%d) program_started=%d editor_handler=%d",
+                            message, (int)(short)LOWORD(lp), (int)(short)HIWORD(lp),
+                            (int)program_started, (int)(g_editor.handle_message != NULL));
+    }
+
     if (program_started && g_editor.handle_message)
     {
         LRESULT editor_result = 0;

@@ -59,6 +59,14 @@ __declspec(dllexport) bool editor_start(void)
     }
     start_editor_elements(&element_context);
     start_object_database();
+
+    /* the editor module has its own engine_context copy: a camera still at the origin (never set, or saved there) sits inside the origin marker */
+    world_camera* start_camera = &engine_context.world_state.editor_scene_camera;
+    if (start_camera->position.x == 0.0f && start_camera->position.y == 0.0f && start_camera->position.z == 0.0f) {
+        start_camera->position = (editor_vec3){0.0f, 15.0f, 35.0f};
+        start_camera->rotation = (editor_vec3){-0.4f, 0.0f, 0.0f};
+        phoenix_info("EditorCamera", "camera was at the origin; restored the default start position.");
+    }
     return true;
 }
 
@@ -121,9 +129,11 @@ __declspec(dllexport) void editor_draw_statusbar(VkCommandBuffer cmd)
 
 __declspec(dllexport) void editor_flush_ui(VkCommandBuffer cmd)
 {
+    draw_preferences_overlay(cmd, &element_context, &render_context.swapchain_main);
     render_element_commands(cmd,
                             render_context.swapchain_main.extent,
                             render_context.pipeline_layout);
+    preferences_end_frame(&element_context);
 }
 
 __declspec(dllexport) void editor_end_frame_pass(VkCommandBuffer cmd)

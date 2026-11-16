@@ -15,7 +15,7 @@ typedef enum {
     menu_action_none = 0,
     menu_action_new_file, menu_action_new_folder, menu_action_new_project, menu_action_new_scene,
     menu_action_save_scene, menu_action_save_project, menu_action_save_all,
-    menu_action_import, menu_action_export, menu_action_preferences,
+    menu_action_import, menu_action_export, menu_action_preferences_submenu, menu_action_preferences,
     menu_action_build, menu_action_exit,
     menu_action_window_hierarchy, menu_action_window_scene, menu_action_window_game,
     menu_action_window_inspector, menu_action_window_modeler, menu_action_window_texture_shop,

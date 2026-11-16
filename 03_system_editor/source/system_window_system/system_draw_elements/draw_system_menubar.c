@@ -34,12 +34,18 @@ const struct_menu_item file_menu_items[] = {
     { NULL,              menu_action_none,        false },
     { "Import...",      menu_action_import,       false },
     { "Export...",      menu_action_export,       false },
-    { "Preferences...", menu_action_preferences,  true },
+    { "Preferences",    menu_action_preferences_submenu, true },
     { NULL,              menu_action_none,        false },
     { "Build",          menu_action_build,        false },
     { NULL,              menu_action_none,        false },
     { "Exit",           menu_action_exit,         true },
 };
+
+const struct_menu_item preferences_submenu_items[] = {
+    { "Preferences...", menu_action_preferences,  true },
+};
+
+const struct_menu_def preferences_submenu = { "Preferences", preferences_submenu_items, (int)(sizeof(preferences_submenu_items) / sizeof(preferences_submenu_items[0])) };
 
 const struct_menu_item edit_menu_items[] = {
     { "Undo",  menu_action_undo,  false },
@@ -114,7 +120,11 @@ const struct_menu_def main_menus[] = {
 
 int  menubar_open_menu_index    = -1;
 bool menubar_mouse_was_pressed  = false;     /* rising edge_to_face_array of left mouse this frame */
+int  menubar_header_x[main_menu_count];      /* header x positions, shared with the dropdown drawn in the overlay stage */
+bool menubar_click_used         = false;     /* the bar already used this frame's click */
 bool previous_menubar_mouse_down = false;
+bool menubar_submenu_open        = false;    /* the File > Preferences flyout */
+int  menubar_submenu_row_y       = 0;        /* screen y of the row that opens the flyout */
 const char* menubar_control_labels[menubar_control_count] = { "_", "[]", "X" };
 
 /* the dock can call this to ignore clicks while a dropdown is open. */
@@ -290,6 +300,13 @@ void draw_dropdown_panel(VkCommandBuffer cmd, int x, int w, int h)
                       system_theme.menubar_background);
 }
 
+/* flyout panel for a submenu: same look as the dropdown, placed at (x, y) instead of under the menubar. */
+void draw_flyout_panel(VkCommandBuffer cmd, int x, int y, int w, int h)
+{
+    push_menubar_rect(cmd, (float)(x - 1), (float)(y - 1), (float)(w + 2), (float)(h + 2), system_theme.dropdown_outline);
+    push_menubar_rect(cmd, (float)x, (float)y, (float)w, (float)h, system_theme.menubar_background);
+}
+
 /* ------------------------------------------------------------------------- */
 /* dynamic zone: options for whatever mode the mode menu obj_vert_selected (maya-like) */
 /* clipped to [x0, x1). adding things here can never move a static button.    */
@@ -413,14 +430,21 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
     for (int i = 0; i < main_menu_count; i++) {
         int header_w = (int)strlen(main_menus[i].title) * menubar_char_w + menubar_header_pad;
         header_x[i] = x;
+        menubar_header_x[i] = x;
 
         bool is_hovered = is_point_in_rect(mouse_x, mouse_y, x, menubar_header_y, header_w, menubar_header_h);
         if (menubar_mouse_was_pressed && is_hovered) {
             phoenix_trace("Menubar", "opening %s at header x=%d y=%d", main_menus[i].title, x, menubar_header_y);
-            menubar_open_menu_index = (menubar_open_menu_index == i) ? -1 : i;
+            if (menubar_open_menu_index == i) {
+                menubar_open_menu_index = -1;
+            } else {
+                menubar_open_menu_index = i;
+            }
+            menubar_submenu_open = false;
             click_used = true;
         } else if (menubar_open_menu_index >= 0 && menubar_open_menu_index != i && is_hovered) {
             menubar_open_menu_index = i;             /* sliding across headers while one is open switches menus */
+            menubar_submenu_open = false;
         }
 
         bool is_open = (menubar_open_menu_index == i);
@@ -473,18 +497,22 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
     const int dynamic_x0 = separator_1_x + 10;
     const int dynamic_x1 = separator_2_x - 8;
     if (dynamic_x1 > dynamic_x0) draw_dynamic_zone(cmd, ui_ctx, dynamic_x0, dynamic_x1);
+    menubar_click_used = click_used;
+}
 
-    /* ================= open dropdown (drawn last, on top of everything) ================= */
+/* open dropdown: called from the overlay stage so the dock/toolbar can not cover it. */
+void draw_menubar_dropdown(VkCommandBuffer cmd, system_element_context* ui_ctx)
+{
+    const int mouse_x = ui_ctx->input.mouse_x;
+    const int mouse_y = ui_ctx->input.mouse_y;
+    bool click_used = menubar_click_used;
+    int* header_x = menubar_header_x;
+
     if (menubar_open_menu_index >= 0) {
         const struct_menu_def* menu = &main_menus[menubar_open_menu_index];
         int drop_x = header_x[menubar_open_menu_index];
         int drop_w = get_menu_width(menu);
         int drop_h = get_menu_height(menu);
-        phoenix_info("Menubar", "DRAWING %s dropdown at screen (%d,%d) %dx%d",
-                      menu->title, drop_x, menu_drop_y, drop_w, drop_h);
-        phoenix_trace("Menubar", "dropdown calc: drop_x=%d menu_drop_y=%d drop_w=%d drop_h=%d",
-                      drop_x, menu_drop_y, drop_w, drop_h);
-
         draw_dropdown_panel(cmd, drop_x, drop_w, drop_h);
 
         const struct_menu_item* clicked_item = NULL;
@@ -510,20 +538,72 @@ void draw_system_menubar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
             system_color text_color = is_hovered ? system_theme.system_active_text
                                     : (item->implemented ? system_theme.menu_text : system_theme.menu_header_text);
             draw_text_element(cmd, ui_ctx, item->label, drop_x + 12, y + (menu_item_h - ui_font_h) / 2, text_color);
+            if (item->action == menu_action_preferences_submenu) {
+                draw_text_element(cmd, ui_ctx, ">", drop_x + drop_w - 16, y + (menu_item_h - ui_font_h) / 2, text_color);
+                menubar_submenu_row_y = y;
+            }
             y += menu_item_h;
         }
 
-        if (clicked_item) {
+        const int sub_x = drop_x + drop_w - 2;
+        const int sub_w = get_menu_width(&preferences_submenu);
+        const int sub_h = get_menu_height(&preferences_submenu);
+        const int sub_y = menubar_submenu_row_y - menu_pad_top;
+
+        if (clicked_item && clicked_item->action == menu_action_preferences_submenu) {
             click_used = true;
             menubar_open_menu_index = -1;
+            menubar_submenu_open = false;
+            phoenix_info("Menubar", "selected %s", clicked_item->label);
+            open_preferences_window();
+            set_menubar_status("Preferences opened.");
+        } else if (clicked_item) {
+            click_used = true;
+            menubar_open_menu_index = -1;
+            menubar_submenu_open = false;
             phoenix_trace("Menubar", "selected %s", clicked_item->label);
             run_menu_action(clicked_item, ui_ctx);
         } else if (menubar_mouse_was_pressed && !click_used &&
-                   !is_point_in_rect(mouse_x, mouse_y, drop_x, menu_drop_y, drop_w, drop_h)) {
+                   !is_point_in_rect(mouse_x, mouse_y, drop_x, menu_drop_y, drop_w, drop_h) &&
+                   !(menubar_submenu_open && is_point_in_rect(mouse_x, mouse_y, sub_x, sub_y, sub_w, sub_h))) {
             menubar_open_menu_index = -1;                                     /* click anywhere else closes it */
+            menubar_submenu_open = false;
+        }
+
+        if (menubar_open_menu_index >= 0 && menubar_submenu_open) {
+            draw_flyout_panel(cmd, sub_x, sub_y, sub_w, sub_h);
+            int sub_item_y = sub_y + menu_pad_top;
+
+            for (int i = 0; i < preferences_submenu.item_count; i++) {
+                const struct_menu_item* sub_item = &preferences_submenu.items[i];
+                bool sub_hovered = is_point_in_rect(mouse_x, mouse_y, sub_x, sub_item_y, sub_w, menu_item_h);
+                if (sub_hovered) {
+                    push_menubar_rect(cmd, (float)(sub_x + 2), (float)sub_item_y, (float)(sub_w - 4), (float)menu_item_h,
+                                               system_theme.menu_item_selected);
+                    if (menubar_mouse_was_pressed && !click_used) {
+                        click_used = true;
+                        menubar_open_menu_index = -1;
+                        menubar_submenu_open = false;
+                        phoenix_info("Menubar", "selected %s", sub_item->label);
+                        run_menu_action(sub_item, ui_ctx);
+                    }
+                }
+                system_color sub_text_color = system_theme.menu_text;
+                if (sub_hovered) {
+                    sub_text_color = system_theme.system_active_text;
+                }
+                draw_text_element(cmd, ui_ctx, sub_item->label, sub_x + 12, sub_item_y + (menu_item_h - ui_font_h) / 2,
+                                  sub_text_color);
+                sub_item_y += menu_item_h;
+            }
         }
     }
 
-    /* modal Preferences window: last, so it sits on top of everything */
-    draw_preferences_window(cmd, ui_ctx, w, (int)swapchain->extent.height);
+}
+
+/* called from editor_flush_ui, after toolbar/dock/statusbar/menubar have queued, so the window is on top of all of them. */
+void draw_preferences_overlay(VkCommandBuffer cmd, system_element_context* ui_ctx, editor_window_swapchain* swapchain)
+{
+    draw_menubar_dropdown(cmd, ui_ctx);
+    draw_preferences_window(cmd, ui_ctx, (int)swapchain->extent.width, (int)swapchain->extent.height);
 }
