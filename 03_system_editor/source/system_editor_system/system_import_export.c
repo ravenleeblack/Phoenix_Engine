@@ -1,4 +1,5 @@
 #include "system_globals.h"
+#include "system_textureshop_skins.h"
 #include <commdlg.h>
 
 /* ========================================================================= */
@@ -181,6 +182,9 @@ bool copy_file_into_archive(const char* source_path, const char* subfolder, char
 
     char base[128];
     get_path_base_name(source_path, base, sizeof(base));
+    if (strcmp(subfolder, "textures") == 0 && strlen(base) > 22) {
+        base[22] = '\0';                                    /* the skin file stores this name in 31 characters */
+    }
     make_unique_asset_path(folder, base, extension, out_path, out_size);
     return CopyFileA(source_path, out_path, TRUE) != 0;
 }
@@ -251,7 +255,7 @@ bool create_system_imported_mesh(const char* name, const loader_mesh_data* mesh)
         target->b = grey;
         target->a = 1.0f;
         target->u = source->uv[0];
-        target->vert_to_edge_array = source->uv[1];
+        target->vert_to_edge_array = 1.0f - source->uv[1];     /* FBX v points up, image rows start at the top */
         target->nx = source->normal[0];
         target->ny = source->normal[1];
         target->nz = source->normal[2];
@@ -329,34 +333,34 @@ bool import_png_file(const char* source_path)
         return false;
     }
 
-    /* the skin system holds colors, so the skin takes the average color of the image's visible pixels */
-    double sum[3] = { 0.0, 0.0, 0.0 };
-    double weight = 0.0;
-    const size_t pixel_count = (size_t)image.width * (size_t)image.height;
-    for (size_t i = 0; i < pixel_count; i++) {
-        const uint8_t* pixel = image.pixels + i * 4;
-        const double alpha = (double)pixel[3] / 255.0;
-        sum[0] += (double)pixel[0] * alpha;
-        sum[1] += (double)pixel[1] * alpha;
-        sum[2] += (double)pixel[2] * alpha;
-        weight += alpha;
-    }
-    float color[3] = { 0.5f, 0.5f, 0.5f };
-    if (weight > 0.0) {
-        color[0] = (float)(sum[0] / weight / 255.0);
-        color[1] = (float)(sum[1] / weight / 255.0);
-        color[2] = (float)(sum[2] / weight / 255.0);
-    }
     const int width = image.width;
     const int height = image.height;
-    editor_remove_image(&image);
+    editor_remove_image(&image);                           /* only checked here: the skin loads the file itself */
 
     char base[128];
     get_path_base_name(asset_path, base, sizeof(base));
-    const bool created = create_texshop_skin_from_color(base, color);
+    const char* file_name = strrchr(asset_path, '\\');
+    if (file_name) {
+        file_name++;
+    } else {
+        file_name = asset_path;
+    }
+    const bool created = create_texshop_skin_from_map(base, file_name);
     select_archive_file(asset_path);
+
+    /* a mesh is selected: it gets the new skin right away */
+    bool assigned = false;
+    const system_scene_object* target = find_scene_object_by_id(g_scene_registry.selected_object_id);
+    if (created && target && target != &g_scene_registry.objects[0] && target->type == scene_object_mesh) {
+        assign_texshop_skin_to_selected();
+        assigned = true;
+    }
     if (created) {
-        set_statusbar_message("Imported '%s' (%dx%d): skin created from its average color. Saved in the File Archive (textures).", base, width, height);
+        if (assigned) {
+            set_statusbar_message("Imported '%s' (%dx%d): skin '%s' reads it as its base color map and is assigned to '%s'.", base, width, height, g_texshop.skins[g_texshop.selected_skin].name, target->name);
+        } else {
+            set_statusbar_message("Imported '%s' (%dx%d): skin '%s' reads it as its base color map. Select an object and assign the skin.", base, width, height, g_texshop.skins[g_texshop.selected_skin].name);
+        }
     }
     phoenix_info("Import", "png '%s': %dx%d, skin created=%d", asset_path, width, height, (int)created);
     return created;
@@ -441,7 +445,7 @@ bool build_export_mesh(const system_scene_object* obj, loader_mesh_data* out)
         copy[i].color[2] = source[i].b;
         copy[i].color[3] = source[i].a;
         copy[i].uv[0] = source[i].u;
-        copy[i].uv[1] = source[i].vert_to_edge_array;
+        copy[i].uv[1] = 1.0f - source[i].vert_to_edge_array;
         copy[i].normal[0] = source[i].nx;
         copy[i].normal[1] = source[i].ny;
         copy[i].normal[2] = source[i].nz;

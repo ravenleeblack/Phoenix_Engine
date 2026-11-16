@@ -64,7 +64,8 @@ __declspec(dllexport) bool editor_start(void)
 
     /* the editor module has its own engine_context copy: a camera still at the origin (never set, or saved there) sits inside the origin marker */
     world_camera* start_camera = &engine_context.world_state.editor_scene_camera;
-    if (start_camera->position.x == 0.0f && start_camera->position.y == 0.0f && start_camera->position.z == 0.0f) {
+    if (start_camera->position.x * start_camera->position.x + start_camera->position.y * start_camera->position.y +
+        start_camera->position.z * start_camera->position.z < 9.0f) {
         start_camera->position = (editor_vec3){0.0f, 15.0f, 35.0f};
         start_camera->rotation = (editor_vec3){-0.4f, 0.0f, 0.0f};
         phoenix_info("EditorCamera", "camera was at the origin; restored the default start position.");
@@ -191,6 +192,12 @@ __declspec(dllexport) bool editor_handle_message(HWND hwnd, UINT message, WPARAM
             if (GetCapture() == hwnd) {
                 ReleaseCapture();
             }
+            if (result) *result = 0;
+            return true;
+        case WM_RBUTTONDOWN:
+            element_context.input.mouse_x = (int)(short)LOWORD(lp);
+            element_context.input.mouse_y = (int)(short)HIWORD(lp);
+            context_menu_notify_right_button(element_context.input.mouse_x, element_context.input.mouse_y);
             if (result) *result = 0;
             return true;
         case WM_CAPTURECHANGED:

@@ -40,6 +40,9 @@ typedef struct {
 typedef struct {
     uint32_t       layer_count;                    /* 1..SKIN_GPU_MAX_LAYERS, layer 0 = bottom */
     skin_gpu_layer layers[SKIN_GPU_MAX_LAYERS];
+    const uint8_t* map_pixels;                     /* base color map: RGBA8 rows top to bottom, NULL = no map. only read during skin_gpu_set */
+    uint32_t       map_width;
+    uint32_t       map_height;
 } skin_gpu_data;
 
 /* set layout + pool + the shared "no skin" set. Safe to call again. create_scene_object_pipeline calls it. */

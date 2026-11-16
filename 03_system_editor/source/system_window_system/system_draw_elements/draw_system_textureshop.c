@@ -49,6 +49,7 @@ static uint32_t hash_texshop_float(uint32_t h, float vert_to_edge_array)
 static uint32_t hash_texshop_skin(const texshop_skin* s)
 {
     uint32_t h = 2166136261u;
+    for (const char* c = s->map_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);   /* a new map rebuilds the GPU copy */
     h = hash_texshop_u32(h, (uint32_t)s->layer_count);
     for (int i = 0; i < s->layer_count; i++) {
         const texshop_layer* l = &s->layers[i];
@@ -189,6 +190,13 @@ static void skin_to_profile(const texshop_skin* s, shader_profile* p)
             pm->contrast = 1.0f;
         }
     }
+
+    /* the base color map: texture input 0 carries the PNG's file name, layer 0's color reads it */
+    if (s->map_file[0] && d->layer_count > 0) {
+        snprintf(p->tex_input_name[0], sizeof(p->tex_input_name[0]), "%s", s->map_file);
+        d->layers[0].src[PROFILE_OUT_COLOR].kind     = PROFILE_SRC_TEXTURE;
+        d->layers[0].src[PROFILE_OUT_COLOR].tex_slot = 0;
+    }
 }
 
 static void profile_to_skin(const shader_profile* p, texshop_skin* s)
@@ -201,6 +209,10 @@ static void profile_to_skin(const shader_profile* p, texshop_skin* s)
     if (face_type > texshop_max_layers) face_type = texshop_max_layers;
     if (face_type < 1) return;                                          /* keep the default base layer */
     s->layer_count = face_type;
+
+    if (d->layers[0].src[PROFILE_OUT_COLOR].kind == PROFILE_SRC_TEXTURE && d->layers[0].src[PROFILE_OUT_COLOR].tex_slot == 0) {
+        snprintf(s->map_file, sizeof(s->map_file), "%s", p->tex_input_name[0]);
+    }
 
     for (int i = 0; i < face_type; i++) {
         const skin_layer* o = &d->layers[i];
@@ -319,9 +331,8 @@ void create_texshop_skin(void)
     set_texshop_status("New skin. Edit it, then Export.");
 }
 
-/* a skin with one color layer, written to assets/skins so it shows in the File Archive. the PNG import uses this
-   (the skin system has colors only, so the image's average color becomes the layer color). */
-bool create_texshop_skin_from_color(const char* base_name, const float color[3])
+/* a skin whose base color layer is white and reads a PNG from assets/textures. written to assets/skins so it shows in the File Archive. */
+bool create_texshop_skin_from_map(const char* base_name, const char* map_file)
 {
     check_texshop_ready();
     if (g_texshop.skin_count >= texshop_max_skins) {
@@ -334,9 +345,10 @@ bool create_texshop_skin_from_color(const char* base_name, const float color[3])
     texshop_skin* s = &g_texshop.skins[g_texshop.skin_count];
     fill_texshop_skin(s, name);
     s->id = g_texshop.next_skin_id++;
-    s->layers[0].color[0] = color[0];
-    s->layers[0].color[1] = color[1];
-    s->layers[0].color[2] = color[2];
+    snprintf(s->map_file, sizeof(s->map_file), "%s", map_file);
+    s->layers[0].color[0] = 1.0f;
+    s->layers[0].color[1] = 1.0f;
+    s->layers[0].color[2] = 1.0f;
     s->layers[0].color[3] = 1.0f;
     s->layers[0].opacity = 1.0f;
     g_texshop.selected_skin = g_texshop.skin_count;
@@ -563,13 +575,35 @@ static void fill_skin_gpu_data(const texshop_skin* s, skin_gpu_data* out)
 }
 
 /* public: the renderer calls this the first time it meets a skin that has no GPU data yet. */
+extern load_image_asset_ptr   editor_load_image;           /* system_import_export.c: the loader plugin */
+extern remove_image_asset_ptr editor_remove_image;
+bool check_loader_ready(void);
+
 void texshop_build_skin_gpu(uint32_t skin_id)
 {
     texshop_skin* s = find_texshop_skin_by_id(skin_id);
     if (!s) return;
     skin_gpu_data data;
     fill_skin_gpu_data(s, &data);
+
+    /* the base color map: decoded here, uploaded by skin_gpu_set, freed right after */
+    loader_image_data image;
+    memset(&image, 0, sizeof(image));
+    bool map_loaded = false;
+    if (s->map_file[0] && check_loader_ready()) {
+        char path[260];
+        snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\%s", s->map_file);
+        map_loaded = editor_load_image(path, &image);
+        if (map_loaded) {
+            data.map_pixels = image.pixels;
+            data.map_width  = (uint32_t)image.width;
+            data.map_height = (uint32_t)image.height;
+        } else {
+            phoenix_warn("SKIN", "skin '%s': map '%s' could not be loaded.", s->name, path);
+        }
+    }
     if (skin_gpu_set(s->id, &data)) s->gpu_hash = hash_texshop_skin(s);
+    if (map_loaded) editor_remove_image(&image);
 }
 
 /* once per frame from the Skin Maker: the obj_vert_selected skin is the only one that can be edited. A changed hash rebuilds its

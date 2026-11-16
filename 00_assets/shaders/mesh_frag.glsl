@@ -22,6 +22,8 @@ layout(set = 0, binding = 0, std140) uniform skin_block {
     skin_layer layers[16];
 } skin;
 
+layout(set = 0, binding = 1) uniform sampler2D skin_map;   // base color map. head.z = 1 when the skin has one, otherwise a 1x1 white texture is bound
+
 vec3 blend_layer(vec3 base, vec3 src, float mode, float amount)
 {
     vec3 result;
@@ -42,15 +44,22 @@ vec4 surface_color()
     uint  count = min(skin.head.x, 16u);
     vec3  c     = vec3(0.0);
     bool  have  = false;
+    vec3  map_color = vec3(1.0);
+    if (skin.head.z != 0u) {
+        map_color = texture(skin_map, v_uv).rgb;                 // the map multiplies the first color layer (white = the picture as is)
+    }
     for (uint i = 0u; i < count; ++i) {
         uint out_mask = uint(skin.layers[i].params.y + 0.5);
         if ((out_mask & 1u) == 0u) continue;                      // this layer does not write Color
         vec3  src    = skin.layers[i].color.rgb;
         float amount = clamp(skin.layers[i].color.a, 0.0, 1.0);
-        if (!have) { c = src; have = true; continue; }            // the first colour layer is the base
+        if (!have) { c = src * map_color; have = true; continue; }   // the first colour layer is the base
         c = blend_layer(c, src, skin.layers[i].params.x, amount);
     }
-    if (!have) return v_color;                                    // a skin that writes no colour: keep the vertex colour
+    if (!have) {
+        if (skin.head.z != 0u) return vec4(map_color, v_color.a);
+        return v_color;                                           // a skin that writes no colour: keep the vertex colour
+    }
     return vec4(c, v_color.a);
 }
 

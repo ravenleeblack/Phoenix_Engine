@@ -53,7 +53,7 @@ typedef struct { uint32_t skin_id; } skin_ref;
 /* draw_system_textureshop.c. All of them act on the object obj_vert_selected in the Hierarchy. */
 void     assign_texshop_skin_to_selected(void);        /* the skin obj_vert_selected in the Texture Shop window -> the obj_vert_selected object */
 bool     assign_archive_skin_to_selected(void);        /* the .sprof obj_vert_selected in the File Archive -> the obj_vert_selected object (object mode right click) */
-bool     create_texshop_skin_from_color(const char* base_name, const float color[3]);   /* new skin + its .sprof in assets/skins (PNG import) */
+bool     create_texshop_skin_from_map(const char* base_name, const char* map_file);   /* new skin whose base color reads assets/textures/<map_file> (PNG import) */
 void     export_texshop_skin(void);
 void     clear_texshop_skin_on_selected(void);         /* obj_vert_selected object goes back to the empty-skin grey */
 uint32_t get_object_skin_id(uint32_t object_id);       /* 0 = no skin (no block, or the skin was deleted). The renderer will call this. */

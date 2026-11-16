@@ -22,10 +22,14 @@ extern int find_memory_index(unsigned int type_filter, unsigned int property_fla
 #define SKIN_RETIRE_FRAMES 3    /* same rule as EM_RETIRE_FRAMES in system_edit_mesh.c: >= frames in flight + 1 */
 #define SKIN_POOL_SETS   (SKIN_CACHE_MAX + SKIN_RETIRE_MAX)
 
+typedef struct { VkImage image; VkDeviceMemory memory; VkImageView view; } skin_texture;
+
 typedef struct {
     VkBuffer        buffer;
     VkDeviceMemory  memory;
     VkDescriptorSet set;
+    skin_texture    texture;          /* the skin's own base color map, when it has one */
+    bool            owns_texture;
 } skin_gpu_block;
 
 typedef struct { uint32_t id; bool used; skin_gpu_block block; } skin_cache_entry;
@@ -34,9 +38,151 @@ typedef struct { skin_gpu_block block; int frames; bool used; } skin_retired_ent
 static VkDevice               s_device = VK_NULL_HANDLE;
 static VkDescriptorSetLayout  s_layout = VK_NULL_HANDLE;
 static VkDescriptorPool       s_pool   = VK_NULL_HANDLE;
+static VkSampler              s_sampler = VK_NULL_HANDLE;       /* one sampler for every skin map */
+static skin_texture           s_white;                          /* 1x1 white: bound by every skin without a map */
 static skin_gpu_block         s_empty;                          /* shared grey set, skin id 0 */
 static skin_cache_entry       s_cache[SKIN_CACHE_MAX];
 static skin_retired_entry     s_retired[SKIN_RETIRE_MAX];
+
+/* ------------------------------------------------------------------------- */
+/* textures                                                                  */
+/* ------------------------------------------------------------------------- */
+static void skin_destroy_texture(skin_texture* t)
+{
+    if (!s_device) return;
+    if (t->view   != VK_NULL_HANDLE) vkDestroyImageView(s_device, t->view, NULL);
+    if (t->image  != VK_NULL_HANDLE) vkDestroyImage(s_device, t->image, NULL);
+    if (t->memory != VK_NULL_HANDLE) vkFreeMemory(s_device, t->memory, NULL);
+    memset(t, 0, sizeof(*t));
+}
+
+/* RGBA8 pixels -> a sampled image, uploaded right now (staging buffer + one time command buffer, then wait). runs at load time, not per frame. */
+static bool skin_create_texture(const uint8_t* rgba, uint32_t width, uint32_t height, skin_texture* out)
+{
+    memset(out, 0, sizeof(*out));
+    if (!s_device || !rgba || width == 0 || height == 0) return false;
+    const VkDeviceSize bytes = (VkDeviceSize)width * (VkDeviceSize)height * 4u;
+
+    VkBuffer staging = VK_NULL_HANDLE;
+    VkDeviceMemory staging_memory = VK_NULL_HANDLE;
+    VkBufferCreateInfo bi = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    bi.size = bytes;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(s_device, &bi, NULL, &staging) != VK_SUCCESS) return false;
+    VkMemoryRequirements breq;
+    vkGetBufferMemoryRequirements(s_device, staging, &breq);
+    int type_index = find_memory_index(breq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VkMemoryAllocateInfo bai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    bai.allocationSize = breq.size;
+    bai.memoryTypeIndex = (uint32_t)type_index;
+    if (type_index < 0 || vkAllocateMemory(s_device, &bai, NULL, &staging_memory) != VK_SUCCESS) {
+        vkDestroyBuffer(s_device, staging, NULL);
+        return false;
+    }
+    vkBindBufferMemory(s_device, staging, staging_memory, 0);
+    void* mapped = NULL;
+    if (vkMapMemory(s_device, staging_memory, 0, bytes, 0, &mapped) != VK_SUCCESS) {
+        vkDestroyBuffer(s_device, staging, NULL);
+        vkFreeMemory(s_device, staging_memory, NULL);
+        return false;
+    }
+    memcpy(mapped, rgba, (size_t)bytes);
+    vkUnmapMemory(s_device, staging_memory);
+
+    bool ok = false;
+    VkImageCreateInfo ii = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+    ii.imageType = VK_IMAGE_TYPE_2D;
+    ii.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ii.extent.width = width;
+    ii.extent.height = height;
+    ii.extent.depth = 1;
+    ii.mipLevels = 1;
+    ii.arrayLayers = 1;
+    ii.samples = VK_SAMPLE_COUNT_1_BIT;
+    ii.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ii.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    ii.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ii.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (vkCreateImage(s_device, &ii, NULL, &out->image) == VK_SUCCESS) {
+        VkMemoryRequirements ireq;
+        vkGetImageMemoryRequirements(s_device, out->image, &ireq);
+        int image_type = find_memory_index(ireq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VkMemoryAllocateInfo iai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        iai.allocationSize = ireq.size;
+        iai.memoryTypeIndex = (uint32_t)image_type;
+        if (image_type >= 0 && vkAllocateMemory(s_device, &iai, NULL, &out->memory) == VK_SUCCESS) {
+            vkBindImageMemory(s_device, out->image, out->memory, 0);
+
+            VkCommandBufferAllocateInfo ca = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+            ca.commandPool = render_context.command_pool;
+            ca.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            ca.commandBufferCount = 1;
+            VkCommandBuffer cmd = VK_NULL_HANDLE;
+            if (vkAllocateCommandBuffers(s_device, &ca, &cmd) == VK_SUCCESS) {
+                VkCommandBufferBeginInfo begin = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+                begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                vkBeginCommandBuffer(cmd, &begin);
+
+                VkImageMemoryBarrier to_copy = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+                to_copy.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                to_copy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                to_copy.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                to_copy.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                to_copy.image = out->image;
+                to_copy.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                to_copy.subresourceRange.levelCount = 1;
+                to_copy.subresourceRange.layerCount = 1;
+                to_copy.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &to_copy);
+
+                VkBufferImageCopy region = {0};
+                region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                region.imageSubresource.layerCount = 1;
+                region.imageExtent.width = width;
+                region.imageExtent.height = height;
+                region.imageExtent.depth = 1;
+                vkCmdCopyBufferToImage(cmd, staging, out->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+                VkImageMemoryBarrier to_read = to_copy;
+                to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                to_read.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                to_read.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &to_read);
+                vkEndCommandBuffer(cmd);
+
+                VkSubmitInfo submit = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+                submit.commandBufferCount = 1;
+                submit.pCommandBuffers = &cmd;
+                if (vkQueueSubmit(render_context.graphics_queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS) {
+                    vkQueueWaitIdle(render_context.graphics_queue);
+                    ok = true;
+                }
+                vkFreeCommandBuffers(s_device, render_context.command_pool, 1, &cmd);
+            }
+        }
+    }
+
+    vkDestroyBuffer(s_device, staging, NULL);
+    vkFreeMemory(s_device, staging_memory, NULL);
+
+    if (ok) {
+        VkImageViewCreateInfo vi = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        vi.image = out->image;
+        vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        vi.format = VK_FORMAT_R8G8B8A8_UNORM;
+        vi.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        vi.subresourceRange.levelCount = 1;
+        vi.subresourceRange.layerCount = 1;
+        ok = vkCreateImageView(s_device, &vi, NULL, &out->view) == VK_SUCCESS;
+    }
+    if (!ok) {
+        skin_destroy_texture(out);
+        return false;
+    }
+    return true;
+}
 
 /* ------------------------------------------------------------------------- */
 /* blocks                                                                    */
@@ -47,13 +193,14 @@ static void skin_destroy_block(skin_gpu_block* b)
     if (b->set    != VK_NULL_HANDLE && s_pool != VK_NULL_HANDLE) vkFreeDescriptorSets(s_device, s_pool, 1, &b->set);
     if (b->buffer != VK_NULL_HANDLE) vkDestroyBuffer(s_device, b->buffer, NULL);
     if (b->memory != VK_NULL_HANDLE) vkFreeMemory(s_device, b->memory, NULL);
+    if (b->owns_texture) skin_destroy_texture(&b->texture);
     memset(b, 0, sizeof(*b));
 }
 
-static void skin_pack(const skin_gpu_data* data, bool use_vertex_colour, float out[SKIN_UBO_FLOATS])
+static void skin_pack(const skin_gpu_data* data, bool use_vertex_colour, bool has_map, float out[SKIN_UBO_FLOATS])
 {
     memset(out, 0, SKIN_UBO_FLOATS * sizeof(float));
-    uint32_t head[4] = { 0, use_vertex_colour ? 1u : 0u, 0, 0 };
+    uint32_t head[4] = { 0, use_vertex_colour ? 1u : 0u, has_map ? 1u : 0u, 0 };
 
     uint32_t face_type = data->layer_count;
     if (face_type > SKIN_GPU_MAX_LAYERS) face_type = SKIN_GPU_MAX_LAYERS;
@@ -72,9 +219,14 @@ static void skin_pack(const skin_gpu_data* data, bool use_vertex_colour, float o
     }
 }
 
-static bool skin_build_block(const float* ubo, skin_gpu_block* out)
+/* own_texture: the skin's map (copied into the block, which then frees it). NULL = the shared white texture. */
+static bool skin_build_block(const float* ubo, const skin_texture* own_texture, skin_gpu_block* out)
 {
     memset(out, 0, sizeof(*out));
+    if (own_texture) {
+        out->texture = *own_texture;
+        out->owns_texture = true;
+    }
 
     VkBufferCreateInfo bi = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     bi.size = SKIN_UBO_SIZE;
@@ -112,13 +264,26 @@ static bool skin_build_block(const float* ubo, skin_gpu_block* out)
     }
 
     VkDescriptorBufferInfo info = { out->buffer, 0, SKIN_UBO_SIZE };
-    VkWriteDescriptorSet w = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    w.dstSet = out->set;
-    w.dstBinding = 0;
-    w.descriptorCount = 1;
-    w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    w.pBufferInfo = &info;
-    vkUpdateDescriptorSets(s_device, 1, &w, 0, NULL);
+    const skin_texture* bound = &s_white;
+    if (out->owns_texture) {
+        bound = &out->texture;
+    }
+    VkDescriptorImageInfo image_info = { s_sampler, bound->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkWriteDescriptorSet writes[2];
+    memset(writes, 0, sizeof(writes));
+    writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[0].dstSet = out->set;
+    writes[0].dstBinding = 0;
+    writes[0].descriptorCount = 1;
+    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    writes[0].pBufferInfo = &info;
+    writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[1].dstSet = out->set;
+    writes[1].dstBinding = 1;
+    writes[1].descriptorCount = 1;
+    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[1].pImageInfo = &image_info;
+    vkUpdateDescriptorSets(s_device, 2, writes, 0, NULL);
     return true;
 }
 
@@ -163,30 +328,55 @@ bool skin_gpu_create_layout(VkDevice device)
     if (s_layout != VK_NULL_HANDLE) skin_gpu_shutdown(s_device);   /* device changed (should not happen) */
     s_device = device;
 
-    VkDescriptorSetLayoutBinding binding = {0};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    binding.descriptorCount = 1;
-    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSetLayoutBinding bindings[2];
+    memset(bindings, 0, sizeof(bindings));
+    bindings[0].binding = 0;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings[1].binding = 1;                                        /* the skin's base color map (mesh_frag.glsl skin_map) */
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     VkDescriptorSetLayoutCreateInfo li = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    li.bindingCount = 1;
-    li.pBindings = &binding;
+    li.bindingCount = 2;
+    li.pBindings = bindings;
     if (vkCreateDescriptorSetLayout(device, &li, NULL, &s_layout) != VK_SUCCESS) {
         s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
         phoenix_error("SKIN", "Failed to create the skin descriptor set layout.");
         return false;
     }
 
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, SKIN_POOL_SETS };
+    VkDescriptorPoolSize sizes[2] = {
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, SKIN_POOL_SETS },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, SKIN_POOL_SETS }
+    };
     VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;   /* sets are freed one by one when a skin is retired */
     pi.maxSets = SKIN_POOL_SETS;
-    pi.poolSizeCount = 1;
-    pi.pPoolSizes = &size;
+    pi.poolSizeCount = 2;
+    pi.pPoolSizes = sizes;
     if (vkCreateDescriptorPool(device, &pi, NULL, &s_pool) != VK_SUCCESS) {
         vkDestroyDescriptorSetLayout(device, s_layout, NULL);
         s_layout = VK_NULL_HANDLE; s_pool = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
         phoenix_error("SKIN", "Failed to create the skin descriptor pool.");
+        return false;
+    }
+
+    VkSamplerCreateInfo sci = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+    sci.magFilter = VK_FILTER_LINEAR;
+    sci.minFilter = VK_FILTER_LINEAR;
+    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    const uint8_t white_pixel[4] = { 255, 255, 255, 255 };
+    if (vkCreateSampler(device, &sci, NULL, &s_sampler) != VK_SUCCESS || !skin_create_texture(white_pixel, 1, 1, &s_white)) {
+        phoenix_error("SKIN", "Failed to create the skin sampler or the white fallback texture.");
+        if (s_sampler != VK_NULL_HANDLE) vkDestroySampler(device, s_sampler, NULL);
+        vkDestroyDescriptorPool(device, s_pool, NULL);
+        vkDestroyDescriptorSetLayout(device, s_layout, NULL);
+        s_sampler = VK_NULL_HANDLE; s_pool = VK_NULL_HANDLE; s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
         return false;
     }
 
@@ -200,12 +390,14 @@ bool skin_gpu_create_layout(VkDevice device)
     grey.layers[0].opacity = 1.0f;
     grey.layers[0].channel_mask = 1u;
     float ubo[SKIN_UBO_FLOATS];
-    skin_pack(&grey, true, ubo);
-    if (!skin_build_block(ubo, &s_empty)) {
+    skin_pack(&grey, true, false, ubo);
+    if (!skin_build_block(ubo, NULL, &s_empty)) {
         phoenix_error("SKIN", "Failed to build the shared empty skin set.");
+        skin_destroy_texture(&s_white);
+        vkDestroySampler(device, s_sampler, NULL);
         vkDestroyDescriptorPool(device, s_pool, NULL);
         vkDestroyDescriptorSetLayout(device, s_layout, NULL);
-        s_pool = VK_NULL_HANDLE; s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
+        s_sampler = VK_NULL_HANDLE; s_pool = VK_NULL_HANDLE; s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
         return false;
     }
     phoenix_info("SKIN", "Skin descriptor layout, pool (%d sets) and shared empty set created.", (int)SKIN_POOL_SETS);
@@ -236,14 +428,25 @@ bool skin_gpu_set(uint32_t skin_id, const skin_gpu_data* data)
 {
     if (!s_device || s_layout == VK_NULL_HANDLE || skin_id == 0 || !data) return false;
 
-    float ubo[SKIN_UBO_FLOATS];
-    skin_pack(data, false, ubo);
+    const bool wants_map = data->map_pixels != NULL && data->map_width > 0 && data->map_height > 0;
 
     skin_gpu_block fresh;
-    if (!skin_build_block(ubo, &fresh)) {
-        skin_gpu_flush();                                         /* pool may be full of retired sets: free them and retry once */
-        if (!skin_build_block(ubo, &fresh)) return false;
+    bool built = false;
+    bool has_map = false;
+    for (int attempt = 0; attempt < 2 && !built; attempt++) {
+        skin_texture map;
+        memset(&map, 0, sizeof(map));
+        has_map = wants_map && skin_create_texture(data->map_pixels, data->map_width, data->map_height, &map);
+
+        float ubo[SKIN_UBO_FLOATS];
+        skin_pack(data, false, has_map, ubo);
+
+        const skin_texture* own = NULL;
+        if (has_map) own = &map;
+        built = skin_build_block(ubo, own, &fresh);          /* a failed build frees the texture it was given */
+        if (!built) skin_gpu_flush();                         /* pool may be full of retired sets: free them and retry once */
     }
+    if (!built) return false;
 
     skin_cache_entry* e = skin_find(skin_id);
     if (!e) {
@@ -274,10 +477,12 @@ void skin_gpu_shutdown(VkDevice device)
     for (int i = 0; i < SKIN_RETIRE_MAX; i++) if (s_retired[i].used) skin_destroy_block(&s_retired[i].block);
     for (int i = 0; i < SKIN_CACHE_MAX; i++)  if (s_cache[i].used)   skin_destroy_block(&s_cache[i].block);
     skin_destroy_block(&s_empty);
+    skin_destroy_texture(&s_white);
+    if (s_sampler != VK_NULL_HANDLE) vkDestroySampler(device, s_sampler, NULL);
     if (s_pool   != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, s_pool, NULL);
     if (s_layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, s_layout, NULL);
     memset(s_retired, 0, sizeof(s_retired));
     memset(s_cache,   0, sizeof(s_cache));
     memset(&s_empty,  0, sizeof(s_empty));
-    s_pool = VK_NULL_HANDLE; s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
+    s_sampler = VK_NULL_HANDLE; s_pool = VK_NULL_HANDLE; s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
 }

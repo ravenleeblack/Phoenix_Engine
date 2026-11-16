@@ -59,6 +59,7 @@ typedef struct {
 typedef struct {
     uint32_t      id;                                   /* never reused, never an array index. Objects store THIS. 0 = none. */
     char          name[texshop_name_len];               /* also the file name: assets/skins/<name>.sprof */
+    char          map_file[32];                         /* base color map: a PNG in assets/textures (file name only), "" = none */
     texshop_layer layers[texshop_max_layers];
     int           layer_count;
     int           selected_layer;
