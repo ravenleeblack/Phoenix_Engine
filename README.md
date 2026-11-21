@@ -6,73 +6,31 @@ Phoenix is a pure-C, Vulkan-powered game engine and 3D content-authoring environ
   <a href="https://github.com/ravenleeblack/Phoenix_Engine/wiki">Documentation Wiki</a>
   ·
   <a href="https://github.com/ravenleeblack/Phoenix_Engine/releases">Releases</a>
-  ·
-  <a href="Phoenix_Engine.md">Project Overview</a>
 </p>
 
-## Welcome
+## Editor first
 
-Phoenix combines a native runtime with modeler, sculpting, painting, scene editing, asset-loading, docking, and game-development tools.
+Most engines start with the runtime and add an editor later. Phoenix went the other way: the editor's UI handling came first, before the engine was built around it.
 
-The complete documentation lives in the [Phoenix Engine Wiki](https://github.com/ravenleeblack/Phoenix_Engine/wiki):
+The result is that Phoenix has real working views from the start:
 
-- [Getting Started](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Getting-Started)
-- [Engine](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Engine)
-- [Editor](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Editor)
-- [Game Module](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Game-Module)
-- [Building and Cleaning](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Building-and-Cleaning)
-- [Architecture](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Architecture)
+- **Scene view**: a real viewport you build and edit in, with its own editor camera, gizmos, and edit-mode overlays.
+- **Game view**: a real viewport that renders through the game camera, so you see how the game will actually look while you work.
 
-## Architecture
+Modeling, sculpting, painting, terrain, lighting, and skins all happen inside these views, not in separate tools.
 
-| Component | Output | Responsibility |
-| --- | --- | --- |
-| Engine | `phoenix_engine.exe` | Windowing, Vulkan, runtime scene, rendering, services, plugin loading |
-| Editor | `phoenix_editor.dll` | UI, docking, modeler, sculpting, painting, scene tools, authoring |
-| Game | `system_game.dll` | Gameplay, simulation, and project-specific runtime behavior |
-| Loader | `phoenix_loader.dll` | PNG and FBX (binary and ASCII mesh) import and export, no external dependencies |
+## Documentation
 
-## Quick Build
+Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleeblack/Phoenix_Engine/wiki):
 
-Requirements include Windows, Vulkan-capable hardware, the Vulkan SDK, and MinGW-w64 or the supported native build environment.
-
-```bash
-make all
-```
-
-For focused work:
-
-```bash
-make engine
-make editor
-make loader
-make game
-```
-
-Run the executable from its output directory:
-
-```powershell
-cd 01_bin
-.\phoenix_engine.exe
-```
-
-Clean only one module while preserving normal editor preferences:
-
-```bash
-make clean_engine
-make clean_editor
-make clean_loader
-make clean_game
-```
-
-See [Phoenix Engine Wiki](https://github.com/ravenleeblack/Phoenix_Engine/wiki) for setup, architecture, module ownership, controls, debugging, and development guidance.
-
-## Repository Documentation
-
-- [Phoenix Engine overview](Phoenix_Engine.md)
-- [Engine module](engine.md)
-- [Editor module](editor.md)
-- [Game module](game.md)
+| Page | What it covers |
+| --- | --- |
+| [Getting Started](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Getting-Started) | Requirements, first build, first launch |
+| [Editor](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Editor) | Modes, edit tools, import and export, skins |
+| [Engine](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Engine) | The runtime host and Vulkan implementation |
+| [Game Module](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Game-Module) | Gameplay code and its lifecycle |
+| [Building and Cleaning](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Building-and-Cleaning) | Every make target |
+| [Architecture](https://github.com/ravenleeblack/Phoenix_Engine/wiki/Architecture) | How the modules fit together |
 
 ## Current Release
 
@@ -83,14 +41,6 @@ What is new in 1.3: File > Import / Export for `.fbx` and `.png`, an export opti
 
 Phoenix is under active development. Public APIs and editor workflows may change between releases.
 
-<img width="1376" height="878" alt="sceneview" src="https://github.com/user-attachments/assets/4308b6fa-4b7c-45c6-ad2f-3ea661129bde" />
+## License
 
-<img width="1254" height="951" alt="right_click_menu" src="https://github.com/user-attachments/assets/86e11b16-4b4a-4757-959d-e86c17cd86a9" />
-
-<img width="1353" height="849" alt="light_and_skin" src="https://github.com/user-attachments/assets/dfcff630-cfd7-402a-a964-b100546913af" />
-
-<img width="378" height="339" alt="shader_profile" src="https://github.com/user-attachments/assets/1bbecbce-515c-4bbc-b839-eab59534ba14" />
-
-
-
-
+MIT-based. You are free to use, modify, and build your own version, but a derivative you distribute may not use the name "Phoenix Engine". See [LICENSE](LICENSE).
