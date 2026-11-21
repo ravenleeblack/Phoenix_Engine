@@ -109,6 +109,18 @@ void update_element_input(system_element_context* context, int mouse_x, int mous
     context->input.alt_pressed = window_focused && ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0);
     context->input.middle_down = window_focused && ((GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0);
 
+    /* active_id means  press that started on this element is still held. When no button is down (and no number box is being scrubbed
+       or typed into) nothing is held, so a stale id must not keep the other windows from reacting to the next click. */
+    /* buttons fire on the frame the release is seen (active_id == their id), so the id is only cleared when it has outlived that frame. */
+    if (mouse_down || context->input.middle_down) {
+        g_active_id_idle_frames = 0;
+    } else if (g_active_id_idle_frames < 1000) {
+        g_active_id_idle_frames++;
+    }
+    if (g_active_id_idle_frames >= 3 && !is_number_field_active() && !is_number_field_editing()) {
+        context->active_id = 0;
+    }
+
     /* Scene-view movement uses the same frame-delivered key state as the rest of the editor.
        Keep it horizontal when forward/backward keys are held, so WASD remains predictable in flight.
        the scene view keeps the keyboard after a click in it, until another panel is clicked (a number field being typed in takes it back). */

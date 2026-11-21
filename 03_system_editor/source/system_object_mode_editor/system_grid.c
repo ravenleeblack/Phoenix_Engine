@@ -9,7 +9,6 @@
  * and the WASD / Alt-drag input already use, so the grid, meshes and gizmo cannot disagree.
  * Convention: yaw 0 faces -Z, rotation.x is pitch (negative looks down).
  */
-#define GRID_VERTEX_COUNT   4004   /* must match grid_vert.glsl */
 #define ZOOM_MIN_DISTANCE   1.0f
 #define ZOOM_MAX_DISTANCE   50000.0f
 #define ZOOM_STEP_FACTOR    0.88f      /* one wheel notch */
@@ -60,11 +59,29 @@ void focus_system_grid_on_selected_object(void)
         if (selected->bounds_radius > 0.0f && largest_scale > 0.0f) {
             radius = selected->bounds_radius * largest_scale;
         }
+        editor_vec3 mesh_centre;
+        float mesh_radius = 0.0f;
+        if (get_object_world_bounds(selected, &mesh_centre, &mesh_radius) && mesh_radius > 0.0f) {
+            target = mesh_centre;                   /* the real middle of the mesh, not the object's origin */
+            radius = mesh_radius;
+        }
     }
 
-    float distance = radius * 6.0f;
-    if (distance < 40.0f) {
-        distance = 40.0f;
+    float distance_factor = 6.0f;
+    float minimum_distance = 40.0f;
+    editor_vec3 terrain_target;
+    float terrain_radius = 0.0f;
+    float terrain_factor = 6.0f;
+    if (get_terrain_focus_target(g_scene_registry.selected_object_id, &terrain_target, &terrain_radius, &terrain_factor)) {
+        target = terrain_target;                    /* a clicked chunk, a region or the whole terrain */
+        radius = terrain_radius;
+        distance_factor = terrain_factor;
+        minimum_distance = 20.0f;
+    }
+
+    float distance = radius * distance_factor;
+    if (distance < minimum_distance) {
+        distance = minimum_distance;
     }
     if (distance > ZOOM_MAX_DISTANCE) {
         distance = ZOOM_MAX_DISTANCE;
@@ -229,7 +246,13 @@ void draw_system_grid_axis_stream(VkCommandBuffer cmd, VkPipelineLayout layout_3
     build_scene_orbit_camera(aspect, &pc.view, &pc.projection);
 
     vkCmdPushConstants(cmd, layout_3d, stages, 0, (uint32_t)sizeof(pc), &pc);
-    if (g_scene_view.show_grid) vkCmdDraw(cmd, GRID_VERTEX_COUNT, 1, 0, 0);
+    if (g_scene_view.show_grid) {
+        uint32_t grid_half = (uint32_t)g_scene_view.grid_half_cells;
+        if (grid_half < 1u) {
+            grid_half = 50u;
+        }
+        vkCmdDraw(cmd, (grid_half * 2u + 1u) * 4u, 1, 0, grid_half);   /* firstInstance carries the grid size to grid_vert.glsl */
+    }
 
     draw_scene_objects(cmd, (const float*)&pc.view, (const float*)&pc.projection);
 }

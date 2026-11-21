@@ -27,7 +27,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /*                              export                                        */
 /*   draw_system_export.c       the export options window                     */
 /*                                                                           */
-/*   import: .fbx -> a scene object, .png -> a skin. the file is copied into  */
+/*   import: .fbx / .obj -> a scene object, .png -> a skin. the file is copied into  */
 /*   the File Archive (assets/models, assets/textures) so it is an asset.     */
 /*   the loader is 01_bin/phoenix_loader.dll (06_system_loader).              */
 /* ========================================================================= */
@@ -35,6 +35,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 typedef enum {
     export_format_fbx_binary = 0,
     export_format_fbx_ascii,
+    export_format_obj,
     export_format_png,
     export_format_count
 } enum_export_format;
@@ -53,7 +54,7 @@ bool pick_save_file_path(const char* title, const char* filter, const char* defa
 
 /* ---- import ---- */
 void import_asset_from_dialog(void);                 /* File > Import... */
-bool import_asset_file(const char* source_path);     /* the whole import for one .fbx / .png */
+bool import_asset_file(const char* source_path);     /* the whole import for one .fbx / .obj / .png. sizes follow g_unit_prefs.import_profile */
 
 /* ---- export ---- */
 void open_export_window(void);                       /* File > Export... */

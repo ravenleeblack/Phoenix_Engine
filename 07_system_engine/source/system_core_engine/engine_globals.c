@@ -117,6 +117,24 @@ VkSampleCountFlagBits get_render_msaa_sample_count(void)
     }
 }
 
+/* the sample count of the scene (offscreen) pass. The editor decides it once the GPU is known and tells the engine, so the engine's grid pipeline matches the pass. */
+int g_scene_msaa_samples = 1;
+
+__declspec(dllexport) void set_engine_scene_msaa(int samples)
+{
+    g_scene_msaa_samples = samples;
+}
+
+VkSampleCountFlagBits get_scene_msaa_sample_count(void)
+{
+    switch (g_scene_msaa_samples) {
+        case 2:  return VK_SAMPLE_COUNT_2_BIT;
+        case 4:  return VK_SAMPLE_COUNT_4_BIT;
+        case 8:  return VK_SAMPLE_COUNT_8_BIT;
+        default: return VK_SAMPLE_COUNT_1_BIT;
+    }
+}
+
 light_settings   g_light      = { 0.20f, true, terrain_layer_atmosphere, 1.5f, 0.0f };
 system_terrain   g_terrain    = {0};
 terrain_settings g_terrain_ui = {0};

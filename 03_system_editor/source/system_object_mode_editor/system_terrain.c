@@ -25,7 +25,7 @@ float terrain_editor_sandbox_snap(float h, float unit) { return floorf(h / unit 
 void terrain_settings_defaults(terrain_settings* s)
 {
     memset(s, 0, sizeof(*s));
-    s->mode          = terrain_mode_sandbox;    /* cube columns */
+    s->mode          = terrain_mode_openworld;  /* smooth ground (the Inspector switches to Sandbox cube columns) */
     s->region_chunks = terrain_default_region_chunks;
     s->chunk_cells   = terrain_chunk_cells;
     s->cells_x       = s->region_chunks * terrain_region_grid * terrain_chunk_cells;
@@ -173,6 +173,12 @@ static void refresh_height_cache(const system_terrain* t)
         uint8_t* c = (uint8_t*)object_db_get(t->region_ids[r], object_data_terrain_color, &sz);
         if (c && sz == (uint32_t)t->dims.region_cells * (uint32_t)t->dims.region_cells * 4u) s_c[r] = c;
     }
+}
+
+/* the object database can move its blocks when anything is added to it, so the cached pointers are re-read before every brush dab */
+void terrain_refresh_height_cache(void)
+{
+    refresh_height_cache(&g_terrain);
 }
 
 static float limit_m(const system_terrain* t) { return t->dims.size_y_m * 0.5f - 2.0f * t->settings.cell_size_m; }
@@ -1372,7 +1378,8 @@ static uint32_t s_ebase_cap = 0;
 static int edit_stride_ok(int st) { (void)st; return 1; }
 
 /* Edit Mode works on one REGION: 3 x 3 chunks = 300 x 300 cells, one vertex per cell column. s_ecx / s_ecz = its first chunk. */
-static int edit_span_cells(const system_terrain* t) { return t->dims.chunk_cells * terrain_region_side_chunks; }
+/* edit mode works on ONE chunk (100 x 100 cells) at a time: the chunk you picked, or the one the camera is over. (It used to be 3 x 3 chunks, snapped to a grid.) */
+static int edit_span_cells(const system_terrain* t) { return t->dims.chunk_cells; }
 
 static void edit_sync_positions(const system_terrain* t)
 {
@@ -1395,8 +1402,8 @@ void set_terrain_edit_chunk(int cx, int cz)
 {
     system_terrain* t = &g_terrain;
     if (!t->exists) return;
-    t->edit_cx = (terrain_editor_clampi(cx, 0, t->dims.chunks_x - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;
-    t->edit_cz = (terrain_editor_clampi(cz, 0, t->dims.chunks_z - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;
+    t->edit_cx = terrain_editor_clampi(cx, 0, t->dims.chunks_x - 1);
+    t->edit_cz = terrain_editor_clampi(cz, 0, t->dims.chunks_z - 1);
     t->edit_follow = false;
 }
 
@@ -1419,8 +1426,16 @@ edit_mode_mesh* terrain_edit_mesh_acquire(system_scene_object* obj)
         if (!s_edit_have || nv == 0) { tcx = t->center_cx; tcz = t->center_cz; }
         else { tcx = s_ecx; tcz = s_ecz; }
     }
-    tcx = (terrain_editor_clampi(tcx, 0, t->dims.chunks_x - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;   /* snap to the region's first chunk */
-    tcz = (terrain_editor_clampi(tcz, 0, t->dims.chunks_z - 1) / terrain_region_side_chunks) * terrain_region_side_chunks;
+    /* a chunk picked in the Scene view or the Scene Archive is the one to edit (only while its region is the selected object) */
+    if (g_pick_chunk_x >= 0 && g_pick_chunk_z >= 0 && g_scene_registry.selected_object_id == g_pick_chunk_region_object_id) {
+        uint32_t picked_vertices = 0;
+        if (s_edit_have) em_selection_counts(&s_edit, &picked_vertices, NULL, NULL);
+        if (!s_edit_have || picked_vertices == 0) {              /* never swap the grid out from under a selection */
+            tcx = g_pick_chunk_x; tcz = g_pick_chunk_z;
+        }
+    }
+    tcx = terrain_editor_clampi(tcx, 0, t->dims.chunks_x - 1);
+    tcz = terrain_editor_clampi(tcz, 0, t->dims.chunks_z - 1);
     t->edit_cx = tcx; t->edit_cz = tcz;
     const int st = edit_stride_ok(t->settings.edit_stride);
 

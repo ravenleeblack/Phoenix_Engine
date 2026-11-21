@@ -91,6 +91,7 @@ void shutdown_dock_system(manage_docking* manager);
 /* used by the other editor files */
 void push_dock_view(manage_docking* manager, enum_view_type view);
 void evaluate_dock_interaction(manage_docking* manager, system_element_context* ui_ctx);
+int  get_dock_cursor_kind(const manage_docking* manager, int mx, int my);   /* 0 arrow, 1 left/right, 2 up/down: the resize cursor over draggable dividers */
 void compute_dock_layout(system_dock_node* node, int x, int y, int w, int h, system_dock_node* parent);
 system_dock_node* create_pure_leaf_node(void);
 void dock_leaf_remove_view(system_dock_node* leaf, int index);
@@ -98,6 +99,7 @@ void traverse_dock_tree(system_element_context* ui_ctx, system_dock_node* node, 
 bool find_intersecting_splitter_line(system_dock_node* node, int mx, int my, system_dock_node** out_node);
 
 /* predefined spots: the view is tabbed into the leaf that holds anchor_a (or anchor_b). if the view is already docked it is just activated. */
+extern bool dock_spawn_background;   /* while true, spawn_dock_view_beside / push_dock_view add tabs without bringing them to the front */
 void spawn_dock_view_beside(manage_docking* manager, enum_view_type anchor_a, enum_view_type anchor_b, enum_view_type view);
 system_dock_node* dock_find_leaf_with_view(system_dock_node* node, enum_view_type view);
 /* remove every tab of a view (mode menu uses it to keep only one mode's windows open). */

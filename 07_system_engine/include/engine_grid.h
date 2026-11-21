@@ -27,14 +27,13 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 
 /*
  * The grid is generated entirely inside grid_vert.glsl from gl_VertexIndex
- * (1001 lines per axis * 2 axes * 2 verts = 4004 vertices), so NO vertex buffer is needed.
+ * (grid_half_cells = cells per half side, passed as firstInstance; vertices = (2 * half + 1) * 4), so NO vertex buffer is needed.
  *
  * There is ONE camera: engine_context.world_state.editor_scene_camera.
  * It is the same camera the gimbal overlay and the WASD / Alt-drag input use,
  * so the grid, meshes and gizmo cannot disagree.
  * Convention: yaw 0 faces -Z, rotation.x is pitch (negative looks down).
  */
-#define grid_vertex_count   4004   /* must match grid_vert.glsl */
 #define zoom_min_distance   1.0f
 #define zoom_max_distance   50000.0f
 #define zoom_step_factor    0.88f      /* one wheel notch */

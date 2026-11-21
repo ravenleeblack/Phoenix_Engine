@@ -92,7 +92,7 @@ If window loses focus while tabbing press alt and move camera around then try ag
 - **Version:** 1.4
 - **Tag:** [v1.4](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.4)
 
-What is new in 1.4: new Edit mode tools (Create Edge, Create Face, Delete Edge, Bevel, and Subdivide at 2, 1/4, 1/8, and 1/16), and a Multicut that keeps the gizmo usable when Ctrl is not held.
+What is new in 1.4: new Edit mode tools (Create Edge, Create Face, Delete Edge, Bevel, and Subdivide at 2, 1/4, 1/8, and 1/16), a Multicut that keeps the gizmo usable when Ctrl is not held, more light kinds, skin maps, `.obj` import with unit profiles, and the build and installer tools. Full details in [VERSION.md](VERSION.md).
 
 **In progress:** version 1.5 is in development.
 

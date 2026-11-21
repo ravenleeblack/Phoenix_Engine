@@ -23,7 +23,11 @@ enum {
     toolbar_icon_diamond,
     toolbar_icon_half,
     toolbar_icon_quarter,
-    toolbar_icon_sun
+    toolbar_icon_sun,
+    toolbar_icon_point,
+    toolbar_icon_spot,
+    toolbar_icon_area,
+    toolbar_icon_hemisphere
 };
 
 static int get_toolbar_icon_abs(int value)
@@ -254,6 +258,50 @@ static void draw_toolbar_icon_sun(VkCommandBuffer cmd, int x, int y, int size, s
     draw_toolbar_icon_line(cmd, x + 13, y + 13, x + 12, y + 12, color);
 }
 
+/* point light: a small bulb with rays */
+static void draw_toolbar_icon_point_light(VkCommandBuffer cmd, int x, int y, int size, system_color color)
+{
+    (void)size;
+    static const int bulb[] = { 6, 4,  10, 4,  12, 6,  12, 9,  10, 11,  6, 11,  4, 9,  4, 6 };
+    draw_toolbar_icon_polygon(cmd, x, y, bulb, 8, color);
+    draw_toolbar_icon_line(cmd, x + 6, y + 13, x + 10, y + 13, color);
+    draw_toolbar_icon_line(cmd, x + 8, y + 0,  x + 8,  y + 2,  color);
+    draw_toolbar_icon_line(cmd, x + 1, y + 7,  x + 3,  y + 7,  color);
+    draw_toolbar_icon_line(cmd, x + 13, y + 7, x + 15, y + 7,  color);
+}
+
+/* spot light: a lamp head with a cone */
+static void draw_toolbar_icon_spot_light(VkCommandBuffer cmd, int x, int y, int size, system_color color)
+{
+    (void)size;
+    static const int head[] = { 5, 1,  11, 1,  10, 5,  6, 5 };
+    draw_toolbar_icon_polygon(cmd, x, y, head, 4, color);
+    draw_toolbar_icon_line(cmd, x + 6,  y + 5, x + 1,  y + 14, color);
+    draw_toolbar_icon_line(cmd, x + 10, y + 5, x + 15, y + 14, color);
+    draw_toolbar_icon_line(cmd, x + 1,  y + 14, x + 15, y + 14, color);
+}
+
+/* area light: a panel with light coming off it */
+static void draw_toolbar_icon_area_light(VkCommandBuffer cmd, int x, int y, int size, system_color color)
+{
+    (void)size;
+    static const int panel[] = { 2, 2,  14, 2,  14, 6,  2, 6 };
+    draw_toolbar_icon_polygon(cmd, x, y, panel, 4, color);
+    draw_toolbar_icon_line(cmd, x + 4,  y + 8, x + 3,  y + 14, color);
+    draw_toolbar_icon_line(cmd, x + 8,  y + 8, x + 8,  y + 14, color);
+    draw_toolbar_icon_line(cmd, x + 12, y + 8, x + 13, y + 14, color);
+}
+
+/* hemisphere light: a half dome over a ground line */
+static void draw_toolbar_icon_hemisphere_light(VkCommandBuffer cmd, int x, int y, int size, system_color color)
+{
+    (void)size;
+    static const int dome[] = { 1, 11,  2, 7,  4, 4,  8, 2,  12, 4,  14, 7,  15, 11 };
+    draw_toolbar_icon_polygon(cmd, x, y, dome, 7, color);
+    draw_toolbar_icon_line(cmd, x + 0, y + 11, x + 15, y + 11, color);
+    draw_toolbar_icon_line(cmd, x + 3, y + 14, x + 12, y + 14, color);
+}
+
 /* picks the right icon function for a kind */
 static void draw_toolbar_icon(VkCommandBuffer cmd, int icon_kind, int x, int y, int size, system_color color)
 {
@@ -266,6 +314,10 @@ static void draw_toolbar_icon(VkCommandBuffer cmd, int icon_kind, int x, int y, 
         case toolbar_icon_half:     draw_toolbar_icon_triangle_half(cmd, x, y, size, color);    break;
         case toolbar_icon_quarter:  draw_toolbar_icon_triangle_quarter(cmd, x, y, size, color); break;
         case toolbar_icon_sun:      draw_toolbar_icon_sun(cmd, x, y, size, color);              break;
+        case toolbar_icon_point:    draw_toolbar_icon_point_light(cmd, x, y, size, color);      break;
+        case toolbar_icon_spot:     draw_toolbar_icon_spot_light(cmd, x, y, size, color);       break;
+        case toolbar_icon_area:     draw_toolbar_icon_area_light(cmd, x, y, size, color);       break;
+        case toolbar_icon_hemisphere: draw_toolbar_icon_hemisphere_light(cmd, x, y, size, color); break;
         default: break;
     }
 }
@@ -367,5 +419,27 @@ void draw_system_toolbar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
                                         render_context.logical_device, render_context.physical_device,
                                         render_context.command_pool, render_context.graphics_queue);
         set_toolbar_status("Created: Directional Light.");
+    }
+    btn_x += btn_step;
+
+    /* the other lights, each with its own engine file (engine_point_light.c, engine_spot_light.c, engine_area_light.c, engine_hemisphere_light.c) */
+    if (draw_toolbar_icon_button(cmd, ui_ctx, 90010, toolbar_icon_point, btn_x, btn_y)) {
+        create_system_light(light_kind_point, (editor_vec3){ 0.0f, 8.0f, 0.0f }, render_context.logical_device, render_context.physical_device);
+        set_toolbar_status("Created: Point Light.");
+    }
+    btn_x += btn_step;
+    if (draw_toolbar_icon_button(cmd, ui_ctx, 90011, toolbar_icon_spot, btn_x, btn_y)) {
+        create_system_light(light_kind_spot, (editor_vec3){ 0.0f, 12.0f, 0.0f }, render_context.logical_device, render_context.physical_device);
+        set_toolbar_status("Created: Spot Light.");
+    }
+    btn_x += btn_step;
+    if (draw_toolbar_icon_button(cmd, ui_ctx, 90012, toolbar_icon_area, btn_x, btn_y)) {
+        create_system_light(light_kind_area, (editor_vec3){ 0.0f, 10.0f, 0.0f }, render_context.logical_device, render_context.physical_device);
+        set_toolbar_status("Created: Area Light.");
+    }
+    btn_x += btn_step;
+    if (draw_toolbar_icon_button(cmd, ui_ctx, 90013, toolbar_icon_hemisphere, btn_x, btn_y)) {
+        create_system_light(light_kind_hemisphere, (editor_vec3){ 0.0f, 16.0f, 0.0f }, render_context.logical_device, render_context.physical_device);
+        set_toolbar_status("Created: Hemisphere Light.");
     }
 }

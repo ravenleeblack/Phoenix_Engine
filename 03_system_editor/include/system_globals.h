@@ -67,6 +67,8 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #include "system_settings_database.h"
 #include "system_preferences.h"
 #include "system_import_export.h"
+#include "system_undo.h"
+#include "system_object_pick.h"
 
 /* ---- 5. Scene objects ---- */
 #include "system_scene_objects.h"
@@ -95,6 +97,10 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 /* ---- 9. Content systems (lighting needs the terrain types from group 7) ---- */
 #include "system_board.h"
 #include "engine_direction_light.h"
+#include "engine_point_light.h"
+#include "engine_spot_light.h"
+#include "engine_area_light.h"
+#include "engine_hemisphere_light.h"
 #include "engine_lighting.h"
 #include "system_paint_texture.h"
 #include "system_file_archive.h"
@@ -106,6 +112,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 
 #include "system_brush_element.h"
 #include "system_skin_gpu.h"
+#include "system_light_gpu.h"
 
 
 
@@ -135,6 +142,7 @@ extern bool is_engine_running;
 
 /* ---- mouse and wheel input ---- */
 extern int                  g_mouse_prev_x;
+extern int                  g_active_id_idle_frames;
 extern int                  g_mouse_prev_y;
 
 extern WNDPROC              g_wheel_old_proc;

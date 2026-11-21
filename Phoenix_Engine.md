@@ -9,7 +9,11 @@ Phoenix Engine is a pure C and Vulkan game, rendering, and content-authoring pla
 | `01_bin/phoenix_engine.exe` | Engine host, window, Vulkan runtime, scene state, and module loader |
 | `01_bin/phoenix_editor.dll` | 3D modeling, sculpting, painting, scene UI, UV and material authoring, lighting, terrain, and docking |
 | `01_bin/system_game.dll` | Project gameplay and simulation code |
-| `01_bin/phoenix_loader.dll` | Mesh and image asset loading |
+| `01_bin/phoenix_loader.dll` | Mesh (`.fbx`, `.obj`) and image (`.png`) asset loading |
+| `01_bin/phoenix_build.exe` | Turns `01_bin` into a game folder without the editor |
+| `01_bin/phoenix_installer.exe` | Installs a built game folder |
+
+Current version: 1.4. See [VERSION.md](VERSION.md) for what changed.
 
 ## User Guide
 

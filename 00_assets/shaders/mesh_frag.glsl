@@ -4,7 +4,8 @@ layout(location = 0) in vec4 v_color;
 layout(location = 1) in vec3 v_view_pos;
 layout(location = 2) flat in vec4 v_light;
 layout(location = 3) flat in vec4 v_sun;
-layout(location = 4) in vec2 v_uv;          // only read by the terrain cell-grid wire (light.w < -1.5)
+layout(location = 4) in vec2 v_uv;          // terrain cell-grid wire (light.w < -1.5) and skin maps
+layout(location = 5) in vec3 v_normal;      // view space, not normalised. zero = the mesh has no normals. smooth terrain material only
 
 layout(location = 0) out vec4 out_color;
 
@@ -18,11 +19,31 @@ struct skin_layer {
 };
 
 layout(set = 0, binding = 0, std140) uniform skin_block {
-    uvec4     head;
+    uvec4     head;          // .w = aux map flags: bit 0 specular map, bit 1 height map, bit 2 ambient map
     skin_layer layers[16];
+    vec4      surface;       // x specular strength, y gloss, z height (bump) scale, w ambient multiplier
 } skin;
 
 layout(set = 0, binding = 1) uniform sampler2D skin_map;   // base color map. head.z = 1 when the skin has one, otherwise a 1x1 white texture is bound
+layout(set = 0, binding = 2) uniform sampler2D skin_aux;   // r = specular, g = height, b = ambient occlusion (white when absent)
+
+// scene lights (system_light_gpu.c): one block per draw call, set 1
+//   pos_range.xyz  view space position, w range           color_type.rgb  color * intensity, w kind (0 directional, 1 point, 2 spot)
+//   dir_cone.xyz   directional: toward the light, spot: direction the spot points, w cos of the outer cone
+//   extra.x        cos of the inner cone
+struct scene_light {
+    vec4 pos_range;
+    vec4 color_type;
+    vec4 dir_cone;
+    vec4 extra;
+};
+
+layout(set = 1, binding = 0, std140) uniform light_block {
+    vec4        counts;      // x = light count, yzw = world up in view space
+    vec4        hemi_sky;    // rgb sky color, w = 1 when a hemisphere light is on
+    vec4        hemi_ground;
+    scene_light lights[8];
+} scene_lights;
 
 vec3 blend_layer(vec3 base, vec3 src, float mode, float amount)
 {
@@ -108,9 +129,107 @@ void main()
     vec3 n = face / len;
     if (dot(n, -v_view_pos) < 0.0) n = -n;   // always face the camera: works for any winding / Y flip
 
-    float facing = max(dot(n, normalize(v_light.xyz)), 0.0);
+    vec3 view_dir = normalize(-v_view_pos);
+    bool  has_skin = (skin.head.y == 0u);
+    uint  flags    = skin.head.w;
 
-    // ambient (grey fill) + sun (coloured, brightness-scaled), applied once to the skin colour
-    vec3 lighting = vec3(v_light.w) + v_sun.rgb * facing;
-    out_color = vec4(base.rgb * lighting, base.a);
+    // terrain material (skin named Terrain, flag bit 3): the surface keeps its vertex colour (what sculpting and painting write),
+    // tinted by layer 0, and is shaded with the smooth vertex normals so the ground has no faceting and carries a soft sheen.
+    bool terrain_material = has_skin && (flags & 8u) != 0u;
+    if (terrain_material) {
+        if (dot(v_normal, v_normal) > 1e-8) {
+            n = normalize(v_normal);
+            if (dot(n, -v_view_pos) < 0.0) n = -n;
+        }
+        base = vec4(v_color.rgb * skin.layers[0].color.rgb, v_color.a);
+    }
+    vec3  aux      = vec3(1.0);
+    if (has_skin && (flags & 7u) != 0u) {
+        aux = texture(skin_aux, v_uv).rgb;
+    }
+
+    // height map -> bump: perturb the normal with the screen space gradient of the height (no tangents needed)
+    if (has_skin && (flags & 2u) != 0u && skin.surface.z > 0.0) {
+        float h   = aux.g;
+        vec3  dpx = dFdx(v_view_pos);
+        vec3  dpy = dFdy(v_view_pos);
+        vec3  r1  = cross(dpy, n);
+        vec3  r2  = cross(n, dpx);
+        float det = dot(dpx, r1);
+        vec3  grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+        n = normalize(abs(det) * n - skin.surface.z * 4.0 * grad);
+    }
+
+    float spec_strength = 0.0;
+    float shininess     = 32.0;
+    float ambient_k     = 1.0;
+    float ao            = 1.0;
+    if (has_skin) {
+        spec_strength = skin.surface.x;
+        if ((flags & 1u) != 0u) spec_strength *= aux.r;
+        shininess = exp2(skin.surface.y * 7.0 + 1.0);
+        ambient_k = skin.surface.w;
+        if ((flags & 4u) != 0u) ao = aux.b;
+    }
+
+    // ambient (grey fill) + hemisphere light, scaled by the skin's ambient value and ambient map
+    // the ambient value is a soft sky / ground gradient (surfaces facing up get more, facing down less) instead of one flat grey
+    float up_t = dot(n, scene_lights.counts.yzw) * 0.5 + 0.5;
+    vec3 amb = vec3(v_light.w) * mix(vec3(0.66, 0.64, 0.62), vec3(1.0, 1.0, 1.04), up_t);
+    if (scene_lights.hemi_sky.w > 0.5) {
+        float t = dot(n, scene_lights.counts.yzw) * 0.5 + 0.5;
+        amb += mix(scene_lights.hemi_ground.rgb, scene_lights.hemi_sky.rgb, t);
+    }
+    vec3 diffuse  = amb * ambient_k * ao;
+    vec3 specular = vec3(0.0);
+
+    // the sun (coloured, brightness-scaled)
+    vec3  sun_l  = normalize(v_light.xyz);
+    float facing = max(dot(n, sun_l), 0.0);
+    diffuse += v_sun.rgb * facing;
+    if (facing > 0.0 && spec_strength > 0.0) {
+        specular += v_sun.rgb * pow(max(dot(n, normalize(sun_l + view_dir)), 0.0), shininess) * spec_strength;
+    }
+
+    // directional / point / spot light objects
+    int count = int(scene_lights.counts.x + 0.5);
+    for (int i = 0; i < count && i < 8; ++i) {
+        scene_light lt   = scene_lights.lights[i];
+        int         kind = int(lt.color_type.w + 0.5);
+        vec3  l   = normalize(lt.dir_cone.xyz);
+        float att = 1.0;
+        if (kind != 0) {
+            vec3  to_light = lt.pos_range.xyz - v_view_pos;
+            float dist     = length(to_light);
+            float ratio    = dist / max(lt.pos_range.w, 0.001);
+            float falloff  = clamp(1.0 - ratio * ratio, 0.0, 1.0);
+            l   = to_light / max(dist, 1e-4);
+            att = falloff * falloff;
+            if (kind == 3) {
+                att = falloff;                    // area light: a soft panel, no hot spot
+            }
+            if (kind == 2) {
+                float c = dot(-l, normalize(lt.dir_cone.xyz));
+                att *= smoothstep(lt.dir_cone.w, lt.extra.x, c);
+            }
+        }
+        float nl = max(dot(n, l), 0.0);
+        if (kind == 3) {
+            nl = clamp((dot(n, l) + 0.5) / 1.5, 0.0, 1.0);   // wraps around the surface instead of a hard terminator
+        }
+        vec3  lc = lt.color_type.rgb * att;
+        diffuse += lc * nl;
+        if (nl > 0.0 && spec_strength > 0.0) {
+            specular += lc * pow(max(dot(n, normalize(l + view_dir)), 0.0), shininess) * spec_strength;
+        }
+    }
+
+    // natural sheen on the terrain: a faint sky reflection that grows toward grazing angles, so slopes catch light like Unity / Unreal ground
+    if (terrain_material) {
+        float fres = pow(1.0 - clamp(dot(n, view_dir), 0.0, 1.0), 4.0);
+        vec3  sky  = vec3(0.55, 0.65, 0.80) * clamp(v_light.w + 0.25, 0.0, 1.0);
+        specular += sky * fres * spec_strength * 0.9;
+    }
+
+    out_color = vec4(base.rgb * diffuse + specular, base.a);
 }

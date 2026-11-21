@@ -12,6 +12,10 @@
 #define TEXSHOP_SKIN_FOLDER FILE_ARCHIVE_ROOT_FOLDER "\\skins"
 #define TEXSHOP_SKIN_EXT    ".sprof"
 
+extern load_image_asset_ptr   editor_load_image;           /* system_import_export.c: the loader plugin */
+extern remove_image_asset_ptr editor_remove_image;
+bool check_loader_ready(void);
+
 texshop_state g_texshop;
 
 static shader_profile s_profile;       /* scratch for export / import. about 25 KB, kept off the stack */
@@ -50,6 +54,13 @@ static uint32_t hash_texshop_skin(const texshop_skin* s)
 {
     uint32_t h = 2166136261u;
     for (const char* c = s->map_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);   /* a new map rebuilds the GPU copy */
+    for (const char* c = s->spec_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
+    for (const char* c = s->height_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
+    for (const char* c = s->ambient_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
+    h = hash_texshop_float(h, s->specular);
+    h = hash_texshop_float(h, s->gloss);
+    h = hash_texshop_float(h, s->height_scale);
+    h = hash_texshop_float(h, s->ambient);
     h = hash_texshop_u32(h, (uint32_t)s->layer_count);
     for (int i = 0; i < s->layer_count; i++) {
         const texshop_layer* l = &s->layers[i];
@@ -142,6 +153,10 @@ static void fill_texshop_skin(texshop_skin* s, const char* name)
     reset_texshop_layer(&s->layers[0], "base",
                         texshop_bit(texshop_out_color) | texshop_bit(texshop_out_normal) | texshop_bit(texshop_out_rough));
     s->layer_count = 1;
+    s->specular     = 0.25f;
+    s->gloss        = 0.40f;
+    s->height_scale = 0.30f;
+    s->ambient      = 1.0f;
 }
 
 /* what the file holds today: colour (in color_tint), opacity, which outputs, blend, projection, masks. Texture sources, mask
@@ -197,12 +212,35 @@ static void skin_to_profile(const texshop_skin* s, shader_profile* p)
         d->layers[0].src[PROFILE_OUT_COLOR].kind     = PROFILE_SRC_TEXTURE;
         d->layers[0].src[PROFILE_OUT_COLOR].tex_slot = 0;
     }
+
+    /* extra maps and the surface values: texture inputs 1..3 carry the file names, the exposed params carry the numbers */
+    snprintf(p->tex_input_name[1], sizeof(p->tex_input_name[1]), "%s", s->spec_file);
+    snprintf(p->tex_input_name[2], sizeof(p->tex_input_name[2]), "%s", s->height_file);
+    snprintf(p->tex_input_name[3], sizeof(p->tex_input_name[3]), "%s", s->ambient_file);
+    p->tex_input_count = 4;
+    const char* const param_names[4] = { "specular", "gloss", "height", "ambient" };
+    const float param_values[4] = { s->specular, s->gloss, s->height_scale, s->ambient };
+    for (int k = 0; k < 4; k++) {
+        snprintf(p->param_name[k], sizeof(p->param_name[k]), "%s", param_names[k]);
+        p->param_default[k] = param_values[k];
+    }
+    p->param_count = 4;
 }
 
 static void profile_to_skin(const shader_profile* p, texshop_skin* s)
 {
     fill_texshop_skin(s, p->name);
     s->id = p->id;
+
+    if (p->param_count >= 4) {
+        s->specular     = p->param_default[0];
+        s->gloss        = p->param_default[1];
+        s->height_scale = p->param_default[2];
+        s->ambient      = p->param_default[3];
+        snprintf(s->spec_file,    sizeof(s->spec_file),    "%s", p->tex_input_name[1]);
+        snprintf(s->height_file,  sizeof(s->height_file),  "%s", p->tex_input_name[2]);
+        snprintf(s->ambient_file, sizeof(s->ambient_file), "%s", p->tex_input_name[3]);
+    }
 
     const skin_profile_data* d = &p->u.skin;
     int face_type = d->layer_count;
@@ -274,6 +312,93 @@ static void load_texshop_skins_from_disk(void)
     if (max_id >= g_texshop.next_skin_id) g_texshop.next_skin_id = max_id + 1;
 }
 
+#define TERRAIN_SKIN_NAME   "Terrain"
+
+/* the one skin every terrain uses until it is given another. No pictures and no preset colours: the terrain keeps its sculpted /
+   painted vertex colour, layer 0 is a white tint over it, and mesh_frag.glsl shades it with smooth normals and a soft sheen
+   because the skin is named Terrain. It is a normal skin: edit it in the Texture Shop or in the Inspector. */
+static void fill_builtin_terrain_skin(texshop_skin* s)
+{
+    s->specular     = 0.30f;
+    s->gloss        = 0.50f;
+    s->ambient      = 1.0f;
+    s->layer_count  = 1;
+    s->selected_layer = 0;
+    s->layers[0].color[0] = 1.0f;
+    s->layers[0].color[1] = 1.0f;
+    s->layers[0].color[2] = 1.0f;
+    s->layers[0].color[3] = 1.0f;
+    s->layers[0].opacity = 1.0f;
+}
+
+static void ensure_builtin_terrain_skin(void)
+{
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        texshop_skin* old = &g_texshop.skins[i];
+        if (strcmp(old->name, TERRAIN_SKIN_NAME) == 0) {
+            if (old->layer_count != 1) {                  /* the first version had grass and rock layers: back to the plain tint */
+                fill_builtin_terrain_skin(old);
+                const int previous = g_texshop.selected_skin;
+                g_texshop.selected_skin = i;
+                export_texshop_skin();
+                g_texshop.selected_skin = previous;
+            }
+            return;
+        }
+    }
+    if (g_texshop.skin_count >= texshop_max_skins) {
+        return;
+    }
+
+    texshop_skin* s = &g_texshop.skins[g_texshop.skin_count];
+    fill_texshop_skin(s, TERRAIN_SKIN_NAME);
+    s->id = g_texshop.next_skin_id++;
+    fill_builtin_terrain_skin(s);
+
+    const int previous = g_texshop.selected_skin;
+    g_texshop.selected_skin = g_texshop.skin_count;
+    g_texshop.skin_count++;
+    export_texshop_skin();
+    g_texshop.selected_skin = previous;
+}
+/* the Terrain skin itself, for the Inspector's terrain options. NULL if it does not exist. */
+texshop_skin* get_builtin_terrain_skin(void)
+{
+    check_texshop_ready();
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        if (strcmp(g_texshop.skins[i].name, TERRAIN_SKIN_NAME) == 0) {
+            return &g_texshop.skins[i];
+        }
+    }
+    return NULL;
+}
+
+/* writes the Terrain skin to assets/skins (the Inspector calls it when an edit is finished) */
+void save_builtin_terrain_skin(void)
+{
+    check_texshop_ready();
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        if (strcmp(g_texshop.skins[i].name, TERRAIN_SKIN_NAME) == 0) {
+            const int previous = g_texshop.selected_skin;
+            g_texshop.selected_skin = i;
+            export_texshop_skin();
+            g_texshop.selected_skin = previous;
+            return;
+        }
+    }
+}
+
+uint32_t get_builtin_terrain_skin_id(void)
+{
+    check_texshop_ready();
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        if (strcmp(g_texshop.skins[i].name, TERRAIN_SKIN_NAME) == 0) {
+            return g_texshop.skins[i].id;
+        }
+    }
+    return 0;
+}
+
 static void start_texshop_state(void)
 {
     memset(&g_texshop, 0, sizeof(g_texshop));
@@ -284,6 +409,7 @@ static void start_texshop_state(void)
     g_texshop.next_skin_id = (uint32_t)time(NULL);
     if (g_texshop.next_skin_id == 0) g_texshop.next_skin_id = 1;
     load_texshop_skins_from_disk();
+    ensure_builtin_terrain_skin();
 
     if (g_texshop.skin_count > 0) {
         char text[96];
@@ -481,6 +607,63 @@ const char* get_object_skin_name(uint32_t object_id)
     return s ? s->name : NULL;
 }
 
+/* the average color a skin shows. cached until the skin changes (the hash covers layers and the map file). */
+void texshop_get_preview_color(texshop_skin* s, float out[3])
+{
+    const uint32_t h = hash_texshop_skin(s);
+    if (!s->preview_ready || s->preview_hash != h) {
+        float map_color[3] = { 1.0f, 1.0f, 1.0f };
+        if (s->map_file[0] && check_loader_ready()) {
+            char path[260];
+            snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\%s", s->map_file);
+            loader_image_data image;
+            memset(&image, 0, sizeof(image));
+            if (editor_load_image(path, &image)) {
+                double sum[3] = { 0.0, 0.0, 0.0 };
+                double weight = 0.0;
+                const size_t pixel_count = (size_t)image.width * (size_t)image.height;
+                for (size_t i = 0; i < pixel_count; i++) {
+                    const uint8_t* pixel = image.pixels + i * 4;
+                    const double alpha = (double)pixel[3] / 255.0;
+                    sum[0] += pixel[0] * alpha;
+                    sum[1] += pixel[1] * alpha;
+                    sum[2] += pixel[2] * alpha;
+                    weight += alpha;
+                }
+                if (weight > 0.0) {
+                    for (int k = 0; k < 3; k++) {
+                        map_color[k] = (float)(sum[k] / weight / 255.0);
+                    }
+                }
+                editor_remove_image(&image);
+            }
+        }
+
+        float color[3] = { 0.55f, 0.55f, 0.55f };
+        for (int i = 0; i < s->layer_count; i++) {
+            const texshop_layer* l = &s->layers[i];
+            if (i == 0) {
+                for (int k = 0; k < 3; k++) {
+                    color[k] = l->color[k] * map_color[k];
+                }
+            } else {
+                for (int k = 0; k < 3; k++) {
+                    color[k] = color[k] * (1.0f - l->opacity) + l->color[k] * l->opacity;
+                }
+            }
+        }
+        for (int k = 0; k < 3; k++) {
+            s->preview_color[k] = color[k];
+        }
+        s->preview_hash = h;
+        s->preview_ready = true;
+    }
+    for (int k = 0; k < 3; k++) {
+        out[k] = s->preview_color[k];
+    }
+}
+
+/* "<object>: <skin or no skin>" for the selected object */
 void texshop_describe_target(char* out, size_t cap)
 {
     const system_scene_object* o = get_texshop_target_object();
@@ -564,6 +747,10 @@ static void fill_skin_gpu_data(const texshop_skin* s, skin_gpu_data* out)
     int face_type = s->layer_count;
     if (face_type > SKIN_GPU_MAX_LAYERS) face_type = SKIN_GPU_MAX_LAYERS;
     out->layer_count = (uint32_t)face_type;
+    out->specular     = s->specular;
+    out->gloss        = s->gloss;
+    out->height_scale = s->height_scale;
+    out->ambient      = s->ambient;
     for (int i = 0; i < face_type; i++) {
         const texshop_layer* l = &s->layers[i];
         for (int k = 0; k < 4; k++) out->layers[i].color[k] = l->color[k];
@@ -579,12 +766,81 @@ extern load_image_asset_ptr   editor_load_image;           /* system_import_expo
 extern remove_image_asset_ptr editor_remove_image;
 bool check_loader_ready(void);
 
+/* packs the specular (r), height (g) and ambient (b) maps into one RGBA image the size of the biggest map. A missing map stays white.
+   returns malloc'd pixels (the caller frees them) or NULL when the skin has none of the three. */
+uint8_t* pack_skin_aux_maps(const texshop_skin* s, uint32_t* out_w, uint32_t* out_h, uint32_t* out_flags)
+{
+    const char* files[3] = { s->spec_file, s->height_file, s->ambient_file };
+    loader_image_data images[3];
+    bool loaded[3] = { false, false, false };
+    memset(images, 0, sizeof(images));
+    *out_flags = 0;
+
+    uint32_t width = 0, height = 0;
+    for (int i = 0; i < 3; i++) {
+        if (files[i][0] == '\0' || !check_loader_ready()) {
+            continue;
+        }
+        char path[260];
+        snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\%s", files[i]);
+        loaded[i] = editor_load_image(path, &images[i]);
+        if (!loaded[i]) {
+            phoenix_warn("SKIN", "skin '%s': map '%s' could not be loaded.", s->name, path);
+            continue;
+        }
+        *out_flags |= 1u << i;
+        if ((uint32_t)images[i].width > width)  width  = (uint32_t)images[i].width;
+        if ((uint32_t)images[i].height > height) height = (uint32_t)images[i].height;
+    }
+
+    uint8_t* packed = NULL;
+    if (*out_flags != 0 && width > 0 && height > 0) {
+        packed = (uint8_t*)malloc((size_t)width * height * 4u);
+    }
+    if (packed) {
+        memset(packed, 255, (size_t)width * height * 4u);
+        for (int i = 0; i < 3; i++) {
+            if (!loaded[i]) {
+                continue;
+            }
+            const uint32_t iw = (uint32_t)images[i].width, ih = (uint32_t)images[i].height;
+            for (uint32_t y = 0; y < height; y++) {
+                const uint32_t sy = y * ih / height;
+                for (uint32_t x = 0; x < width; x++) {
+                    const uint32_t sx = x * iw / width;
+                    packed[((size_t)y * width + x) * 4u + (size_t)i] = images[i].pixels[((size_t)sy * iw + sx) * 4u];
+                }
+            }
+        }
+        *out_w = width;
+        *out_h = height;
+    } else {
+        *out_flags = 0;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        if (loaded[i]) {
+            editor_remove_image(&images[i]);
+        }
+    }
+    return packed;
+}
+
 void texshop_build_skin_gpu(uint32_t skin_id)
 {
     texshop_skin* s = find_texshop_skin_by_id(skin_id);
     if (!s) return;
     skin_gpu_data data;
     fill_skin_gpu_data(s, &data);
+
+    uint32_t aux_w = 0, aux_h = 0, aux_flags = 0;
+    uint8_t* aux_pixels = pack_skin_aux_maps(s, &aux_w, &aux_h, &aux_flags);
+    if (aux_pixels) {
+        data.aux_pixels = aux_pixels;
+        data.aux_width  = aux_w;
+        data.aux_height = aux_h;
+        data.aux_flags  = aux_flags;
+    }
 
     /* the base color map: decoded here, uploaded by skin_gpu_set, freed right after */
     loader_image_data image;
@@ -602,8 +858,10 @@ void texshop_build_skin_gpu(uint32_t skin_id)
             phoenix_warn("SKIN", "skin '%s': map '%s' could not be loaded.", s->name, path);
         }
     }
+    if (strcmp(s->name, "Terrain") == 0) data.aux_flags |= 8u;   /* mesh_frag.glsl: smooth terrain material (grass / rock by slope) */
     if (skin_gpu_set(s->id, &data)) s->gpu_hash = hash_texshop_skin(s);
     if (map_loaded) editor_remove_image(&image);
+    free(aux_pixels);
 }
 
 /* once per frame from the Skin Maker: the obj_vert_selected skin is the only one that can be edited. A changed hash rebuilds its

@@ -231,6 +231,7 @@ void start_system_theme_profile(system_element_context* ui_ctx);
 /* Core Low-Level Back-end Batch Rendering Primitives.
    push_quad_element: color.alpha is a plain 0..1 alpha, always. nothing else is encoded in it. */
 void push_quad_element(VkCommandBuffer cmd, float x, float y, float w, float h, system_color color);
+void push_circle_element(VkCommandBuffer cmd, float cx, float cy, float radius, float thickness, system_color color);   /* thickness 0 = a filled disc */
 
 /* scene / game view composite. the renderer tag travels as its own argument, not inside a color. */
 typedef enum {
@@ -331,6 +332,7 @@ typedef enum {
 
 typedef struct {
     bool        show_grid;
+    int         grid_half_cells;    /* grid half size in 4 m cells (50 = 200 m wide) */
     bool        show_origin;
     bool        show_cameras;       /* camera glyphs, frustum lines, blue culling plane */
     bool        camera_locked;      /* editor camera is held at lock_position / lock_rotation */

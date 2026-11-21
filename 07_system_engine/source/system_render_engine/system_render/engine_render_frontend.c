@@ -58,7 +58,7 @@ VkCommandBuffer begin_frontend_main_pass(void)
     uint32_t image_idx = render_context.swapchain_main.current_frame;
     if (image_idx >= render_context.swapchain_main.image_count) return VK_NULL_HANDLE;
 
-    VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[image_idx];
+    VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[g_current_inflight_cpu_frame];
     if (cmd == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
     g_editor.record_offscreen_frame(cmd);
@@ -109,7 +109,7 @@ bool draw_frontend_render_frame(render_packet* packet)
     // 2. Fetch the validated hardware backbuffer texture index that was explicitly written by begin_frame
     uint32_t image_idx = render_context.swapchain_main.current_frame; 
     if (image_idx < render_context.swapchain_main.image_count) {
-        VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[image_idx];
+        VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[g_current_inflight_cpu_frame];
         if (cmd != VK_NULL_HANDLE) {
             /* Scene and Game targets are recorded outside their main UI pass. */
             g_editor.record_offscreen_frame(cmd);

@@ -56,6 +56,7 @@ bool     assign_archive_skin_to_selected(void);        /* the .sprof obj_vert_se
 bool     create_texshop_skin_from_map(const char* base_name, const char* map_file);   /* new skin whose base color reads assets/textures/<map_file> (PNG import) */
 void     export_texshop_skin(void);
 void     clear_texshop_skin_on_selected(void);         /* obj_vert_selected object goes back to the empty-skin grey */
+uint32_t get_builtin_terrain_skin_id(void);            /* the Terrain skin every terrain object uses until it has its own, 0 if it could not be made */
 uint32_t get_object_skin_id(uint32_t object_id);       /* 0 = no skin (no block, or the skin was deleted). The renderer will call this. */
 const char* get_object_skin_name(uint32_t object_id);  /* NULL = no skin. Points into the skin list, do not keep it across a frame. */
 

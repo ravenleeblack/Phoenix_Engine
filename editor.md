@@ -22,11 +22,17 @@ The editor currently provides:
 - Object-mode right-click Skin menu: assign the `.sprof` selected in the File Archive to the selected object
 - Window focus: the scene view keeps the keyboard after a click; hotkeys and held keys are ignored while another app has focus
 
+- Light kinds (directional, point, spot, hemisphere, area) with a light window
+- Skin maps: specular, height, and ambient occlusion
+- Preferences > Import / Export unit profiles: Phoenix, Maya, Unity, ZBrush (import only)
+
+See [VERSION.md](VERSION.md) for what changed in 1.4.
+
 ## Import and Export
 
 File > Import opens the Windows file dialog.
 
-- `.fbx` (binary or ASCII, mesh geometry only) is copied to `assets/models` and added to the scene.
+- `.fbx` (binary or ASCII, mesh geometry only) and `.obj` are scaled by the selected unit profile, copied to `assets/models`, and added to the scene.
 - `.png` is copied to `assets/textures` and a skin is created from its average color in `assets/skins`.
 
 File > Export opens an options window: export the selected object or the selected archive file, as FBX binary, FBX ASCII, or PNG. Export... then opens the save dialog. Objects are written in object space, in meters.

@@ -67,6 +67,8 @@ OBJ_DIR = 02_obj
 # Inclusive Include Matrix Matching
 INCLUDES += -I03_system_editor/include \
             -I06_system_loader/include \
+            -I09_system_installer/include \
+            -I10_system_build/include \
             -I07_system_engine/include \
             -I08_system_game/include \
             -I08_system_game/include/system_core_game \
@@ -81,6 +83,13 @@ GAME_DLL      = $(BIN_DIR)/system_game.dll
 ENGINE_IMPLIB = $(OBJ_DIR)/libphoenix_engine.a
 PHOENIX_LOADER_DLL = $(BIN_DIR)/phoenix_loader.dll
 PHOENIX_LOADER_OBJ = $(OBJ_DIR)/system_phoenix_loader.o
+
+# build tool (10_system_build) and installer (09_system_installer): small stand alone exes, no engine, editor or vulkan.
+# phoenix_build.exe turns 01_bin into a game folder without the editor. phoenix_installer.exe installs that folder.
+BUILD_EXE     = $(BIN_DIR)/phoenix_build.exe
+BUILD_OBJ     = $(OBJ_DIR)/system_build.o
+INSTALLER_EXE = $(BIN_DIR)/phoenix_installer.exe
+INSTALLER_OBJ = $(OBJ_DIR)/system_installer.o
 
 # Shaders Build Target Targets
 VERT_SPV = $(BIN_DIR)/object_vert.spv
@@ -118,10 +127,10 @@ GAME_OBJS   = $(addprefix $(OBJ_DIR)/,$(notdir $(GAME_SRC:.c=.o)))
 # lets one pattern rule find every .c file wherever it sits
 vpath %.c $(sort $(dir $(EDITOR_SRC) $(ENGINE_SRC) $(GAME_SRC)))
 
-.PHONY: all editor engine game loader phoenix_loader clean clean_prefs clean_all clean_phoenix_loader directories shaders
+.PHONY: all editor engine game loader build installer phoenix_loader clean clean_prefs clean_all clean_phoenix_loader directories shaders
 
 # Build includes compiled shader binaries natively
-all: directories shaders $(ENGINE_EXE) $(EDITOR_DLL) $(PHOENIX_LOADER_DLL) $(GAME_DLL)
+all: directories shaders $(ENGINE_EXE) $(EDITOR_DLL) $(PHOENIX_LOADER_DLL) $(GAME_DLL) $(BUILD_EXE) $(INSTALLER_EXE)
 
 shaders: $(VERT_SPV) $(FRAG_SPV) $(GRID_VERT_SPV) $(GRID_FRAG_SPV) $(MESH_VERT_SPV) $(MESH_FRAG_SPV) $(BG_VERT_SPV) $(BG_FRAG_SPV) $(UIB_VERT_SPV) $(UIB_FRAG_SPV) $(FXAA_VERT_SPV) $(FXAA_FRAG_SPV)
 
@@ -178,6 +187,8 @@ engine: directories shaders $(ENGINE_EXE)
 editor: directories $(EDITOR_DLL)
 game: directories $(GAME_DLL)
 loader: directories $(PHOENIX_LOADER_DLL)
+build: directories $(BUILD_EXE)
+installer: directories $(INSTALLER_EXE)
 
 directories:
 ifeq ($(OS),Windows_NT)
@@ -190,7 +201,7 @@ endif
 
 # order-only (the | ): the folders must exist first, but a newer folder never forces a rebuild
 $(VERT_SPV) $(FRAG_SPV) $(3D_VERT_SPV) $(GRID_FRAG_SPV) $(MESH_VERT_SPV) $(MESH_FRAG_SPV) $(BG_VERT_SPV) $(BG_FRAG_SPV) $(UIB_VERT_SPV) $(UIB_FRAG_SPV) $(FXAA_VERT_SPV) $(FXAA_FRAG_SPV): | directories
-$(ENGINE_EXE) $(EDITOR_DLL) $(GAME_DLL) $(PHOENIX_LOADER_DLL): | directories
+$(ENGINE_EXE) $(EDITOR_DLL) $(GAME_DLL) $(PHOENIX_LOADER_DLL) $(BUILD_EXE) $(INSTALLER_EXE): | directories
 
 # engine exe: exports every symbol and writes the import library the plugins link against
 $(ENGINE_EXE): $(ENGINE_OBJS)
@@ -210,6 +221,23 @@ $(GAME_DLL): $(GAME_OBJS) $(ENGINE_EXE)
 $(OBJ_DIR)/%.o: %.c | directories
 	@echo [Compiling Unit] $<
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# build tool and installer: own objects, no vpath, no engine import library
+$(BUILD_OBJ): 10_system_build/source/system_build.c | directories
+	@echo [Compiling Unit] $<
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_EXE): $(BUILD_OBJ)
+	@echo [Linking Executable] $@
+	$(CC) $(CFLAGS) $^ -o $@ -lkernel32
+
+$(INSTALLER_OBJ): 09_system_installer/source/system_installer.c | directories
+	@echo [Compiling Unit] $<
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(INSTALLER_EXE): $(INSTALLER_OBJ)
+	@echo [Linking Executable] $@
+	$(CC) $(CFLAGS) $^ -o $@ -lkernel32
 
 # phoenix loader: its own dll. "make phoenix_loader" cleans and rebuilds ONLY this (06_system_loader -> 01_bin/phoenix_loader.dll).
 # It is not part of "all" and not linked into the editor or the engine.

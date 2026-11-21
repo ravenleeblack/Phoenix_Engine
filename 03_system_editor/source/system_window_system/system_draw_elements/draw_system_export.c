@@ -88,8 +88,8 @@ void describe_export_source(char* out, size_t out_size, bool* out_valid)
     const file_archive_node* node = file_archive_node_at(file_archive_selected());
     if (!node || node->kind != file_node_file) {
         snprintf(out, out_size, "%s", "No file selected in the File Archive.");
-    } else if (!check_path_extension(node->name, ".fbx") && !check_path_extension(node->name, ".png")) {
-        snprintf(out, out_size, "'%.30s' is not an .fbx or .png.", node->name);
+    } else if (!check_path_extension(node->name, ".fbx") && !check_path_extension(node->name, ".obj") && !check_path_extension(node->name, ".png")) {
+        snprintf(out, out_size, "'%.30s' is not an .fbx, .obj or .png.", node->name);
     } else {
         snprintf(out, out_size, "File: %.40s", node->name);
         *out_valid = true;
@@ -161,18 +161,23 @@ void draw_export_window(VkCommandBuffer cmd, system_element_context* ui_element,
     y += ui_font_h + 14;
 
     const bool png_allowed = (export_source == export_source_archive_file);
-    if (draw_export_button(cmd, ui_element, "FBX binary", label_x, y, 130, row_h, export_format == export_format_fbx_binary, true)) {
+    if (draw_export_button(cmd, ui_element, "FBX binary", label_x, y, 100, row_h, export_format == export_format_fbx_binary, true)) {
         export_format = export_format_fbx_binary;
     }
-    if (draw_export_button(cmd, ui_element, "FBX ASCII", label_x + 140, y, 130, row_h, export_format == export_format_fbx_ascii, true)) {
+    if (draw_export_button(cmd, ui_element, "FBX ASCII", label_x + 108, y, 100, row_h, export_format == export_format_fbx_ascii, true)) {
         export_format = export_format_fbx_ascii;
     }
-    if (draw_export_button(cmd, ui_element, "PNG", label_x + 280, y, 130, row_h, export_format == export_format_png, png_allowed)) {
+    if (draw_export_button(cmd, ui_element, "OBJ", label_x + 216, y, 100, row_h, export_format == export_format_obj, true)) {
+        export_format = export_format_obj;
+    }
+    if (draw_export_button(cmd, ui_element, "PNG", label_x + 324, y, 100, row_h, export_format == export_format_png, png_allowed)) {
         export_format = export_format_png;
     }
     y += row_h + 10;
 
-    draw_text_element(cmd, ui_element, "Objects export in object space, in meters.", label_x, y, get_theme_hint_color());
+    char units_line[96];
+    snprintf(units_line, sizeof(units_line), "Object space, %s units (change in Preferences > Import / Export).", get_unit_profile_name(g_unit_prefs.export_profile));
+    draw_text_element(cmd, ui_element, units_line, label_x, y, get_theme_hint_color());
     y += ui_font_h + 4;
     draw_text_element(cmd, ui_element, "PNG exports an image from the File Archive.", label_x, y, get_theme_hint_color());
     y += ui_font_h + 4;

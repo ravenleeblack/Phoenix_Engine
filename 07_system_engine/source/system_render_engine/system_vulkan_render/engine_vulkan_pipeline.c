@@ -150,7 +150,7 @@ void destroy_module_if_valid(VkDevice device, VkShaderModule mesh, const VkAlloc
    returning an error, so it is checked and clamped to 1x. it must also equal the offscreen pass sample count. */
 VkSampleCountFlagBits get_valid_grid_sample_count(vulkan_system_context* context)
 {
-    VkSampleCountFlagBits requested = get_render_msaa_sample_count();
+    VkSampleCountFlagBits requested = get_scene_msaa_sample_count();
     VkSampleCountFlags supported = context->device.properties.limits.framebufferColorSampleCounts &
                                    context->device.properties.limits.framebufferDepthSampleCounts;
 

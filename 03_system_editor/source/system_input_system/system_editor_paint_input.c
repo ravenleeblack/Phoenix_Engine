@@ -154,7 +154,7 @@ void paint_input_update(system_element_context* ui_element)
     g_paint_prev_down = down;
 
     system_scene_object* obj = find_scene_object_by_id(g_scene_registry.selected_object_id);
-    if (obj && obj->type != scene_object_mesh) obj = 0;
+    if (obj && (obj->type != scene_object_mesh || is_terrain_object(obj))) obj = 0;   /* the terrain has its own brush (system_terrain_brush.c) */
 
     edit_mode_mesh* mesh = 0;
     if (obj) mesh = em_registry_get_or_create(obj);

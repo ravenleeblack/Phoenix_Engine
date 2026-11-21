@@ -13,8 +13,9 @@ void texshop_build_skin_gpu(uint32_t skin_id)
 
 extern int find_memory_index(unsigned int type_filter, unsigned int property_flags);   /* system_vulkan_backend.c */
 
-/* std140 image of mesh_frag.glsl `Skin`:  uvec4 head; struct { vec4 color; vec4 params; } layers[16];  = 16 + 16 * 32 = 528 bytes */
-#define SKIN_UBO_FLOATS (4 + SKIN_GPU_MAX_LAYERS * 8)
+/* std140 image of mesh_frag.glsl `Skin`:  uvec4 head; struct { vec4 color; vec4 params; } layers[16]; vec4 surface;  = 16 + 16 * 32 + 16 = 544 bytes
+   surface = specular, gloss, height scale, ambient */
+#define SKIN_UBO_FLOATS (4 + SKIN_GPU_MAX_LAYERS * 8 + 4)
 #define SKIN_UBO_SIZE   ((VkDeviceSize)(SKIN_UBO_FLOATS * sizeof(float)))
 
 #define SKIN_CACHE_MAX   48     /* 32 skins + the empty one + headroom */
@@ -30,6 +31,8 @@ typedef struct {
     VkDescriptorSet set;
     skin_texture    texture;          /* the skin's own base color map, when it has one */
     bool            owns_texture;
+    skin_texture    aux;              /* packed specular / height / ambient maps, when the skin has any */
+    bool            owns_aux;
 } skin_gpu_block;
 
 typedef struct { uint32_t id; bool used; skin_gpu_block block; } skin_cache_entry;
@@ -194,13 +197,14 @@ static void skin_destroy_block(skin_gpu_block* b)
     if (b->buffer != VK_NULL_HANDLE) vkDestroyBuffer(s_device, b->buffer, NULL);
     if (b->memory != VK_NULL_HANDLE) vkFreeMemory(s_device, b->memory, NULL);
     if (b->owns_texture) skin_destroy_texture(&b->texture);
+    if (b->owns_aux) skin_destroy_texture(&b->aux);
     memset(b, 0, sizeof(*b));
 }
 
 static void skin_pack(const skin_gpu_data* data, bool use_vertex_colour, bool has_map, float out[SKIN_UBO_FLOATS])
 {
     memset(out, 0, SKIN_UBO_FLOATS * sizeof(float));
-    uint32_t head[4] = { 0, use_vertex_colour ? 1u : 0u, has_map ? 1u : 0u, 0 };
+    uint32_t head[4] = { 0, use_vertex_colour ? 1u : 0u, has_map ? 1u : 0u, data->aux_flags };
 
     uint32_t face_type = data->layer_count;
     if (face_type > SKIN_GPU_MAX_LAYERS) face_type = SKIN_GPU_MAX_LAYERS;
@@ -217,15 +221,25 @@ static void skin_pack(const skin_gpu_data* data, bool use_vertex_colour, bool ha
         dst[6] = l->triplanar ? 1.0f : 0.0f;
         dst[7] = 0.0f;
     }
+
+    float* surface = &out[4 + SKIN_GPU_MAX_LAYERS * 8];
+    surface[0] = data->specular;
+    surface[1] = data->gloss;
+    surface[2] = data->height_scale;
+    surface[3] = data->ambient;
 }
 
-/* own_texture: the skin's map (copied into the block, which then frees it). NULL = the shared white texture. */
-static bool skin_build_block(const float* ubo, const skin_texture* own_texture, skin_gpu_block* out)
+/* own_texture / own_aux: the skin's maps (copied into the block, which then frees them). NULL = the shared white texture. */
+static bool skin_build_block(const float* ubo, const skin_texture* own_texture, const skin_texture* own_aux, skin_gpu_block* out)
 {
     memset(out, 0, sizeof(*out));
     if (own_texture) {
         out->texture = *own_texture;
         out->owns_texture = true;
+    }
+    if (own_aux) {
+        out->aux = *own_aux;
+        out->owns_aux = true;
     }
 
     VkBufferCreateInfo bi = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -269,7 +283,12 @@ static bool skin_build_block(const float* ubo, const skin_texture* own_texture, 
         bound = &out->texture;
     }
     VkDescriptorImageInfo image_info = { s_sampler, bound->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    VkWriteDescriptorSet writes[2];
+    const skin_texture* aux_bound = &s_white;
+    if (out->owns_aux) {
+        aux_bound = &out->aux;
+    }
+    VkDescriptorImageInfo aux_info = { s_sampler, aux_bound->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkWriteDescriptorSet writes[3];
     memset(writes, 0, sizeof(writes));
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = out->set;
@@ -283,7 +302,13 @@ static bool skin_build_block(const float* ubo, const skin_texture* own_texture, 
     writes[1].descriptorCount = 1;
     writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writes[1].pImageInfo = &image_info;
-    vkUpdateDescriptorSets(s_device, 2, writes, 0, NULL);
+    writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[2].dstSet = out->set;
+    writes[2].dstBinding = 2;
+    writes[2].descriptorCount = 1;
+    writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[2].pImageInfo = &aux_info;
+    vkUpdateDescriptorSets(s_device, 3, writes, 0, NULL);
     return true;
 }
 
@@ -328,7 +353,7 @@ bool skin_gpu_create_layout(VkDevice device)
     if (s_layout != VK_NULL_HANDLE) skin_gpu_shutdown(s_device);   /* device changed (should not happen) */
     s_device = device;
 
-    VkDescriptorSetLayoutBinding bindings[2];
+    VkDescriptorSetLayoutBinding bindings[3];
     memset(bindings, 0, sizeof(bindings));
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -338,8 +363,12 @@ bool skin_gpu_create_layout(VkDevice device)
     bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings[2].binding = 2;                                        /* packed specular / height / ambient maps (mesh_frag.glsl skin_aux) */
+    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[2].descriptorCount = 1;
+    bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     VkDescriptorSetLayoutCreateInfo li = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    li.bindingCount = 2;
+    li.bindingCount = 3;
     li.pBindings = bindings;
     if (vkCreateDescriptorSetLayout(device, &li, NULL, &s_layout) != VK_SUCCESS) {
         s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
@@ -349,7 +378,7 @@ bool skin_gpu_create_layout(VkDevice device)
 
     VkDescriptorPoolSize sizes[2] = {
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, SKIN_POOL_SETS },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, SKIN_POOL_SETS }
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, SKIN_POOL_SETS * 2 }
     };
     VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;   /* sets are freed one by one when a skin is retired */
@@ -391,7 +420,7 @@ bool skin_gpu_create_layout(VkDevice device)
     grey.layers[0].channel_mask = 1u;
     float ubo[SKIN_UBO_FLOATS];
     skin_pack(&grey, true, false, ubo);
-    if (!skin_build_block(ubo, NULL, &s_empty)) {
+    if (!skin_build_block(ubo, NULL, NULL, &s_empty)) {
         phoenix_error("SKIN", "Failed to build the shared empty skin set.");
         skin_destroy_texture(&s_white);
         vkDestroySampler(device, s_sampler, NULL);
@@ -429,6 +458,7 @@ bool skin_gpu_set(uint32_t skin_id, const skin_gpu_data* data)
     if (!s_device || s_layout == VK_NULL_HANDLE || skin_id == 0 || !data) return false;
 
     const bool wants_map = data->map_pixels != NULL && data->map_width > 0 && data->map_height > 0;
+    const bool wants_aux = data->aux_pixels != NULL && data->aux_width > 0 && data->aux_height > 0;
 
     skin_gpu_block fresh;
     bool built = false;
@@ -441,9 +471,15 @@ bool skin_gpu_set(uint32_t skin_id, const skin_gpu_data* data)
         float ubo[SKIN_UBO_FLOATS];
         skin_pack(data, false, has_map, ubo);
 
+        skin_texture aux;
+        memset(&aux, 0, sizeof(aux));
+        const bool has_aux = wants_aux && skin_create_texture(data->aux_pixels, data->aux_width, data->aux_height, &aux);
+
         const skin_texture* own = NULL;
         if (has_map) own = &map;
-        built = skin_build_block(ubo, own, &fresh);          /* a failed build frees the texture it was given */
+        const skin_texture* own_aux = NULL;
+        if (has_aux) own_aux = &aux;
+        built = skin_build_block(ubo, own, own_aux, &fresh); /* a failed build frees the textures it was given */
         if (!built) skin_gpu_flush();                         /* pool may be full of retired sets: free them and retry once */
     }
     if (!built) return false;

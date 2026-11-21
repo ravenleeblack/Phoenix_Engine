@@ -14,7 +14,6 @@ const int main_every_m = 16;
 const int chunk_size_m = 2000;
 const int chunk_border_m = 1000;
 const float depth_bias = 1.0e-6;
-const int half_extent_m = 2000;
 
 const vec3 color_sub    = vec3(0.36, 0.36, 0.39);
 const vec3 color_main   = vec3(0.52, 0.52, 0.56);
@@ -32,6 +31,8 @@ vec3 pick_line_color(int coord_m, vec3 axis_color) {
 
 void main()
 {
+    // the cpu passes the grid half size in cells as firstInstance: gl_InstanceIndex = cells per half side
+    int half_extent_m = max(gl_InstanceIndex, 1) * cell_size_m;
     int lines_per_axis = (half_extent_m * 2) / cell_size_m + 1;
     int verts_per_axis = lines_per_axis * 2;
 

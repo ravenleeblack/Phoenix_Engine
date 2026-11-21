@@ -6,7 +6,6 @@ extern int find_memory_index(unsigned int type_filter, unsigned int property_fla
 /* grid_vert.glsl: half_extent_m = 2000, cell_size_m = 4 -> lines_per_axis = (2000*2)/4 + 1 = 1001, verts_per_axis = 2002, two axes = 4004.
    If this is larger than the shader's real count, the extra vertices are drawn as more Z lines past x = +2000 and the grid stops being square.
    Change half_extent_m / cell_size_m in grid_vert.glsl and this number together (same number lives in system_grid.c). */
-#define GRID_VERTEX_COUNT 4004   /* must match grid_vert.glsl: 1001 lines per axis * 2 axes * 2 verts */
 #define OFFSCREEN_MAX_DIM 8192u
 
 typedef struct {
@@ -540,7 +539,13 @@ static void draw_scene_view(VkCommandBuffer cmd, uint32_t w, uint32_t h)
 
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_grid);
         vkCmdPushConstants(cmd, pipeline_layout_grid, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
-        if (g_scene_view.show_grid) vkCmdDraw(cmd, GRID_VERTEX_COUNT, 1, 0, 0);   /* Grid button (includes the red / blue axis lines) */
+        if (g_scene_view.show_grid) {   /* Grid button (includes the red / blue axis lines) */
+            uint32_t grid_half = (uint32_t)g_scene_view.grid_half_cells;
+            if (grid_half < 1u) {
+                grid_half = 50u;
+            }
+            vkCmdDraw(cmd, (grid_half * 2u + 1u) * 4u, 1, 0, grid_half);   /* firstInstance carries the grid size to grid_vert.glsl */
+        }
     }
 
     /* Meshes, camera glyphs, origin marker. Binds its own pipeline, so it comes after the grid. */

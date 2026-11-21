@@ -6,6 +6,7 @@ bool create_editor_scene_object_pipeline(VkPhysicalDevice physical_device, VkDev
 #include "system_scene_offscreen.h"
 
 extern void record_editor_offscreen_frame(VkCommandBuffer cmd);
+int get_dock_cursor_kind(const manage_docking* manager, int mx, int my);   /* system_dock.c */
 extern bool create_editor_offscreen_resources(void);
 extern void shutdown_editor_offscreen(void);
 
@@ -40,11 +41,14 @@ __declspec(dllexport) bool editor_load_settings(void)
     return true;
 }
 
+__declspec(dllexport) void editor_apply_settings(void)
+{
+    update_system_preference();
+}
+
 __declspec(dllexport) void editor_save_settings(void)
 {
     prefs_save();
-    editor_state_write_to_db();
-    settings_db_save();
 }
 
 __declspec(dllexport) bool editor_start(void)
@@ -93,6 +97,8 @@ __declspec(dllexport) void editor_update(float delta_time)
     system_wheel_hook_update();
     preferences_begin_frame(&element_context);
     export_begin_frame(&element_context);
+    update_system_object_picking(&element_context);   /* click an object in the Scene view */
+    update_system_undo(&element_context);             /* Ctrl+Z / Ctrl+Y and Edit > Undo / Redo */
 }
 
 __declspec(dllexport) VkCommandBuffer editor_begin_frame_pass(void)
@@ -200,6 +206,26 @@ __declspec(dllexport) bool editor_handle_message(HWND hwnd, UINT message, WPARAM
             context_menu_notify_right_button(element_context.input.mouse_x, element_context.input.mouse_y);
             if (result) *result = 0;
             return true;
+        case WM_SETCURSOR: {
+            /* windows asks before every mouse move which cursor to show: a resize arrow over a dock divider, otherwise the normal one */
+            if (LOWORD(lp) == HTCLIENT) {
+                POINT cursor_point;
+                if (GetCursorPos(&cursor_point) && ScreenToClient(hwnd, &cursor_point)) {
+                    const int cursor_kind = get_dock_cursor_kind(&dock_workspace, cursor_point.x, cursor_point.y);
+                    if (cursor_kind == 1) {
+                        SetCursor(LoadCursor(NULL, IDC_SIZEWE));
+                        if (result) *result = TRUE;
+                        return true;
+                    }
+                    if (cursor_kind == 2) {
+                        SetCursor(LoadCursor(NULL, IDC_SIZENS));
+                        if (result) *result = TRUE;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
         case WM_CAPTURECHANGED:
             if (lp != 0 && (HWND)lp != hwnd) {
                 clear_editor_input_state();                    /* another window took the mouse: the button up will not come to us */
@@ -240,6 +266,11 @@ __declspec(dllexport) void editor_shutdown(void)
 __declspec(dllexport) bool offscreen_create_renderpass(VkDevice device, VkFormat color_format, VkFormat depth_format)
 {
     render_context.logical_device = device;
+    /* the sample count is decided from the physical device. Without it get_msaa_sample_count() answers 1 here and 4 later, and the pipelines no longer match this pass. */
+    system_render_context* engine_render_context = get_engine_render_context();
+    if (engine_render_context) {
+        render_context.physical_device = engine_render_context->physical_device;
+    }
     return create_editor_offscreen_renderpass(device, color_format, depth_format);
 }
 

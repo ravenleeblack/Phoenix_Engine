@@ -51,7 +51,7 @@ system_color system_color_accent_01                          = system_rgba(232, 
 system_color system_color_accent_02                          = system_rgba(182,  80, 102, 255);   /* plum */
 system_color system_color_accent_03                          = system_rgba(204, 102,   0, 255);   /* graphite */
 
-system_color system_color_main_menu_bg_00                    = system_rgba( 43,  43,  43, 255);   /* maya */
+system_color system_color_main_menu_bg_00                    = system_rgba( 90,  90,  90, 255);   /* maya */
 system_color system_color_main_menu_bg_01                    = system_rgba( 34,  35,  38, 255);   /* zbrush */
 system_color system_color_main_menu_bg_02                    = system_rgba( 32,  20,  30, 255);   /* plum */
 system_color system_color_main_menu_bg_03                    = system_rgba( 36,  36,  36, 255);   /* graphite */
@@ -106,7 +106,7 @@ system_color system_color_tool_menu_hort_sep_01              = system_rgba( 12, 
 system_color system_color_tool_menu_hort_sep_02              = system_rgba(182,  80, 102, 255);   /* plum */
 system_color system_color_tool_menu_hort_sep_03              = system_rgba(204, 102,   0, 255);   /* graphite */
 
-system_color system_color_stop_status_menu_bg_00             = system_rgba( 38,  38,  38, 255);   /* maya */
+system_color system_color_stop_status_menu_bg_00             = system_rgba( 90,  90,  90, 255);   /* maya */
 system_color system_color_stop_status_menu_bg_01             = system_rgba( 28,  29,  32, 255);   /* zbrush */
 system_color system_color_stop_status_menu_bg_02             = system_rgba( 24,  15,  23, 255);   /* plum */
 system_color system_color_stop_status_menu_bg_03             = system_rgba( 30,  30,  30, 255);   /* graphite */
@@ -246,7 +246,7 @@ system_color system_color_tab_item_01                        = system_rgba( 40, 
 system_color system_color_tab_item_02                        = system_rgba( 48,  30,  44, 255);   /* plum */
 system_color system_color_tab_item_03                        = system_rgba( 46,  46,  46, 255);   /* graphite */
 
-system_color system_color_tab_item_active_00                 = system_rgba( 60,  60,  60, 255);   /* maya */
+system_color system_color_tab_item_active_00                 = system_rgba( 90,  90,  90, 255);   /* maya */
 system_color system_color_tab_item_active_01                 = system_rgba( 62,  63,  69, 255);   /* zbrush */
 system_color system_color_tab_item_active_02                 = system_rgba( 76,  50,  70, 255);   /* plum */
 system_color system_color_tab_item_active_03                 = system_rgba( 70,  70,  70, 255);   /* graphite */
@@ -276,7 +276,7 @@ system_color system_color_tab_close_text_01                  = system_rgba(255, 
 system_color system_color_tab_close_text_02                  = system_rgba(255, 255, 255, 255);   /* plum */
 system_color system_color_tab_close_text_03                  = system_rgba(255, 255, 255, 255);   /* graphite */
 
-system_color system_color_tab_sub_menubar_00                 = system_rgba( 60,  60,  60, 255);   /* maya */
+system_color system_color_tab_sub_menubar_00                 = system_rgba( 90,  90,  90, 255);   /* maya */
 system_color system_color_tab_sub_menubar_01                 = system_rgba( 52,  53,  58, 255);   /* zbrush */
 system_color system_color_tab_sub_menubar_02                 = system_rgba( 48,  30,  44, 255);   /* plum */
 system_color system_color_tab_sub_menubar_03                 = system_rgba( 60,  60,  60, 255);   /* graphite */
@@ -296,7 +296,7 @@ system_color system_color_tab_sub_menubar_button_active_01   = system_rgba(232, 
 system_color system_color_tab_sub_menubar_button_active_02   = system_rgba(182,  80, 102, 255);   /* plum */
 system_color system_color_tab_sub_menubar_button_active_03   = system_rgba(204, 102,   0, 255);   /* graphite */
 
-system_color system_color_tab_content_window_bg_00           = system_rgba( 50,  50,  50, 255);   /* maya */
+system_color system_color_tab_content_window_bg_00           = system_rgba( 90,  90,  90, 255);   /* maya */
 system_color system_color_tab_content_window_bg_01           = system_rgba( 46,  47,  51, 255);   /* zbrush */
 system_color system_color_tab_content_window_bg_02           = system_rgba( 44,  30,  41, 255);   /* plum */
 system_color system_color_tab_content_window_bg_03           = system_rgba( 50,  50,  50, 255);   /* graphite */
@@ -331,7 +331,7 @@ system_color system_color_scene_manipulator_input_text_01    = system_rgba(255, 
 system_color system_color_scene_manipulator_input_text_02    = system_rgba(255, 255, 255, 255);   /* plum */
 system_color system_color_scene_manipulator_input_text_03    = system_rgba(255, 255, 255, 255);   /* graphite */
 
-system_color system_color_strip_window_body_00               = system_rgba( 20,  20,  20, 255);   /* maya */
+system_color system_color_strip_window_body_00               = system_rgba( 90,  90,  90, 255);   /* maya */
 system_color system_color_strip_window_body_01               = system_rgba( 24,  25,  27, 255);   /* zbrush */
 system_color system_color_strip_window_body_02               = system_rgba( 18,  12,  18, 255);   /* plum */
 system_color system_color_strip_window_body_03               = system_rgba( 30,  30,  30, 255);   /* graphite */

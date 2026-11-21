@@ -294,7 +294,7 @@ bool check_sculpt_scene_view(const system_element_context* ui_element)
 system_scene_object* find_sculpt_selected_mesh(void)
 {
     system_scene_object* o = find_scene_object_by_id(g_scene_registry.selected_object_id);
-    if (o && o->type == scene_object_mesh) return o;
+    if (o && o->type == scene_object_mesh && !is_terrain_object(o)) return o;   /* the terrain has its own brush (system_terrain_brush.c) */
     return 0;
 }
 

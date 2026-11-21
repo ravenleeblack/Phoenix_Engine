@@ -175,7 +175,13 @@ void draw_system_grid_axis_stream(VkCommandBuffer cmd, VkPipelineLayout layout_3
     build_scene_orbit_camera(aspect, &pc.view, &pc.projection);
 
     vkCmdPushConstants(cmd, layout_3d, stages, 0, (uint32_t)sizeof(pc), &pc);
-    if (g_scene_view.show_grid) vkCmdDraw(cmd, grid_vertex_count, 1, 0, 0);
+    if (g_scene_view.show_grid) {
+        uint32_t grid_half = (uint32_t)g_scene_view.grid_half_cells;
+        if (grid_half < 1u) {
+            grid_half = 50u;
+        }
+        vkCmdDraw(cmd, (grid_half * 2u + 1u) * 4u, 1, 0, grid_half);   /* firstInstance carries the grid size to grid_vert.glsl */
+    }
 
     draw_scene_objects(cmd, (const float*)&pc.view, (const float*)&pc.projection);
 }

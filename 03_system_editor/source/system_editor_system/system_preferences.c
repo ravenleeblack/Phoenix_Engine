@@ -99,6 +99,21 @@ void apply_prefs_from_db(bool allow_legacy_migration)
         }
     }
 
+    {
+        int grid_cells = 0;
+        if (settings_db_get_int("prefs.grid_cells", &grid_cells) && grid_cells >= 1 && grid_cells <= 500) { g_scene_view.grid_half_cells = grid_cells; found = true; }
+    }
+    {
+        float units[2];
+        if (settings_db_get_floats("prefs.units", units, 2)) {
+            const int import_profile = (int)(units[0] + 0.5f);
+            const int export_profile = (int)(units[1] + 0.5f);
+            if (import_profile >= 0 && import_profile < unit_profile_count) { g_unit_prefs.import_profile = import_profile; }
+            if (export_profile >= 0 && export_profile < unit_profile_zbrush) { g_unit_prefs.export_profile = export_profile; }
+            found = true;
+        }
+    }
+
     editor_state_apply_from_db();
 
     if (allow_legacy_migration && !found && load_legacy_ini()) {
@@ -133,6 +148,9 @@ void prefs_write(void)
     f[0] = g_light.min_light; f[1] = g_light.enabled ? 1.0f : 0.0f; f[2] = (float)g_light.layer;     settings_db_set_floats("prefs.light", f, 3);
 
     f[0] = g_light.sun_intensity; f[1] = g_light.sun_warmth;     settings_db_set_floats("prefs.sunlight", f, 2);
+
+    settings_db_set_int("prefs.grid_cells", g_scene_view.grid_half_cells);
+    f[0] = (float)g_unit_prefs.import_profile; f[1] = (float)g_unit_prefs.export_profile;     settings_db_set_floats("prefs.units", f, 2);
 
     editor_state_write_to_db();
 
@@ -174,6 +192,7 @@ VkSampleCountFlagBits get_msaa_sample_count(void)
         int cap  = max_supported_msaa();
         preferences_active_msaa = (want > cap) ? cap : want;
         if (preferences_active_msaa < 2) preferences_active_msaa = 1;
+        set_engine_scene_msaa(preferences_active_msaa);   /* the engine's grid pipeline must use the same count as the scene pass */
         phoenix_info("Prefs", "MSAA active: %dx (requested %dx, GPU max %dx)", preferences_active_msaa, want, cap);
     }
     switch (preferences_active_msaa) {
@@ -203,6 +222,7 @@ int          preferences_window_x = -1;
 int          preferences_window_y = -1;
 int          preferences_window_drag_offset_x = 0;
 int          preferences_window_drag_offset_y = 0;
+int          preferences_tab = 0;           /* 0 general, 1 grid, 2 camera, 3 import / export, 4 build */
 
 /* Late re-apply. prefs_load() runs before the renderer / editor elements exist, so later init code can overwrite
    what it loaded. Call this once everything is up: it re-reads the file and sets every option again.
@@ -232,6 +252,7 @@ void open_preferences_window(void)
     preferences_pressed         = false;
     preferences_drag_id         = -1;
     preferences_window_dragging = false;
+    preferences_tab             = 0;
     preferences_window_x        = -1;
     preferences_window_y        = -1;
 }
@@ -336,6 +357,60 @@ void pref_slider(VkCommandBuffer cmd, system_element_context* ui_element, int id
     draw_text_element(cmd, ui_element, buf, tx + tw + 10, y + (h - ui_font_h) / 2, system_theme.system_text);
 }
 
+/* runs one of the tools next to the exe (10_system_build, 09_system_installer) and waits for it. returns its exit code, or -1 when it could not start */
+int run_build_tool(const char* tool_file, const char* arguments)
+{
+    char tool_path[MAX_PATH];
+    if (!settings_db_make_path(tool_file, tool_path, sizeof(tool_path))) {
+        return -1;
+    }
+    char command[MAX_PATH * 2 + 8];
+    snprintf(command, sizeof(command), "\"%s\" %s", tool_path, arguments);
+
+    STARTUPINFOA startup;
+    PROCESS_INFORMATION process;
+    memset(&startup, 0, sizeof(startup));
+    memset(&process, 0, sizeof(process));
+    startup.cb = sizeof(startup);
+    if (!CreateProcessA(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &startup, &process)) {
+        return -1;
+    }
+    WaitForSingleObject(process.hProcess, 60000);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    CloseHandle(process.hProcess);
+    CloseHandle(process.hThread);
+    return (int)exit_code;
+}
+
+/* Preferences > Build: 01_bin -> game_build next to the exe, without the editor. the installer is copied in beside it. */
+void build_game_folder(void)
+{
+    char output_folder[MAX_PATH];
+    char installer_from[MAX_PATH];
+    char installer_to[MAX_PATH + 32];
+    char arguments[MAX_PATH + 8];
+    if (!settings_db_make_path("game_build", output_folder, sizeof(output_folder))) {
+        set_preferences_status("Build: could not find the exe folder.");
+        return;
+    }
+    snprintf(arguments, sizeof(arguments), "\"%s\"", output_folder);
+    const int result = run_build_tool("phoenix_build.exe", arguments);
+    if (result < 0) {
+        set_preferences_status("Build: phoenix_build.exe was not found next to the editor. Run make all.");
+        return;
+    }
+    if (result != 0) {
+        set_preferences_status("Build finished with errors (exit code %d).", result);
+        return;
+    }
+    if (settings_db_make_path("phoenix_installer.exe", installer_from, sizeof(installer_from))) {
+        snprintf(installer_to, sizeof(installer_to), "%s\\phoenix_installer.exe", output_folder);
+        CopyFileA(installer_from, installer_to, FALSE);
+    }
+    set_preferences_status("Build done: %s", output_folder);
+}
+
 void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_element, int screen_w, int screen_h)
 {
     if (!preferences_window_open || !ui_element) return;
@@ -399,7 +474,24 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
     int y = Y + 28 + pad;
     const int label_x = X + pad;
     const int ctl_x   = X + 170;
+    const int cap     = max_supported_msaa();
+    int bx            = ctl_x;
 
+    /* ---- tabs ---- */
+    const char* tab_names[5] = { "General", "Grid", "Camera", "Import / Export", "Build" };
+    const int tab_widths[5]  = { 80, 60, 75, 130, 64 };
+    int tab_x = label_x;
+    for (int i = 0; i < 5; i++) {
+        if (pref_button(cmd, ui_element, tab_names[i], tab_x, y - pad + 6, tab_widths[i], row_h, preferences_tab == i, true)) {
+            preferences_tab = i;
+        }
+        tab_x += tab_widths[i] + 6;
+    }
+    y += row_h - pad + 14;
+    push_quad_element(cmd, (float)label_x, (float)(y - 6), (float)(W - pad * 2), 1.0f, sep_color);
+    y += 6;
+
+    if (preferences_tab == 0) {
     /* ---- Anti-aliasing ---- */
     draw_text_element(cmd, ui_element, "ANTI-ALIASING", label_x, y, system_theme.menu_active_text);
     push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f,
@@ -407,9 +499,8 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
     y += ui_font_h + 14;
 
     /* MSAA: Off / 2x / 4x / 8x. Applies to the 3D grid, scene objects (cube, camera, terrain) and the UI pass. */
-    const int cap = max_supported_msaa();
     draw_text_element(cmd, ui_element, "MSAA", label_x, y + 3, system_theme.system_text);
-    int bx = ctl_x;
+    bx = ctl_x;
     if (pref_button(cmd, ui_element, "Off", bx, y, 52, row_h, preferences_pending.msaa_samples == 1, true)) { preferences_pending.msaa_samples = 1; g_prefs = preferences_pending; prefs_save(); preferences_saved_note = true; set_preferences_status("MSAA: Off (restart the editor to apply)."); }
     bx += 58;
     if (pref_button(cmd, ui_element, "2x", bx, y, 52, row_h, preferences_pending.msaa_samples == 2, cap >= 2)) { preferences_pending.msaa_samples = 2; g_prefs = preferences_pending; prefs_save(); preferences_saved_note = true; set_preferences_status("MSAA: 2x (restart the editor to apply)."); }
@@ -498,9 +589,40 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
 
     draw_text_element(cmd, ui_element, "Sun, ambient and terrain light: Lighting tab (next to Inspector).", cx0, y, get_theme_hint_color());
     y += ui_font_h + 6;
+    }
 
-    /* ---- Camera: Scene view clip planes and pan speed (until there is a Camera window) ---- */
-    y += 10;
+    if (preferences_tab == 1) {
+    /* ---- Grid: one cell is 4 m, the size of a cube / plane ---- */
+    draw_text_element(cmd, ui_element, "GRID", label_x, y, system_theme.menu_active_text);
+    push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
+    y += ui_font_h + 14;
+
+    draw_text_element(cmd, ui_element, "Show grid", label_x, y + 3, system_theme.system_text);
+    if (pref_button(cmd, ui_element, "On",  ctl_x,      y, 52, row_h,  g_scene_view.show_grid, true)) { g_scene_view.show_grid = true;  prefs_save(); set_preferences_status("Grid: on."); }
+    if (pref_button(cmd, ui_element, "Off", ctl_x + 58, y, 52, row_h, !g_scene_view.show_grid, true)) { g_scene_view.show_grid = false; prefs_save(); set_preferences_status("Grid: off."); }
+    y += row_h + 10;
+
+    draw_text_element(cmd, ui_element, "Grid size", label_x, y + 3, system_theme.system_text);
+    const int grid_half_choices[5] = { 16, 32, 50, 125, 250 };
+    const char* grid_size_names[5] = { "128 m", "256 m", "400 m", "1 km", "2 km" };
+    bx = ctl_x;
+    for (int i = 0; i < 5; i++) {
+        if (pref_button(cmd, ui_element, grid_size_names[i], bx, y, 56, row_h, g_scene_view.grid_half_cells == grid_half_choices[i], true)) {
+            g_scene_view.grid_half_cells = grid_half_choices[i];
+            prefs_save();
+            set_preferences_status("Grid size: %s across.", grid_size_names[i]);
+        }
+        bx += 62;
+    }
+    y += row_h + 14;
+
+    draw_text_element(cmd, ui_element, "One cell is 4 m x 4 m: the size of a cube and a plane.", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "Brighter lines every 16 m (4 cells).", label_x, y, get_theme_hint_color());
+    }
+
+    if (preferences_tab == 2) {
+    /* ---- Camera: Scene view clip planes and pan speed ---- */
     draw_text_element(cmd, ui_element, "CAMERA", label_x, y, system_theme.menu_active_text);
     push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
     y += ui_font_h + 14;
@@ -512,6 +634,84 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
     pref_slider(cmd, ui_element, 11, "Pan speed",      120, label_x, y, W - pad * 2, &g_camera_prefs.pan_speed,  1.0f,   30.0f,    1.0f);
     y += 22;
     camera_prefs_clamp();
+    }
+
+    if (preferences_tab == 4) {
+    /* ---- Build: a game folder without the editor, and its installer ---- */
+    draw_text_element(cmd, ui_element, "GAME BUILD", label_x, y, system_theme.menu_active_text);
+    push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
+    y += ui_font_h + 14;
+
+    if (pref_button(cmd, ui_element, "Build game folder", label_x, y, 170, row_h, false, true)) {
+        build_game_folder();
+    }
+    char build_folder[MAX_PATH];
+    if (settings_db_make_path("game_build", build_folder, sizeof(build_folder))) {
+        if (pref_button(cmd, ui_element, "Open folder", label_x + 180, y, 120, row_h, false, true)) {
+            ShellExecuteA(NULL, "open", build_folder, NULL, NULL, SW_SHOWNORMAL);
+        }
+    }
+    y += row_h + 10;
+    draw_text_element(cmd, ui_element, "Copies the engine, game, loader, shaders and assets into game_build", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "next to the editor. The editor and its settings file stay behind.", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 22;
+
+    draw_text_element(cmd, ui_element, "INSTALLER", label_x, y, system_theme.menu_active_text);
+    push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
+    y += ui_font_h + 14;
+    draw_text_element(cmd, ui_element, "game_build\\phoenix_installer.exe installs that folder to", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "%LOCALAPPDATA%\\phoenix_game and writes an uninstall.bat.", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "The game still needs the editor dll to start: no-editor boot is next.", label_x, y, get_theme_hint_color());
+    }
+
+    if (preferences_tab == 3) {
+    /* ---- Import / Export: models are sized in meters inside the engine (a cube is 4 m) ---- */
+    draw_text_element(cmd, ui_element, "IMPORT (.fbx, .obj)", label_x, y, system_theme.menu_active_text);
+    push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
+    y += ui_font_h + 14;
+
+    draw_text_element(cmd, ui_element, "Incoming sizes", label_x, y + 3, system_theme.system_text);
+    bx = ctl_x;
+    for (int i = 0; i < unit_profile_count; i++) {
+        if (pref_button(cmd, ui_element, get_unit_profile_name(i), bx, y, 72, row_h, g_unit_prefs.import_profile == i, true)) {
+            g_unit_prefs.import_profile = i;
+            prefs_save();
+            set_preferences_status("Import sizes: %s.", get_unit_profile_name(i));
+        }
+        bx += 78;
+    }
+    y += row_h + 10;
+    draw_text_element(cmd, ui_element, "Phoenix / Unity: .obj numbers are meters. Maya / ZBrush: centimeters.", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "Phoenix, Maya and Unity trust the units stored in an .fbx file.", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "ZBrush ignores them and reads every .fbx number as centimeters.", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 22;
+
+    draw_text_element(cmd, ui_element, "EXPORT (.fbx, .obj)", label_x, y, system_theme.menu_active_text);
+    push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
+    y += ui_font_h + 14;
+
+    draw_text_element(cmd, ui_element, "Outgoing sizes", label_x, y + 3, system_theme.system_text);
+    bx = ctl_x;
+    for (int i = 0; i < unit_profile_zbrush; i++) {
+        if (pref_button(cmd, ui_element, get_unit_profile_name(i), bx, y, 72, row_h, g_unit_prefs.export_profile == i, true)) {
+            g_unit_prefs.export_profile = i;
+            prefs_save();
+            set_preferences_status("Export sizes: %s.", get_unit_profile_name(i));
+        }
+        bx += 78;
+    }
+    y += row_h + 10;
+    draw_text_element(cmd, ui_element, "Phoenix and Unity: meters (a 4 m cube exports 4 units wide).", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "Maya: centimeters (the same cube exports 400 units wide).", label_x, y, get_theme_hint_color());
+    y += ui_font_h + 4;
+    draw_text_element(cmd, ui_element, "The unit scale is also written into the .fbx header.", label_x, y, get_theme_hint_color());
+    }
 
     if (preferences_look_dirty && !preferences_real_down) { prefs_save(); preferences_look_dirty = false; }
 
@@ -519,7 +719,9 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
     int active_msaa_shown = (preferences_active_msaa > 0) ? preferences_active_msaa : g_prefs.msaa_samples;
     int saved_msaa_effective = (g_prefs.msaa_samples > cap) ? cap : g_prefs.msaa_samples;
     bool needs_restart = (saved_msaa_effective != active_msaa_shown) || (g_prefs.vsync != preferences_active_vsync);
-    if (preferences_pending.msaa_samples > cap) {
+    if (preferences_tab != 0) {
+        /* nothing to restart on the other tabs */
+    } else if (preferences_pending.msaa_samples > cap) {
         draw_text_element(cmd, ui_element, "This GPU does not support that sample face_type.", label_x, Y + H - 62, system_theme.menu_active_text);
     } else if (needs_restart || preferences_saved_note) {
         draw_text_element(cmd, ui_element, "Saved. Restart the editor to apply.", label_x, Y + H - 62, system_theme.menu_active_text);

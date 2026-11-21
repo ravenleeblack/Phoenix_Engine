@@ -29,7 +29,7 @@ enum {
     lw_id_unl       = lw_id_base + 31,
     lw_id_rebuild   = lw_id_base + 32,
     lw_id_clear     = lw_id_base + 33,
-    lw_id_add_dir   = lw_id_base + 34,
+    lw_id_add_dir   = lw_id_base + 34,   /* (unused: lights are created from the toolbar) */
     lw_id_slider    = lw_id_base + 40,    /* + n */
     lw_id_light_on  = lw_id_base + 100,   /* + light index * 2 */
     lw_id_light_sel = lw_id_base + 101    /* + light index * 2 */
@@ -177,19 +177,30 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
             draw_text_element(cmd, ui_ctx, line, x, y, system_theme.system_accent);
             y += ui_font_h + 6;
         }
-        changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 4, "Brightness", x, y, w, &g_light.sun_intensity,     0.0f, 3.0f,   100.0f, true); y += lw_row_h;
-        changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 5, "Warm/Cool",  x, y, w, &g_light.sun_warmth,        -1.0f, 1.0f,  100.0f, true); y += lw_row_h;
+        changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 4, "Brightness", x, y, w, &g_light.sun_intensity,     0.0f, 3.0f,   100.0f, !driven); y += lw_row_h;
+        changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 5, "Warm/Cool",  x, y, w, &g_light.sun_warmth,        -1.0f, 1.0f,  100.0f, !driven); y += lw_row_h;
         changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 2, "Ambient",    x, y, w, &g_scene_sun.ambient,       0.0f, 0.9f,   100.0f, true); y += lw_row_h;
         changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 0, "Sun turn",   x, y, w, &g_scene_sun.azimuth_deg,   0.0f, 360.0f, 1.0f, !driven); y += lw_row_h;
         changed |= lw_slider(cmd, ui_ctx, lw_id_slider + 1, "Sun height", x, y, w, &g_scene_sun.elevation_deg, 5.0f, 90.0f,  1.0f, !driven); y += lw_row_h;
-        hint(cmd, ui_ctx, "Brightness: 100 = normal, up to 300",     x, y, w); y += ui_font_h + 4;
-        hint(cmd, ui_ctx, "Warm/Cool: left = blue, right = orange",  x, y, w); y += ui_font_h + 4;
+        if (driven) {
+            hint(cmd, ui_ctx, "Colour, brightness, warm/cool: select the", x, y, w); y += ui_font_h + 4;
+            hint(cmd, ui_ctx, "light object (SELECTED LIGHT below)",       x, y, w); y += ui_font_h + 4;
+        } else {
+            hint(cmd, ui_ctx, "Brightness: 100 = normal, up to 300",     x, y, w); y += ui_font_h + 4;
+            hint(cmd, ui_ctx, "Warm/Cool: left = blue, right = orange",  x, y, w); y += ui_font_h + 4;
+        }
         if (changed) s_save_pending = true;
         y += lw_gap;
     }
 
-    /* ---- TERRAIN LIGHT ---- */
-    if (room(y, 2 * lw_row_h + 14, limit)) {
+    /* ---- TERRAIN LIGHT (hidden while a light object is selected, so its settings have room) ---- */
+    bool light_selected = false;
+    for (int i = 0; i < editor_light_count; i++) {
+        if (editor_lights[i].object_id == g_scene_registry.selected_object_id) {
+            light_selected = true;
+        }
+    }
+    if (!light_selected && room(y, 2 * lw_row_h + 14, limit)) {
         section(cmd, ui_ctx, "TERRAIN LIGHT", x, y, w);
         y += ui_font_h + 10;
 
@@ -210,22 +221,20 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
         section(cmd, ui_ctx, "LIGHT OBJECTS", x, y, w);
         y += ui_font_h + 10;
 
-        if (lw_button(cmd, ui_ctx, lw_id_add_dir, "+ Directional light", x, y, 150, false)) {
-            editor_vec3 obj_vert_pos = { 0.0f, 12.0f, 0.0f };
-            create_system_directional_light(obj_vert_pos, 1.0f, "Directional Light",
-                                            render_context.logical_device, render_context.physical_device,
-                                            render_context.command_pool, render_context.graphics_queue);
-        }
-        y += lw_row_h + 2;
+        hint(cmd, ui_ctx, "Lights are created from the toolbar (after the sun).", x, y, w);
+        y += ui_font_h + 6;
 
+        const char* kind_names[light_kind_count] = { "Dir", "Point", "Spot", "Hemi", "Area" };
         for (int i = 0; i < get_light_object_count() && room(y, lw_row_h, limit); i++) {
             const light_object* lo = get_light_object_at(i);
             if (!lo) break;
             const int sel_w = 52, on_w = 40;
             const int name_w = w - sel_w - on_w - lw_gap * 2;
-            char nm[40];
-            snprintf(nm, sizeof(nm), "%.*s", name_w > 0 ? name_w / ui_font_w : 0, get_light_object_name(i));
-            draw_text_element(cmd, ui_ctx, nm, x, y + (lw_btn_h - ui_font_h) / 2,
+            char nm[56];
+            snprintf(nm, sizeof(nm), "%s: %s", kind_names[lo->kind], get_light_object_name(i));
+            char nm_cut[56];
+            snprintf(nm_cut, sizeof(nm_cut), "%.*s", name_w > 0 ? name_w / ui_font_w : 0, nm);
+            draw_text_element(cmd, ui_ctx, nm_cut, x, y + (lw_btn_h - ui_font_h) / 2,
                               lo->enabled ? system_theme.system_active_text : system_theme.system_text);
             if (lw_button(cmd, ui_ctx, (uint32_t)(lw_id_light_on  + i * 2), lo->enabled ? "On" : "Off",
                           x + name_w + lw_gap, y, on_w, lo->enabled))
@@ -234,6 +243,44 @@ void draw_system_light_window(system_element_context* ui_ctx, system_dock_node* 
                           x + name_w + on_w + lw_gap * 2, y, sel_w, false))
                 select_light_object(i);
             y += lw_row_h;
+        }
+
+        /* the selected light's own settings */
+        light_object* sel = NULL;
+        for (int i = 0; i < editor_light_count; i++) {
+            if (editor_lights[i].object_id == g_scene_registry.selected_object_id) {
+                sel = &editor_lights[i];
+            }
+        }
+        if (sel && room(y, 6 * lw_row_h, limit)) {
+            y += lw_gap;
+            section(cmd, ui_ctx, "SELECTED LIGHT", x, y, w);
+            y += ui_font_h + 10;
+            const int base = lw_id_slider + 20;
+            lw_slider(cmd, ui_ctx, base + 0, "Intensity", x, y, w, &sel->intensity, 0.0f, 4.0f, 100.0f, true); y += lw_row_h;
+            if (sel->kind == light_kind_hemisphere) {
+                lw_slider(cmd, ui_ctx, base + 1, "Sky R", x, y, w, &sel->color[0], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 2, "Sky G", x, y, w, &sel->color[1], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 3, "Sky B", x, y, w, &sel->color[2], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 4, "Ground R", x, y, w, &sel->ground_color[0], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 5, "Ground G", x, y, w, &sel->ground_color[1], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 6, "Ground B", x, y, w, &sel->ground_color[2], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+            } else {
+                lw_slider(cmd, ui_ctx, base + 1, "Red",   x, y, w, &sel->color[0], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 2, "Green", x, y, w, &sel->color[1], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 3, "Blue",  x, y, w, &sel->color[2], 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+            }
+            if (sel->kind != light_kind_hemisphere) {
+                lw_slider(cmd, ui_ctx, base + 10, "Warm/Cool", x, y, w, &sel->warmth, -1.0f, 1.0f, 100.0f, true); y += lw_row_h;
+            }
+            if (sel->kind == light_kind_point || sel->kind == light_kind_spot || sel->kind == light_kind_area) {
+                lw_slider(cmd, ui_ctx, base + 7, "Range", x, y, w, &sel->range, 1.0f, 200.0f, 1.0f, true); y += lw_row_h;
+            }
+            if (sel->kind == light_kind_spot) {
+                lw_slider(cmd, ui_ctx, base + 8, "Cone",     x, y, w, &sel->cone_deg, 5.0f, 89.0f, 1.0f, true); y += lw_row_h;
+                lw_slider(cmd, ui_ctx, base + 9, "Softness", x, y, w, &sel->softness, 0.0f, 1.0f, 100.0f, true); y += lw_row_h;
+            }
+            hint(cmd, ui_ctx, "Aim with the rotate tool: lights point along -Z", x, y, w);
         }
     }
 

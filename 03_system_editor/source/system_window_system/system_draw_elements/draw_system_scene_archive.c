@@ -54,7 +54,8 @@ void draw_scene_archive_node(VkCommandBuffer cmd, system_element_context* system
     draw_tree_guide_lines(cmd, x, *current_y, item_height, indent_level, s_guide_continue,
                           obj->next_sibling != NULL, obj->first_child != NULL);
 
-    if (obj->first_child != NULL) {
+    const int region_row = get_terrain_region_of_object(obj->id);    /* region_xx rows open into their chunks */
+    if (obj->first_child != NULL || region_row >= 0) {
         bool arrow_hovered = (system_ui->input.mouse_x >= local_x && system_ui->input.mouse_x < (local_x + 12) &&
                               system_ui->input.mouse_y >= *current_y && system_ui->input.mouse_y < (*current_y + item_height));
         
@@ -98,6 +99,51 @@ void draw_scene_archive_node(VkCommandBuffer cmd, system_element_context* system
     }
 
     *current_y += item_height;
+
+    /* the chunks of a region: click one to select it (it shows with its faces in the Scene view, Ctrl+F frames it) */
+    if (region_row >= 0 && obj->is_open && g_terrain.exists) {
+        const int rc = g_terrain.dims.region_chunks;
+        const int rx = region_row % terrain_region_grid;
+        const int rz = region_row / terrain_region_grid;
+        int cx1 = rx * rc + rc - 1;
+        int cz1 = rz * rc + rc - 1;
+        if (rx == terrain_region_grid - 1) {
+            cx1 = g_terrain.dims.chunks_x - 1;
+        }
+        if (rz == terrain_region_grid - 1) {
+            cz1 = g_terrain.dims.chunks_z - 1;
+        }
+        for (int cz = rz * rc; cz <= cz1; cz++) {
+            for (int cx = rx * rc; cx <= cx1; cx++) {
+                const int chunk_x = x + ((indent_level + 1) * 16);
+                const bool chunk_hovered = (system_ui->input.mouse_x >= x && system_ui->input.mouse_x < (x + window_w) &&
+                                            system_ui->input.mouse_y >= *current_y && system_ui->input.mouse_y < (*current_y + item_height));
+                const bool chunk_selected = (g_scene_registry.selected_object_id == obj->id && g_pick_chunk_x == cx && g_pick_chunk_z == cz &&
+                                             g_pick_chunk_region_object_id == obj->id);
+                if (chunk_selected) {
+                    push_quad_element(cmd, (float)x, (float)*current_y, (float)window_w, (float)item_height, system_theme.menu_item_selected);
+                } else if (chunk_hovered) {
+                    push_quad_element(cmd, (float)x, (float)*current_y, (float)window_w, (float)item_height,
+                                      process_theme_color(system_theme.tab_content_window_sceneview, system_theme.system_hover_delta));
+                }
+                if (chunk_hovered && s_click_edge) {
+                    select_scene_object_and_show(obj->id);
+                    g_pick_chunk_x = cx;
+                    g_pick_chunk_z = cz;
+                    g_pick_chunk_region_object_id = obj->id;
+                    set_scene_archive_status("Selected terrain chunk %d, %d (Ctrl+F frames it).", cx, cz);
+                }
+                char chunk_name[32];
+                snprintf(chunk_name, sizeof(chunk_name), "chunk_%d_%d", cx, cz);
+                system_color chunk_color = system_theme.system_text;
+                if (chunk_selected) {
+                    chunk_color = system_theme.system_active_text;
+                }
+                draw_text_element(cmd, system_ui, chunk_name, chunk_x + 16, *current_y + 4, chunk_color);
+                *current_y += item_height;
+            }
+        }
+    }
 
     if (obj->is_open && obj->first_child != NULL) {
         draw_scene_archive_node(cmd, system_ui, obj->first_child, x, current_y, window_w, indent_level + 1);

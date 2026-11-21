@@ -2,16 +2,15 @@
 
 /* g_light is defined in engine_globals.c:
    light_settings g_light = { 0.20f, true, terrain_layer_atmosphere, 1.5f, 0.0f };
-   clamp_int_range() lives in engine_math.c / engine_math.h. */
+   clamp_int_value() lives in engine_math.c / engine_math.h. */
 
 /* warm = low sun / sunset orange, cool = overcast / moonlight blue */
-void get_light_sun_color(float ambient, float out[4])
+void apply_light_warmth(float rgb[3], float warmth)
 {
-    const float white[3] = { 1.00f, 1.00f, 1.00f };
-    const float warm[3]  = { 1.00f, 0.78f, 0.50f };
-    const float cool[3]  = { 0.70f, 0.85f, 1.00f };
+    const float warm[3] = { 1.00f, 0.78f, 0.50f };
+    const float cool[3] = { 0.70f, 0.85f, 1.00f };
 
-    float w = g_light.sun_warmth;
+    float w = warmth;
     if (w < -1.0f) w = -1.0f;
     if (w >  1.0f) w =  1.0f;
 
@@ -21,22 +20,41 @@ void get_light_sun_color(float ambient, float out[4])
         target = cool;
         t = -w;
     }
+    for (int i = 0; i < 3; i++) rgb[i] *= 1.0f + (target[i] - 1.0f) * t;
+}
 
-    float inten = g_light.sun_intensity;
+/* the sun colour the mesh shader gets. a directional light object (sun_driven) supplies its own colour, intensity and warmth,
+   otherwise the Lighting window's Brightness and Warm / Cool sliders do. */
+void get_light_sun_color(float ambient, float out[4])
+{
+    float rgb[3] = { 1.0f, 1.0f, 1.0f };
+    float inten  = g_light.sun_intensity;
+    float warmth = g_light.sun_warmth;
+    float limit  = 3.0f;
+
+    if (g_light.sun_driven) {
+        rgb[0] = g_light.sun_driver_color[0];
+        rgb[1] = g_light.sun_driver_color[1];
+        rgb[2] = g_light.sun_driver_color[2];
+        inten  = g_light.sun_driver_intensity;
+        warmth = g_light.sun_driver_warmth;
+        limit  = 4.0f;
+    }
     if (inten < 0.0f) inten = 0.0f;
-    if (inten > 3.0f) inten = 3.0f;
+    if (inten > limit) inten = limit;
+    apply_light_warmth(rgb, warmth);
 
     float fill = 1.0f - ambient;            /* the old formula was ambient + (1 - ambient) * facing */
     if (fill < 0.0f) fill = 0.0f;
 
-    for (int i = 0; i < 3; i++) out[i] = (white[i] + (target[i] - white[i]) * t) * inten * fill;
+    for (int i = 0; i < 3; i++) out[i] = rgb[i] * inten * fill;
     out[3] = 0.0f;
 }
 
 unsigned char pack_light_value(int sky, int block)
 {
-    sky   = clamp_int_range(sky, 0, 15);
-    block = clamp_int_range(block, 0, 15);
+    sky   = clamp_int_value(sky, 0, 15);
+    block = clamp_int_value(block, 0, 15);
     return (unsigned char)((block << 4) | (15 - sky));
 }
 
@@ -149,10 +167,10 @@ void mark_terrain_light_dirty(system_terrain* t, int gx0, int gz0, int gx1, int 
     terrain_chunk* tc = t->layers[terrain_layer_terrain].chunks;
     if (!tc) return;
     const int cc = t->dims.chunk_cells;
-    gx0 = clamp_int_range(gx0 - 1, 0, t->dims.cells_x - 1);
-    gz0 = clamp_int_range(gz0 - 1, 0, t->dims.cells_z - 1);
-    gx1 = clamp_int_range(gx1 + 1, 0, t->dims.cells_x - 1);
-    gz1 = clamp_int_range(gz1 + 1, 0, t->dims.cells_z - 1);
+    gx0 = clamp_int_value(gx0 - 1, 0, t->dims.cells_x - 1);
+    gz0 = clamp_int_value(gz0 - 1, 0, t->dims.cells_z - 1);
+    gx1 = clamp_int_value(gx1 + 1, 0, t->dims.cells_x - 1);
+    gz1 = clamp_int_value(gz1 + 1, 0, t->dims.cells_z - 1);
     for (int cz = gz0 / cc; cz <= gz1 / cc; cz++) {
         for (int cx = gx0 / cc; cx <= gx1 / cc; cx++) {
             tc[cz * t->dims.chunks_x + cx].dirty = true;

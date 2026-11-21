@@ -231,6 +231,7 @@ void traverse_dock_tree(system_element_context* ui_element, system_dock_node* no
         mode_menu_follow_state(ui_element);     /* whatever changed the mode, the flags and the Modeler / Sculpt / Paint windows follow it */
         sculpt_input_update(ui_element);        /* once per UI frame: sculpt strokes + mode_state mirror (system_sculpt_input.c) */
         paint_input_update(ui_element);         /* once per UI frame: paint strokes (was never called) */
+        update_terrain_brush(ui_element);       /* once per UI frame: sculpt / paint strokes on the terrain (a ring on the ground) */
     }
 
     if (node->node_type == dock_node_leaf) {
@@ -266,17 +267,17 @@ void open_file_archive_window(manage_docking* mesh)
 /* window pairs                                                               */
 /* ========================================================================= */
 /* Texture Shop mode = four tabs:
-     Texture Shop   next to Inspector     the shader profile window (profiles, assign, export)
-     Skin Maker     next to Texture Shop  layer stack, colour, blend, masks of the obj_vert_selected skin
+     Texture Shop   next to Inspector     the skin library (lit spheres, assign / clear)
      Tex Editor     next to Scene / Game  the UV editor
+     Skin Maker     next to Tex Editor    layer stack, colour, blend, masks, map of the selected skin (middle, with the big windows)
      Tex Nodes      next to Tex Editor    the node canvas */
 void open_texture_shop_windows(manage_docking* mesh, system_element_context* ui_element)
 {
     if (!mesh || !ui_element) return;
     ui_element->spawn_textureshop_window = true;
     spawn_dock_view_beside(mesh, view_type_inspector,      view_type_modeler, view_type_textureshop);
-    spawn_dock_view_beside(mesh, view_type_textureshop,    view_type_inspector, view_type_texshop_skinmaker);
     spawn_dock_view_beside(mesh, view_type_scene,          view_type_game,    view_type_texshop_editor);   /* the editor is the UV editor: next to Scene / Game */
+    spawn_dock_view_beside(mesh, view_type_texshop_editor, view_type_scene,   view_type_texshop_skinmaker);
     spawn_dock_view_beside(mesh, view_type_texshop_editor, view_type_scene,   view_type_texshop_node);     /* the node window tabs with the UV editor */
 }
 
@@ -294,13 +295,14 @@ void update_dock_spawn_requests(manage_docking* mesh, system_element_context* ui
 {
     if (!mesh || !ui_element || !mesh->root || mesh->is_dragging) return;
 
+    dock_spawn_background = true;      /* requested windows come up behind the tab you are on */
     if (ui_element->spawn_textureshop_window) {
         if (!dock_find_leaf_with_view(mesh->root, view_type_textureshop))
             spawn_dock_view_beside(mesh, view_type_inspector, view_type_modeler, view_type_textureshop);
-        if (!dock_find_leaf_with_view(mesh->root, view_type_texshop_skinmaker))
-            spawn_dock_view_beside(mesh, view_type_textureshop, view_type_inspector, view_type_texshop_skinmaker);
         if (!dock_find_leaf_with_view(mesh->root, view_type_texshop_editor))
             spawn_dock_view_beside(mesh, view_type_scene, view_type_game, view_type_texshop_editor);
+        if (!dock_find_leaf_with_view(mesh->root, view_type_texshop_skinmaker))
+            spawn_dock_view_beside(mesh, view_type_texshop_editor, view_type_scene, view_type_texshop_skinmaker);
         if (!dock_find_leaf_with_view(mesh->root, view_type_texshop_node))
             spawn_dock_view_beside(mesh, view_type_texshop_editor, view_type_scene, view_type_texshop_node);
     }
@@ -310,4 +312,5 @@ void update_dock_spawn_requests(manage_docking* mesh, system_element_context* ui
         if (!dock_find_leaf_with_view(mesh->root, view_type_worldbld_tools))
             spawn_dock_view_beside(mesh, view_type_hierarchy, view_type_inspector, view_type_worldbld_tools);
     }
+    dock_spawn_background = false;
 }

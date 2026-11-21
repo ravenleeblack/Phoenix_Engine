@@ -10,13 +10,15 @@ HMODULE                  editor_loader_module     = NULL;
 load_3d_mesh_asset_ptr   editor_load_mesh         = NULL;
 remove_3d_mesh_asset_ptr editor_remove_mesh       = NULL;
 save_3d_mesh_asset_ptr   editor_save_mesh         = NULL;
+load_3d_mesh_asset_scaled_ptr editor_load_mesh_scaled = NULL;
+save_3d_mesh_asset_scaled_ptr editor_save_mesh_scaled = NULL;
 load_image_asset_ptr     editor_load_image        = NULL;
 remove_image_asset_ptr   editor_remove_image      = NULL;
 save_image_asset_ptr     editor_save_image        = NULL;
 
 bool check_loader_ready(void)
 {
-    if (editor_loader_module && editor_load_mesh && editor_save_mesh && editor_load_image && editor_save_image) {
+    if (editor_loader_module && editor_load_mesh && editor_save_mesh && editor_load_mesh_scaled && editor_save_mesh_scaled && editor_load_image && editor_save_image) {
         return true;
     }
 
@@ -32,11 +34,13 @@ bool check_loader_ready(void)
     editor_load_mesh    = (load_3d_mesh_asset_ptr)(void*)GetProcAddress(editor_loader_module, "load_3d_mesh_asset");
     editor_remove_mesh  = (remove_3d_mesh_asset_ptr)(void*)GetProcAddress(editor_loader_module, "remove_3d_mesh_asset");
     editor_save_mesh    = (save_3d_mesh_asset_ptr)(void*)GetProcAddress(editor_loader_module, "save_3d_mesh_asset");
+    editor_load_mesh_scaled = (load_3d_mesh_asset_scaled_ptr)(void*)GetProcAddress(editor_loader_module, "load_3d_mesh_asset_scaled");
+    editor_save_mesh_scaled = (save_3d_mesh_asset_scaled_ptr)(void*)GetProcAddress(editor_loader_module, "save_3d_mesh_asset_scaled");
     editor_load_image   = (load_image_asset_ptr)(void*)GetProcAddress(editor_loader_module, "load_image_asset");
     editor_remove_image = (remove_image_asset_ptr)(void*)GetProcAddress(editor_loader_module, "remove_image_asset");
     editor_save_image   = (save_image_asset_ptr)(void*)GetProcAddress(editor_loader_module, "save_image_asset");
 
-    if (!editor_load_mesh || !editor_remove_mesh || !editor_save_mesh || !editor_load_image || !editor_remove_image || !editor_save_image) {
+    if (!editor_load_mesh || !editor_remove_mesh || !editor_save_mesh || !editor_load_mesh_scaled || !editor_save_mesh_scaled || !editor_load_image || !editor_remove_image || !editor_save_image) {
         set_statusbar_message("%s", "phoenix_loader.dll is out of date. Run the build (wsl make all) and start again.");
         return false;
     }
@@ -286,8 +290,10 @@ bool create_system_imported_mesh(const char* name, const loader_mesh_data* mesh)
     return true;
 }
 
-bool import_fbx_file(const char* source_path)
+/* .fbx and .obj: the model is sized for the import profile (Preferences > Import / Export) */
+bool import_model_file(const char* source_path, const char* kind_name)
 {
+    const int profile = g_unit_prefs.import_profile;
     char asset_path[260];
     if (!copy_file_into_archive(source_path, "models", asset_path, sizeof(asset_path))) {
         set_statusbar_message("Import failed: could not copy '%s' into the File Archive.", source_path);
@@ -296,8 +302,8 @@ bool import_fbx_file(const char* source_path)
 
     loader_mesh_data mesh;
     memset(&mesh, 0, sizeof(mesh));
-    if (!editor_load_mesh(asset_path, &mesh)) {
-        set_statusbar_message("Import failed: '%s' is not an FBX with mesh geometry the loader understands.", asset_path);
+    if (!editor_load_mesh_scaled(asset_path, &mesh, get_unit_profile_meters_per_unit(profile), get_unit_profile_trusts_fbx_units(profile))) {
+        set_statusbar_message("Import failed: '%s' is not an %s with mesh geometry the loader understands.", asset_path, kind_name);
         select_archive_file(asset_path);
         return false;
     }
@@ -311,9 +317,9 @@ bool import_fbx_file(const char* source_path)
 
     select_archive_file(asset_path);
     if (created) {
-        set_statusbar_message("Imported '%s': %u vertices, %u triangles. Saved in the File Archive (models).", base, vertex_count, triangle_count);
+        set_statusbar_message("Imported '%s' (%s units): %u vertices, %u triangles. Saved in the File Archive (models).", base, get_unit_profile_name(profile), vertex_count, triangle_count);
     }
-    phoenix_info("Import", "fbx '%s': %u vertices, %u triangles, created=%d", asset_path, vertex_count, triangle_count, (int)created);
+    phoenix_info("Import", "%s '%s' (%s units): %u vertices, %u triangles, created=%d", kind_name, asset_path, get_unit_profile_name(profile), vertex_count, triangle_count, (int)created);
     return created;
 }
 
@@ -375,23 +381,62 @@ bool import_asset_file(const char* source_path)
         return false;
     }
     if (check_path_extension(source_path, ".fbx")) {
-        return import_fbx_file(source_path);
+        return import_model_file(source_path, "FBX");
+    }
+    if (check_path_extension(source_path, ".obj")) {
+        return import_model_file(source_path, "OBJ");
     }
     if (check_path_extension(source_path, ".png")) {
         return import_png_file(source_path);
     }
-    set_statusbar_message("%s", "Import supports .fbx models and .png images.");
+    set_statusbar_message("%s", "Import supports .fbx and .obj models and .png images.");
     return false;
 }
 
 void import_asset_from_dialog(void)
 {
     char path[260];
-    const char filter[] = "Models and images (*.fbx;*.png)\0*.fbx;*.png\0FBX models (*.fbx)\0*.fbx\0PNG images (*.png)\0*.png\0\0";
+    const char filter[] = "Models and images (*.fbx;*.obj;*.png)\0*.fbx;*.obj;*.png\0FBX models (*.fbx)\0*.fbx\0OBJ models (*.obj)\0*.obj\0PNG images (*.png)\0*.png\0\0";
     if (!pick_open_file_path("Import", filter, path, sizeof(path))) {
         return;
     }
     import_asset_file(path);
+}
+
+/* ========================================================================= */
+/* unit profiles (Preferences > Import / Export)                               */
+/* ========================================================================= */
+unit_prefs g_unit_prefs = { unit_profile_phoenix, unit_profile_phoenix };
+
+const char* get_unit_profile_name(int profile)
+{
+    switch (profile) {
+        case unit_profile_maya:   return "Maya";
+        case unit_profile_unity:  return "Unity";
+        case unit_profile_zbrush: return "ZBrush";
+        default:                  return "Phoenix";
+    }
+}
+
+float get_unit_profile_meters_per_unit(int profile)
+{
+    if (profile == unit_profile_maya || profile == unit_profile_zbrush) {
+        return 0.01f;
+    }
+    return 1.0f;
+}
+
+bool get_unit_profile_trusts_fbx_units(int profile)
+{
+    return profile != unit_profile_zbrush;
+}
+
+float get_unit_profile_units_per_meter(int profile)
+{
+    if (profile == unit_profile_maya || profile == unit_profile_zbrush) {
+        return 100.0f;
+    }
+    return 1.0f;
 }
 
 /* ========================================================================= */
@@ -484,29 +529,29 @@ bool export_current_selection(void)
             return false;
         }
         if (export_format == export_format_png) {
-            set_statusbar_message("%s", "Export: a scene object can only be written as FBX. Pick an FBX format.");
+            set_statusbar_message("%s", "Export: a scene object can only be written as FBX or OBJ. Pick a model format.");
             return false;
         }
         snprintf(default_name, sizeof(default_name), "%s", obj->name);
     } else {
         const file_archive_node* node = file_archive_node_at(file_archive_selected());
         if (!node || node->kind != file_node_file) {
-            set_statusbar_message("%s", "Export: select an .fbx or .png file in the File Archive first.");
+            set_statusbar_message("%s", "Export: select an .fbx, .obj or .png file in the File Archive first.");
             return false;
         }
         snprintf(source_file, sizeof(source_file), "%s", node->path);
         const bool is_png = check_path_extension(source_file, ".png");
-        const bool is_fbx = check_path_extension(source_file, ".fbx");
-        if (!is_png && !is_fbx) {
-            set_statusbar_message("%s", "Export: the selected archive file is not an .fbx or .png.");
+        const bool is_model = check_path_extension(source_file, ".fbx") || check_path_extension(source_file, ".obj");
+        if (!is_png && !is_model) {
+            set_statusbar_message("%s", "Export: the selected archive file is not an .fbx, .obj or .png.");
             return false;
         }
         if (is_png && export_format != export_format_png) {
             set_statusbar_message("%s", "Export: a PNG can only be written as PNG. Pick the PNG format.");
             return false;
         }
-        if (is_fbx && export_format == export_format_png) {
-            set_statusbar_message("%s", "Export: an FBX can only be written as FBX. Pick an FBX format.");
+        if (is_model && export_format == export_format_png) {
+            set_statusbar_message("%s", "Export: a model can only be written as FBX or OBJ. Pick a model format.");
             return false;
         }
         get_path_base_name(source_file, default_name, sizeof(default_name));
@@ -515,12 +560,17 @@ bool export_current_selection(void)
     const char* extension = "fbx";
     const char* title = "Export FBX";
     const char fbx_filter[] = "FBX model (*.fbx)\0*.fbx\0\0";
+    const char obj_filter[] = "OBJ model (*.obj)\0*.obj\0\0";
     const char png_filter[] = "PNG image (*.png)\0*.png\0\0";
     const char* filter = fbx_filter;
     if (export_format == export_format_png) {
         extension = "png";
         title = "Export PNG";
         filter = png_filter;
+    } else if (export_format == export_format_obj) {
+        extension = "obj";
+        title = "Export OBJ";
+        filter = obj_filter;
     }
 
     char destination[260];
@@ -537,21 +587,30 @@ bool export_current_selection(void)
             editor_remove_image(&image);
         }
     } else {
+        int mesh_format = loader_mesh_format_fbx_binary;
+        if (export_format == export_format_fbx_ascii) {
+            mesh_format = loader_mesh_format_fbx_ascii;
+        } else if (export_format == export_format_obj) {
+            mesh_format = loader_mesh_format_obj;
+        }
+        const float units_per_meter = get_unit_profile_units_per_meter(g_unit_prefs.export_profile);
+        const int import_profile = g_unit_prefs.import_profile;
+
         loader_mesh_data mesh;
         memset(&mesh, 0, sizeof(mesh));
         if (obj) {
             if (build_export_mesh(obj, &mesh)) {
-                ok = editor_save_mesh(destination, &mesh, export_format == export_format_fbx_binary);
+                ok = editor_save_mesh_scaled(destination, &mesh, mesh_format, units_per_meter);
                 free_export_mesh(&mesh);
             }
-        } else if (editor_load_mesh(source_file, &mesh)) {
-            ok = editor_save_mesh(destination, &mesh, export_format == export_format_fbx_binary);
+        } else if (editor_load_mesh_scaled(source_file, &mesh, get_unit_profile_meters_per_unit(import_profile), get_unit_profile_trusts_fbx_units(import_profile))) {
+            ok = editor_save_mesh_scaled(destination, &mesh, mesh_format, units_per_meter);
             editor_remove_mesh(&mesh);
         }
     }
 
     if (ok) {
-        set_statusbar_message("Exported to %s", destination);
+        set_statusbar_message("Exported to %s (%s units).", destination, get_unit_profile_name(g_unit_prefs.export_profile));
         file_archive_refresh();
     } else {
         set_statusbar_message("Export failed: could not write %s", destination);

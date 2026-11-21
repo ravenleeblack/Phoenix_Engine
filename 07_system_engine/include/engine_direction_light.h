@@ -30,7 +30,12 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #define phoenix_pi        3.14159265f
 
 typedef enum {
-    light_kind_directional = 0
+    light_kind_directional = 0,
+    light_kind_point,
+    light_kind_spot,
+    light_kind_hemisphere,      /* sky color above, ground color below: soft outdoor fill */
+    light_kind_area,            /* soft panel: engine_area_light.c */
+    light_kind_count
 } light_kind;
 
 /* the scene registry stays the light list (id, name, transform); only the light specific bits live here. */
@@ -38,6 +43,13 @@ typedef struct {
     uint32_t   object_id;
     light_kind kind;
     bool       enabled;
+    float      color[3];          /* directional / point / spot color, hemisphere sky color */
+    float      ground_color[3];   /* hemisphere ground color */
+    float      intensity;         /* 0..4 */
+    float      range;             /* point / spot: distance where the light has faded out */
+    float      cone_deg;          /* spot: half angle of the outer cone */
+    float      softness;          /* spot: 0 = hard edge, 1 = fades from the centre */
+    float      warmth;            /* -1 = cool / blue, 0 = as set, +1 = warm / orange */
 } light_object;
 
 /* a sun glyph: small octahedron core, four short rays (+-X, +-Y) and a long arrow down local -Z.
@@ -63,6 +75,9 @@ void remove_light_at(int index);
 phoenix_engine_api bool create_system_directional_light(editor_vec3 position, float size, const char* name,
                                                         VkDevice device, VkPhysicalDevice physical_device,
                                                         VkCommandPool pool, VkQueue queue);
+/* point / spot / hemisphere lights (editor side, system_directional_light.c). kind = light_kind */
+bool create_system_light(light_kind kind, editor_vec3 position, VkDevice device, VkPhysicalDevice physical_device);
+void reset_light_defaults(light_object* l, light_kind kind);
 
 /* rotation (radians, x = pitch, y = yaw) -> sun azimuth / elevation in degrees */
 void get_sun_from_rotation(editor_vec3 rotation, float* out_azimuth_deg, float* out_elevation_deg);

@@ -994,6 +994,7 @@ typedef struct {
     int      layer;          /* 0 none, 1 inside LayerElementNormal, 2 inside LayerElementUV (first set of each only) */
     bool     in_geometry;
     double   unit_scale;     /* UnitScaleFactor: 1 = centimeters, 100 = meters */
+    double   forced_meters_per_unit;   /* above 0: ignore the file's UnitScaleFactor and use this */
     char     first_string[128];
     double   last_number;
     loader_vertex* out_vertices;
@@ -1189,6 +1190,9 @@ void loader_fbx_emit_geometry(loader_fbx_context* context)
     }
 
     double scale = context->unit_scale * 0.01;
+    if (context->forced_meters_per_unit > 0.0) {
+        scale = context->forced_meters_per_unit;
+    }
     size_t count = context->polygon_index_count;
     size_t start = 0;
     size_t polygon_number = 0;
@@ -1681,7 +1685,7 @@ bool loader_fbx_walk_ascii(loader_fbx_context* context, const char* text, size_t
     }
 }
 
-bool loader_load_fbx_file(const char* filepath, loader_mesh_data* out_mesh)
+bool loader_load_fbx_file(const char* filepath, loader_mesh_data* out_mesh, double forced_meters_per_unit)
 {
     size_t size = 0;
     uint8_t* data = loader_read_file(filepath, &size);
@@ -1692,6 +1696,7 @@ bool loader_load_fbx_file(const char* filepath, loader_mesh_data* out_mesh)
     loader_fbx_context context;
     memset(&context, 0, sizeof(context));
     context.unit_scale = 1.0;
+    context.forced_meters_per_unit = forced_meters_per_unit;
 
     bool ok = false;
     const char binary_magic[] = "Kaydara FBX Binary  ";
@@ -1719,6 +1724,306 @@ bool loader_load_fbx_file(const char* filepath, loader_mesh_data* out_mesh)
     return true;
 }
 
+/* ------------------------------------------------------------------------- */
+/* obj loading: v / vt / vn / f (any polygon is fanned into triangles)         */
+/*   obj has no units: every position is multiplied by meters_per_unit.         */
+/* ------------------------------------------------------------------------- */
+typedef struct {
+    float*  data;
+    size_t  count;
+    size_t  capacity;
+} loader_float_list;
+
+bool loader_float_list_push(loader_float_list* list, float value)
+{
+    if (list->count == list->capacity) {
+        size_t new_capacity = list->capacity * 2;
+        if (new_capacity < 1024) {
+            new_capacity = 1024;
+        }
+        float* grown = (float*)realloc(list->data, new_capacity * sizeof(float));
+        if (!grown) {
+            return false;
+        }
+        list->data = grown;
+        list->capacity = new_capacity;
+    }
+    list->data[list->count++] = value;
+    return true;
+}
+
+typedef struct {
+    loader_float_list positions;
+    loader_float_list uvs;
+    loader_float_list normals;
+    loader_vertex*    out_vertices;
+    uint32_t          out_vertex_count;
+    uint32_t          out_vertex_capacity;
+    uint32_t*         out_indices;
+    uint32_t          out_index_count;
+    uint32_t          out_index_capacity;
+    bool              failed;
+} loader_obj_state;
+
+#define loader_obj_max_corners 256
+
+bool loader_obj_reserve(loader_obj_state* state, uint32_t more_vertices, uint32_t more_indices)
+{
+    if (state->out_vertex_count + more_vertices > state->out_vertex_capacity) {
+        uint32_t new_capacity = state->out_vertex_capacity * 2;
+        if (new_capacity < 4096) {
+            new_capacity = 4096;
+        }
+        while (new_capacity < state->out_vertex_count + more_vertices) {
+            new_capacity *= 2;
+        }
+        loader_vertex* grown = (loader_vertex*)realloc(state->out_vertices, (size_t)new_capacity * sizeof(loader_vertex));
+        if (!grown) {
+            return false;
+        }
+        state->out_vertices = grown;
+        state->out_vertex_capacity = new_capacity;
+    }
+    if (state->out_index_count + more_indices > state->out_index_capacity) {
+        uint32_t new_capacity = state->out_index_capacity * 2;
+        if (new_capacity < 12288) {
+            new_capacity = 12288;
+        }
+        while (new_capacity < state->out_index_count + more_indices) {
+            new_capacity *= 2;
+        }
+        uint32_t* grown = (uint32_t*)realloc(state->out_indices, (size_t)new_capacity * sizeof(uint32_t));
+        if (!grown) {
+            return false;
+        }
+        state->out_indices = grown;
+        state->out_index_capacity = new_capacity;
+    }
+    return true;
+}
+
+/* reads one number from the line, moves the cursor past it. false when there is none */
+bool loader_obj_read_float(const char** cursor, float* out)
+{
+    const char* p = *cursor;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    char* end = NULL;
+    double value = strtod(p, &end);
+    if (end == p) {
+        return false;
+    }
+    *out = (float)value;
+    *cursor = end;
+    return true;
+}
+
+/* "7", "-1" or nothing. returns the zero based slot, or -1 when the field is empty or out of range */
+long loader_obj_read_slot(const char** cursor, size_t available)
+{
+    const char* p = *cursor;
+    if (*p == '/' || *p == ' ' || *p == '\t' || *p == '\0') {
+        return -1;
+    }
+    char* end = NULL;
+    long value = strtol(p, &end, 10);
+    if (end == p) {
+        return -1;
+    }
+    *cursor = end;
+    if (value < 0) {
+        value = (long)available + value;
+    } else {
+        value = value - 1;
+    }
+    if (value < 0 || (size_t)value >= available) {
+        return -1;
+    }
+    return value;
+}
+
+void loader_obj_read_face(loader_obj_state* state, const char* line, double scale)
+{
+    loader_vertex corners[loader_obj_max_corners];
+    bool has_normal[loader_obj_max_corners];
+    uint32_t corner_count = 0;
+    const char* p = line;
+
+    while (*p != '\0' && *p != '\r' && *p != '\n') {
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        if (*p == '\0' || *p == '\r' || *p == '\n') {
+            break;
+        }
+        const char* token = p;
+        long position_slot = loader_obj_read_slot(&p, state->positions.count / 3);
+        long uv_slot = -1;
+        long normal_slot = -1;
+        if (*p == '/') {
+            p++;
+            uv_slot = loader_obj_read_slot(&p, state->uvs.count / 2);
+            if (*p == '/') {
+                p++;
+                normal_slot = loader_obj_read_slot(&p, state->normals.count / 3);
+            }
+        }
+        if (p == token) {
+            p++;     /* not a number: skip the character so the loop always ends */
+            continue;
+        }
+        if (position_slot < 0) {
+            state->failed = true;
+            return;
+        }
+        if (corner_count < loader_obj_max_corners) {
+            loader_vertex* v = &corners[corner_count];
+            memset(v, 0, sizeof(*v));
+            v->pos[0] = (float)(state->positions.data[position_slot * 3 + 0] * scale);
+            v->pos[1] = (float)(state->positions.data[position_slot * 3 + 1] * scale);
+            v->pos[2] = (float)(state->positions.data[position_slot * 3 + 2] * scale);
+            v->color[0] = 0.55f;
+            v->color[1] = 0.55f;
+            v->color[2] = 0.55f;
+            v->color[3] = 1.0f;
+            if (uv_slot >= 0) {
+                v->uv[0] = state->uvs.data[uv_slot * 2 + 0];
+                v->uv[1] = state->uvs.data[uv_slot * 2 + 1];
+            }
+            has_normal[corner_count] = false;
+            if (normal_slot >= 0) {
+                v->normal[0] = state->normals.data[normal_slot * 3 + 0];
+                v->normal[1] = state->normals.data[normal_slot * 3 + 1];
+                v->normal[2] = state->normals.data[normal_slot * 3 + 2];
+                has_normal[corner_count] = true;
+            }
+            corner_count++;
+        }
+    }
+    if (corner_count < 3) {
+        return;
+    }
+
+    /* corners without a normal get the flat face normal */
+    float ax = corners[1].pos[0] - corners[0].pos[0];
+    float ay = corners[1].pos[1] - corners[0].pos[1];
+    float az = corners[1].pos[2] - corners[0].pos[2];
+    float bx = corners[2].pos[0] - corners[0].pos[0];
+    float by = corners[2].pos[1] - corners[0].pos[1];
+    float bz = corners[2].pos[2] - corners[0].pos[2];
+    float nx = ay * bz - az * by;
+    float ny = az * bx - ax * bz;
+    float nz = ax * by - ay * bx;
+    float length = sqrtf(nx * nx + ny * ny + nz * nz);
+    if (length > 0.0f) {
+        nx /= length;
+        ny /= length;
+        nz /= length;
+    } else {
+        nx = 0.0f;
+        ny = 1.0f;
+        nz = 0.0f;
+    }
+
+    if (!loader_obj_reserve(state, corner_count, (corner_count - 2) * 3)) {
+        state->failed = true;
+        return;
+    }
+    uint32_t first = state->out_vertex_count;
+    for (uint32_t k = 0; k < corner_count; k++) {
+        if (!has_normal[k]) {
+            corners[k].normal[0] = nx;
+            corners[k].normal[1] = ny;
+            corners[k].normal[2] = nz;
+        }
+        state->out_vertices[state->out_vertex_count++] = corners[k];
+    }
+    for (uint32_t k = 1; k + 1 < corner_count; k++) {
+        state->out_indices[state->out_index_count++] = first;
+        state->out_indices[state->out_index_count++] = first + k;
+        state->out_indices[state->out_index_count++] = first + k + 1;
+    }
+}
+
+bool loader_load_obj_file(const char* filepath, loader_mesh_data* out_mesh, double meters_per_unit)
+{
+    size_t size = 0;
+    uint8_t* data = loader_read_file(filepath, &size);
+    if (!data) {
+        return false;
+    }
+
+    loader_obj_state state;
+    memset(&state, 0, sizeof(state));
+    double scale = meters_per_unit;
+    if (scale <= 0.0) {
+        scale = 1.0;
+    }
+
+    const char* line = (const char*)data;
+    while (*line != '\0' && !state.failed) {
+        const char* p = line;
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        if (p[0] == 'v' && (p[1] == ' ' || p[1] == '\t')) {
+            const char* cursor = p + 1;
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+            if (loader_obj_read_float(&cursor, &x) && loader_obj_read_float(&cursor, &y) && loader_obj_read_float(&cursor, &z)) {
+                if (!loader_float_list_push(&state.positions, x) || !loader_float_list_push(&state.positions, y) || !loader_float_list_push(&state.positions, z)) {
+                    state.failed = true;
+                }
+            }
+        } else if (p[0] == 'v' && p[1] == 't' && (p[2] == ' ' || p[2] == '\t')) {
+            const char* cursor = p + 2;
+            float u = 0.0f;
+            float v = 0.0f;
+            if (loader_obj_read_float(&cursor, &u)) {
+                loader_obj_read_float(&cursor, &v);
+                if (!loader_float_list_push(&state.uvs, u) || !loader_float_list_push(&state.uvs, v)) {
+                    state.failed = true;
+                }
+            }
+        } else if (p[0] == 'v' && p[1] == 'n' && (p[2] == ' ' || p[2] == '\t')) {
+            const char* cursor = p + 2;
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+            if (loader_obj_read_float(&cursor, &x) && loader_obj_read_float(&cursor, &y) && loader_obj_read_float(&cursor, &z)) {
+                if (!loader_float_list_push(&state.normals, x) || !loader_float_list_push(&state.normals, y) || !loader_float_list_push(&state.normals, z)) {
+                    state.failed = true;
+                }
+            }
+        } else if (p[0] == 'f' && (p[1] == ' ' || p[1] == '\t')) {
+            loader_obj_read_face(&state, p + 1, scale);
+        }
+
+        while (*line != '\0' && *line != '\n') {
+            line++;
+        }
+        if (*line == '\n') {
+            line++;
+        }
+    }
+    free(data);
+    free(state.positions.data);
+    free(state.uvs.data);
+    free(state.normals.data);
+
+    if (state.failed || state.out_vertex_count == 0 || state.out_index_count == 0) {
+        free(state.out_vertices);
+        free(state.out_indices);
+        return false;
+    }
+    out_mesh->vertices = state.out_vertices;
+    out_mesh->indices = state.out_indices;
+    out_mesh->vertex_count = state.out_vertex_count;
+    out_mesh->index_count = state.out_index_count;
+    return true;
+}
 /* the first loader's own raw mesh format: counts, then 28 byte vertices (pos + color), then indices */
 bool loader_load_raw_mesh_file(const char* filepath, loader_mesh_data* out_mesh)
 {
@@ -1770,16 +2075,29 @@ bool loader_load_raw_mesh_file(const char* filepath, loader_mesh_data* out_mesh)
     return true;
 }
 
-PHOENIX_LOADER_API bool load_3d_mesh_asset(const char* filepath, loader_mesh_data* out_mesh)
+PHOENIX_LOADER_API bool load_3d_mesh_asset_scaled(const char* filepath, loader_mesh_data* out_mesh, float meters_per_unit, bool honor_file_units)
 {
     if (!filepath || !out_mesh) {
         return false;
     }
     memset(out_mesh, 0, sizeof(*out_mesh));
     if (loader_has_extension(filepath, ".fbx")) {
-        return loader_load_fbx_file(filepath, out_mesh);
+        double forced = (double)meters_per_unit;
+        if (honor_file_units) {
+            forced = 0.0;
+        }
+        return loader_load_fbx_file(filepath, out_mesh, forced);
+    }
+    if (loader_has_extension(filepath, ".obj")) {
+        return loader_load_obj_file(filepath, out_mesh, (double)meters_per_unit);
     }
     return loader_load_raw_mesh_file(filepath, out_mesh);
+}
+
+/* the old entry point: fbx units come from the file, obj is read as meters */
+PHOENIX_LOADER_API bool load_3d_mesh_asset(const char* filepath, loader_mesh_data* out_mesh)
+{
+    return load_3d_mesh_asset_scaled(filepath, out_mesh, 1.0f, true);
 }
 
 PHOENIX_LOADER_API void remove_3d_mesh_asset(loader_mesh_data* mesh)
@@ -1825,11 +2143,15 @@ typedef struct {
     double* polygon_index;  size_t polygon_index_count;
     double* normals;        size_t normal_count;
     double* uvs;            size_t uv_count;
+    double  unit_scale_factor;   /* written to the file: 1 = centimeters, 100 = meters */
 } loader_fbx_export;
 
-bool loader_fbx_build_export(const loader_mesh_data* mesh, loader_fbx_export* out)
+bool loader_fbx_build_export(const loader_mesh_data* mesh, loader_fbx_export* out, double units_per_meter)
 {
     memset(out, 0, sizeof(*out));
+    if (units_per_meter <= 0.0) {
+        units_per_meter = 1.0;
+    }
     if (!mesh || !mesh->vertices || !mesh->indices || mesh->vertex_count == 0 || mesh->index_count < 3) {
         return false;
     }
@@ -1852,10 +2174,11 @@ bool loader_fbx_build_export(const loader_mesh_data* mesh, loader_fbx_export* ou
     }
 
     for (uint32_t i = 0; i < mesh->vertex_count; i++) {
-        out->positions[i * 3 + 0] = mesh->vertices[i].pos[0];
-        out->positions[i * 3 + 1] = mesh->vertices[i].pos[1];
-        out->positions[i * 3 + 2] = mesh->vertices[i].pos[2];
+        out->positions[i * 3 + 0] = mesh->vertices[i].pos[0] * units_per_meter;
+        out->positions[i * 3 + 1] = mesh->vertices[i].pos[1] * units_per_meter;
+        out->positions[i * 3 + 2] = mesh->vertices[i].pos[2] * units_per_meter;
     }
+    out->unit_scale_factor = 100.0 / units_per_meter;
     for (size_t t = 0; t < triangles; t++) {
         for (size_t k = 0; k < 3; k++) {
             uint32_t index = mesh->indices[t * 3 + k];
@@ -1909,7 +2232,7 @@ bool loader_save_fbx_ascii(const char* filepath, const loader_fbx_export* data)
     loader_buffer_text(&buffer, "\t\tP: \"FrontAxisSign\", \"int\", \"Integer\", \"\",1\n");
     loader_buffer_text(&buffer, "\t\tP: \"CoordAxis\", \"int\", \"Integer\", \"\",0\n");
     loader_buffer_text(&buffer, "\t\tP: \"CoordAxisSign\", \"int\", \"Integer\", \"\",1\n");
-    loader_buffer_text(&buffer, "\t\tP: \"UnitScaleFactor\", \"double\", \"Number\", \"\",100\n");
+    loader_buffer_text(&buffer, "\t\tP: \"UnitScaleFactor\", \"double\", \"Number\", \"\",%.9g\n", data->unit_scale_factor);
     loader_buffer_text(&buffer, "\t}\n}\n\n");
 
     loader_buffer_text(&buffer, "Objects:  {\n\tGeometry: 1000, \"Geometry::mesh\", \"Mesh\" {\n");
@@ -2097,7 +2420,7 @@ bool loader_save_fbx_binary(const char* filepath, const loader_fbx_export* data)
     loader_bin_string(&buffer, "double");
     loader_bin_string(&buffer, "Number");
     loader_bin_string(&buffer, "");
-    loader_bin_double(&buffer, 100.0);
+    loader_bin_double(&buffer, data->unit_scale_factor);
     loader_bin_properties_done(&buffer, unit);
     loader_bin_end(&buffer, unit, false);
     loader_bin_end(&buffer, properties, true);
@@ -2160,21 +2483,71 @@ bool loader_save_fbx_binary(const char* filepath, const loader_fbx_export* data)
     return ok;
 }
 
-PHOENIX_LOADER_API bool save_3d_mesh_asset(const char* filepath, const loader_mesh_data* mesh, bool binary)
+/* obj: one v / vt / vn per vertex, triangles reference them by the same number */
+bool loader_save_obj_file(const char* filepath, const loader_mesh_data* mesh, double units_per_meter)
+{
+    if (!mesh || !mesh->vertices || !mesh->indices || mesh->vertex_count == 0 || mesh->index_count < 3) {
+        return false;
+    }
+    if (units_per_meter <= 0.0) {
+        units_per_meter = 1.0;
+    }
+    loader_buffer buffer;
+    memset(&buffer, 0, sizeof(buffer));
+    loader_buffer_text(&buffer, "# written by the phoenix loader\n# 1 unit = %.9g m\no mesh\n", 1.0 / units_per_meter);
+    for (uint32_t i = 0; i < mesh->vertex_count; i++) {
+        const loader_vertex* v = &mesh->vertices[i];
+        loader_buffer_text(&buffer, "v %.9g %.9g %.9g\n", v->pos[0] * units_per_meter, v->pos[1] * units_per_meter, v->pos[2] * units_per_meter);
+    }
+    for (uint32_t i = 0; i < mesh->vertex_count; i++) {
+        loader_buffer_text(&buffer, "vt %.9g %.9g\n", mesh->vertices[i].uv[0], mesh->vertices[i].uv[1]);
+    }
+    for (uint32_t i = 0; i < mesh->vertex_count; i++) {
+        const loader_vertex* v = &mesh->vertices[i];
+        loader_buffer_text(&buffer, "vn %.9g %.9g %.9g\n", v->normal[0], v->normal[1], v->normal[2]);
+    }
+    for (uint32_t t = 0; t + 2 < mesh->index_count; t += 3) {
+        uint32_t a = mesh->indices[t + 0];
+        uint32_t b = mesh->indices[t + 1];
+        uint32_t c = mesh->indices[t + 2];
+        if (a >= mesh->vertex_count || b >= mesh->vertex_count || c >= mesh->vertex_count) {
+            continue;
+        }
+        loader_buffer_text(&buffer, "f %u/%u/%u %u/%u/%u %u/%u/%u\n", a + 1, a + 1, a + 1, b + 1, b + 1, b + 1, c + 1, c + 1, c + 1);
+    }
+    bool ok = !buffer.failed && loader_write_file(filepath, buffer.data, buffer.size);
+    free(buffer.data);
+    return ok;
+}
+
+PHOENIX_LOADER_API bool save_3d_mesh_asset_scaled(const char* filepath, const loader_mesh_data* mesh, int format, float units_per_meter)
 {
     if (!filepath) {
         return false;
     }
+    if (format == loader_mesh_format_obj) {
+        return loader_save_obj_file(filepath, mesh, (double)units_per_meter);
+    }
     loader_fbx_export data;
-    if (!loader_fbx_build_export(mesh, &data)) {
+    if (!loader_fbx_build_export(mesh, &data, (double)units_per_meter)) {
         return false;
     }
     bool ok = false;
-    if (binary) {
+    if (format == loader_mesh_format_fbx_binary) {
         ok = loader_save_fbx_binary(filepath, &data);
     } else {
         ok = loader_save_fbx_ascii(filepath, &data);
     }
     loader_fbx_free_export(&data);
     return ok;
+}
+
+/* the old entry point: fbx in meters */
+PHOENIX_LOADER_API bool save_3d_mesh_asset(const char* filepath, const loader_mesh_data* mesh, bool binary)
+{
+    int format = loader_mesh_format_fbx_ascii;
+    if (binary) {
+        format = loader_mesh_format_fbx_binary;
+    }
+    return save_3d_mesh_asset_scaled(filepath, mesh, format, 1.0f);
 }

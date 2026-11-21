@@ -93,6 +93,7 @@ static void mode_windows_apply(system_element_context* ui_element, system_mode_c
     /* leaving Texture Shop mode: switch the pair off, start_dock_system removes all three tabs */
     if (prev_ctx == (int)mode_context_textureshop && ctx != mode_context_textureshop) ui_element->spawn_textureshop_window = false;
 
+    dock_spawn_background = true;      /* the mode's windows come up as tabs, the tab you are on (Scene, Game...) stays in front */
     switch (ctx) {
     case mode_context_object:
     case mode_context_edit:
@@ -123,6 +124,7 @@ static void mode_windows_apply(system_element_context* ui_element, system_mode_c
     default:            /* uv / model / animation: leave the windows alone */
         break;
     }
+    dock_spawn_background = false;
 }
 
 /* flags + surface follow the one active mode. no windows. */

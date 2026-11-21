@@ -36,7 +36,7 @@ system_render_context render_context = {0};
 system_engine_context engine_context = {0};
 manage_docking dock_workspace = {0};
 scene_view_state g_scene_view = {
-    .show_grid = true, .show_origin = true, .show_cameras = true,
+    .show_grid = true, .grid_half_cells = 50, .show_origin = true, .show_cameras = true,
     .shading = scene_shading_textured,
     .wire_color           = { 0.78f, 0.82f, 0.90f },
     .wire_on_shaded_color = { 0.04f, 0.04f, 0.05f },
@@ -45,6 +45,7 @@ scene_view_state g_scene_view = {
 /* the color palette now lives in phoenix_system_theme.c */
 
 int                  g_mouse_prev_x = 0;
+int                  g_active_id_idle_frames = 0;   /* frames with no mouse button down (system_editor_mouse.c clears a stale active_id after 3) */
 int                  g_mouse_prev_y = 0;
  
 WNDPROC              g_wheel_old_proc = 0;

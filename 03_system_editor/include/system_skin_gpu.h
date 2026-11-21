@@ -43,6 +43,14 @@ typedef struct {
     const uint8_t* map_pixels;                     /* base color map: RGBA8 rows top to bottom, NULL = no map. only read during skin_gpu_set */
     uint32_t       map_width;
     uint32_t       map_height;
+    const uint8_t* aux_pixels;                     /* packed extra maps, RGBA8: r = specular, g = height, b = ambient occlusion. NULL = none */
+    uint32_t       aux_width;
+    uint32_t       aux_height;
+    uint32_t       aux_flags;                      /* bit 0 = specular map, bit 1 = height map, bit 2 = ambient map */
+    float          specular;                       /* specular strength 0..1 */
+    float          gloss;                          /* highlight tightness 0..1 */
+    float          height_scale;                   /* bump strength 0..1 */
+    float          ambient;                        /* how much of the scene ambient the skin takes, 0..2 */
 } skin_gpu_data;
 
 /* set layout + pool + the shared "no skin" set. Safe to call again. create_scene_object_pipeline calls it. */

@@ -48,8 +48,8 @@ const struct_menu_item preferences_submenu_items[] = {
 const struct_menu_def preferences_submenu = { "Preferences", preferences_submenu_items, (int)(sizeof(preferences_submenu_items) / sizeof(preferences_submenu_items[0])) };
 
 const struct_menu_item edit_menu_items[] = {
-    { "Undo",  menu_action_undo,  false },
-    { "Redo",  menu_action_redo,  false },
+    { "Undo",  menu_action_undo,  true },
+    { "Redo",  menu_action_redo,  true },
     { NULL,    menu_action_none,   false },
     { "Copy",  menu_action_copy,   false },
     { "Paste", menu_action_paste,  false },
@@ -167,6 +167,13 @@ void run_menu_action(const struct_menu_item* item, system_element_context* ui_ct
     switch (item->action) {
     case menu_action_exit:
         PostQuitMessage(0);
+        break;
+
+    case menu_action_undo:
+        perform_system_undo();
+        break;
+    case menu_action_redo:
+        perform_system_redo();
         break;
 
     /* create_system_* register the scene object themselves. do not spawn a second one. */

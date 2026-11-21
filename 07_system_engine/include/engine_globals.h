@@ -58,6 +58,10 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #include "engine_scene_look.h"
 #include "engine_scene_offscreen.h"
 #include "engine_direction_light.h"   /* needs system_scene_object + editor_vertex: after engine_scene_objects.h */
+#include "engine_point_light.h"
+#include "engine_spot_light.h"
+#include "engine_area_light.h"
+#include "engine_hemisphere_light.h"
 #include "engine_grid.h"              /* needs world_camera + editor_mat4 */
 #include "engine_element.h"
 #include "engine_dock.h"
@@ -160,6 +164,9 @@ extern system_render_context render_context;
 system_render_context* get_engine_render_context(void);
 system_program* get_engine_program_state(void);
 VkPipeline get_engine_grid_pipeline(void);
+extern int g_scene_msaa_samples;
+void set_engine_scene_msaa(int samples);                /* the editor calls it when it decides the scene pass sample count */
+VkSampleCountFlagBits get_scene_msaa_sample_count(void);
 VkPipelineLayout get_engine_grid_pipeline_layout(void);
 extern system_engine_context engine_context;
 

@@ -32,7 +32,7 @@ static void push_mesh_pc(VkCommandBuffer cmd, const editor_mat4* mv, const edito
 {
     float pc[40];
     float sun[4];
-    light_get_sun_color(light[3], sun);
+    get_light_sun_color(light[3], sun);
     memcpy(&pc[0],  mv,    sizeof(editor_mat4));
     memcpy(&pc[16], proj,  sizeof(editor_mat4));
     memcpy(&pc[32], light, 4 * sizeof(float));

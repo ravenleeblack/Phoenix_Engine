@@ -60,6 +60,16 @@ typedef struct {
     uint32_t      id;                                   /* never reused, never an array index. Objects store THIS. 0 = none. */
     char          name[texshop_name_len];               /* also the file name: assets/skins/<name>.sprof */
     char          map_file[32];                         /* base color map: a PNG in assets/textures (file name only), "" = none */
+    char          spec_file[32];                        /* specular map (red channel is read), "" = none */
+    char          height_file[32];                      /* height map (red channel), drives bump shading, "" = none */
+    char          ambient_file[32];                     /* ambient occlusion map (red channel), "" = none */
+    float         specular;                             /* highlight strength 0..1 */
+    float         gloss;                                /* highlight tightness 0..1 */
+    float         height_scale;                         /* bump strength 0..1 */
+    float         ambient;                              /* share of the scene ambient the skin receives, 0..2 */
+    float         preview_color[3];                     /* average color of the skin, for the sphere in the Texture Shop window */
+    uint32_t      preview_hash;                         /* hash the preview was computed from */
+    bool          preview_ready;
     texshop_layer layers[texshop_max_layers];
     int           layer_count;
     int           selected_layer;
@@ -96,9 +106,12 @@ void           add_texshop_mask(texshop_layer* l, enum_texshop_mask mask);
 void           remove_texshop_mask(texshop_layer* l, int index);
 bool           texshop_skin_is_dirty(const texshop_skin* s);
 void           texshop_describe_target(char* out, size_t cap);   /* "<object>: <skin or no skin>" for the obj_vert_selected object */
+void           texshop_get_preview_color(texshop_skin* s, float out[3]);   /* the skin's average color: layers blended, base layer times its map's average */
 
 /* once per frame from the window: rebuilds the obj_vert_selected skin's GPU copy when an edit changed it */
 void           texshop_sync_skin_gpu(void);
 void           export_texshop_skin(void);
+texshop_skin*  get_builtin_terrain_skin(void);               /* the Terrain skin (grass / rock colours, sheen) the Inspector edits, NULL if missing */
+void           save_builtin_terrain_skin(void);              /* writes it to assets/skins */
 
 #endif

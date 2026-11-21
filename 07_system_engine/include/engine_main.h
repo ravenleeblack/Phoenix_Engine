@@ -48,6 +48,7 @@ typedef enum program_boot_stage
 /* ---- editor plugin (phoenix_editor.dll): everything the engine calls into the editor ---- */
 typedef bool            (*load_editor_settings_ptr)(void);
 typedef void            (*save_editor_settings_ptr)(void);
+typedef void            (*apply_editor_settings_ptr)(void);
 typedef bool            (*start_editor_ptr)(void);
 typedef void            (*update_editor_ptr)(float delta_time);
 typedef VkCommandBuffer (*begin_editor_frame_pass_ptr)(void);
@@ -73,6 +74,7 @@ typedef struct editor_plugin
 {
     load_editor_settings_ptr         load_settings;
     save_editor_settings_ptr         save_settings;
+    apply_editor_settings_ptr        apply_settings;     /* after the editor started: re-applies the saved preferences and unlocks saving */
     start_editor_ptr                 start;
     update_editor_ptr                update;
     begin_editor_frame_pass_ptr      begin_frame_pass;

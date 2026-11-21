@@ -12,6 +12,66 @@ void remove_editor_light_at(int index)
     editor_light_count--;
 }
 
+void reset_light_defaults(light_object* l, light_kind kind)
+{
+    l->kind         = kind;
+    l->enabled      = true;
+    l->color[0] = l->color[1] = l->color[2] = 1.0f;
+    l->ground_color[0] = 0.22f; l->ground_color[1] = 0.18f; l->ground_color[2] = 0.14f;
+    l->intensity    = 1.0f;
+    l->warmth       = 0.0f;
+    l->range        = 30.0f;
+    l->cone_deg     = 35.0f;
+    l->softness     = 0.3f;
+    /* each kind has its own engine file with its own defaults */
+    if (kind == light_kind_point) {
+        set_point_light_defaults(l);
+    } else if (kind == light_kind_spot) {
+        set_spot_light_defaults(l);
+    } else if (kind == light_kind_area) {
+        set_area_light_defaults(l);
+    } else if (kind == light_kind_hemisphere) {
+        set_hemisphere_light_defaults(l);
+    }
+}
+
+bool create_system_light(light_kind kind, editor_vec3 position, VkDevice device, VkPhysicalDevice physical_device)
+{
+    const char* names[light_kind_count] = { "Directional Light", "Point Light", "Spot Light", "Hemisphere Light", "Area Light" };
+    if (kind < 0 || kind >= light_kind_count) {
+        return false;
+    }
+    if (kind == light_kind_directional) {
+        return create_system_directional_light(position, 1.0f, names[kind], device, physical_device, VK_NULL_HANDLE, VK_NULL_HANDLE);
+    }
+    if (editor_light_count >= light_max_objects || g_scene_registry.object_count >= max_scene_objects) {
+        phoenix_warn("Light", "%s", "Light registry full. Cannot add another light.");
+        return false;
+    }
+
+    system_scene_object* obj = spawn_new_scene_object(names[kind], position);
+    if (!obj) {
+        phoenix_error("Light", "%s", "Failed to allocate light hierarchy node.");
+        return false;
+    }
+    obj->type     = scene_object_light;
+    obj->rotation = (editor_vec3){ -1.5708f, 0.0f, 0.0f };   /* spot lights start pointing straight down */
+    obj->scale    = (editor_vec3){ 1.0f, 1.0f, 1.0f };
+
+    build_sun_glyph(&editor_sun_glyph, 1.0f);
+    if (!upload_scene_object_mesh(obj, device, physical_device, editor_sun_glyph.vertices, (uint32_t)editor_sun_glyph.vertex_count,
+                                  editor_sun_glyph.indices, (uint32_t)editor_sun_glyph.index_count)) {
+        phoenix_error("Light", "%s", "Light GPU upload failed - object will appear in hierarchy only.");
+    }
+
+    light_object* l = &editor_lights[editor_light_count];
+    editor_light_count++;
+    l->object_id = obj->id;
+    reset_light_defaults(l, kind);
+    set_statusbar_message("Added %s. Edit it in the Lighting window.", names[kind]);
+    return true;
+}
+
 bool create_system_directional_light(editor_vec3 position, float size, const char* name,
                                      VkDevice device, VkPhysicalDevice physical_device,
                                      VkCommandPool pool, VkQueue queue)
@@ -59,8 +119,7 @@ bool create_system_directional_light(editor_vec3 position, float size, const cha
     light_object* l = &editor_lights[editor_light_count];
     editor_light_count++;
     l->object_id = obj->id;
-    l->kind      = light_kind_directional;
-    l->enabled   = true;
+    reset_light_defaults(l, light_kind_directional);
 
     phoenix_info("Light", "Directional light '%s' registered.", light_name);
     return true;
@@ -70,6 +129,7 @@ bool create_system_directional_light(editor_vec3 position, float size, const cha
 void update_light_from_scene(void)
 {
     editor_light_driver = -1;
+    g_light.sun_driven = false;
 
     for (int i = 0; i < editor_light_count; ) {
         system_scene_object* obj = find_scene_object_by_id(editor_lights[i].object_id);
@@ -81,6 +141,12 @@ void update_light_from_scene(void)
         if (editor_light_driver < 0 && editor_lights[i].enabled && editor_lights[i].kind == light_kind_directional) {
             editor_light_driver = i;
             get_sun_from_rotation(obj->rotation, &g_scene_sun.azimuth_deg, &g_scene_sun.elevation_deg);
+            g_light.sun_driven = true;                       /* the engine reads the light's own colour, intensity and warmth */
+            g_light.sun_driver_color[0] = editor_lights[i].color[0];
+            g_light.sun_driver_color[1] = editor_lights[i].color[1];
+            g_light.sun_driver_color[2] = editor_lights[i].color[2];
+            g_light.sun_driver_intensity = editor_lights[i].intensity;
+            g_light.sun_driver_warmth    = editor_lights[i].warmth;
         }
         i++;
     }

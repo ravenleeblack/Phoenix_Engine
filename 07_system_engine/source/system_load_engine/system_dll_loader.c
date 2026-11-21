@@ -26,6 +26,7 @@ bool load_editor_library(void)
     const char* name = "phoenix_editor.dll";
     g_editor.load_settings     = (load_editor_settings_ptr)   resolve_system_symbol(system_editor_dll, name, "editor_load_settings");
     g_editor.save_settings     = (save_editor_settings_ptr)   resolve_system_symbol(system_editor_dll, name, "editor_save_settings");
+    g_editor.apply_settings    = (apply_editor_settings_ptr)  resolve_system_symbol(system_editor_dll, name, "editor_apply_settings");
     g_editor.start             = (start_editor_ptr)           resolve_system_symbol(system_editor_dll, name, "editor_start");
     g_editor.update            = (update_editor_ptr)          resolve_system_symbol(system_editor_dll, name, "editor_update");
     g_editor.begin_frame_pass  = (begin_editor_frame_pass_ptr)resolve_system_symbol(system_editor_dll, name, "editor_begin_frame_pass");
@@ -47,7 +48,7 @@ bool load_editor_library(void)
     g_editor.create_scene_object_pipeline = (create_scene_object_pipeline_ptr)resolve_system_symbol(system_editor_dll, name, "create_scene_object_pipeline");
     g_editor.record_offscreen_frame       = (record_offscreen_frame_ptr)      resolve_system_symbol(system_editor_dll, name, "offscreen_record_frame");
 
-    if (!g_editor.load_settings || !g_editor.save_settings || !g_editor.start || !g_editor.update ||
+    if (!g_editor.load_settings || !g_editor.save_settings || !g_editor.apply_settings || !g_editor.start || !g_editor.update ||
         !g_editor.begin_frame_pass || !g_editor.draw_ui || !g_editor.draw_menubar ||
         !g_editor.draw_toolbar || !g_editor.draw_dock || !g_editor.draw_statusbar ||
         !g_editor.flush_ui || !g_editor.end_frame_pass ||

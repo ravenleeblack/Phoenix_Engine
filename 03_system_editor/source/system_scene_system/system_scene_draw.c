@@ -32,7 +32,7 @@ static void push_mesh_pc(VkCommandBuffer cmd, const editor_mat4* mv, const edito
 {
     float pc[40];
     float sun[4];
-    light_get_sun_color(light[3], sun);
+    get_light_sun_color(light[3], sun);
     memcpy(&pc[0],  mv,    sizeof(editor_mat4));
     memcpy(&pc[16], proj,  sizeof(editor_mat4));
     memcpy(&pc[32], light, 4 * sizeof(float));
@@ -304,10 +304,18 @@ bool create_editor_scene_object_pipeline(VkPhysicalDevice physical_device, VkDev
     }
     VkDescriptorSetLayout skin_set_layout = skin_gpu_get_layout();
 
+    /* Set 1 = the scene lights (one dynamic uniform buffer, read by mesh_frag.glsl) */
+    if (!create_light_gpu_layout(device, physical_device)) {
+        vkDestroyShaderModule(device, vs, NULL);
+        vkDestroyShaderModule(device, fs, NULL);
+        return false;
+    }
+    VkDescriptorSetLayout set_layouts[2] = { skin_set_layout, get_light_gpu_layout() };
+
     VkPushConstantRange pcr = { VK_SHADER_STAGE_VERTEX_BIT, 0, MESH_PC_SIZE };   /* modelview + proj + light (matrices stay push constants) */
     VkPipelineLayoutCreateInfo li = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-    li.setLayoutCount = 1;
-    li.pSetLayouts = &skin_set_layout;
+    li.setLayoutCount = 2;
+    li.pSetLayouts = set_layouts;
     li.pushConstantRangeCount = 1;
     li.pPushConstantRanges = &pcr;
     if (vkCreatePipelineLayout(device, &li, NULL, &g_obj_layout) != VK_SUCCESS) {
@@ -668,6 +676,7 @@ static void draw_scene_mesh_list(VkCommandBuffer cmd, const editor_mat4* view, c
 
     float light[4];
     scene_look_get_light_view(view, light);   /* zero xyz while the Lit button is off */
+    bind_light_gpu_set(cmd, g_obj_layout, view);   /* set 1: point / spot / extra directional / hemisphere lights */
 
     const bool skins_active = use_skins && flat_rgb == NULL;
     VkDescriptorSet bound = VK_NULL_HANDLE;
@@ -687,7 +696,10 @@ static void draw_scene_mesh_list(VkCommandBuffer cmd, const editor_mat4* view, c
         if (skins_active) {
             VkDescriptorSet want = skin_gpu_get_empty_set();           /* no skin: shared grey set */
             if (o->type != scene_object_camera) {
-                const uint32_t skin_id = get_object_skin_id(o->id);    /* 0 = no skin, or the skin was deleted */
+                uint32_t skin_id = get_object_skin_id(o->id);          /* 0 = no skin, or the skin was deleted */
+                if (skin_id == 0 && is_terrain_object(o)) {
+                    skin_id = get_builtin_terrain_skin_id();           /* terrain without a skin of its own looks like grass and dirt */
+                }
                 if (skin_id != 0) {
                     if (!skin_gpu_has(skin_id)) texshop_build_skin_gpu(skin_id);   /* first use: build once, then cached per skin */
                     want = skin_gpu_get_set(skin_id);
@@ -885,6 +897,150 @@ static void draw_terrain_borders(VkCommandBuffer cmd, const editor_mat4* view, c
     vkCmdDraw(cmd, g_bd_line_count, 1, 0, 0);
 }
 
+/* ------------------------------------------------------------------ */
+/* Selection bounding box: 12 edges around the selected mesh, fitted   */
+/* to its own vertices and drawn in its own space (so it turns and     */
+/* scales with the object).                                            */
+/* ------------------------------------------------------------------ */
+static VkBuffer       g_bbox_buffer = VK_NULL_HANDLE;
+static VkDeviceMemory g_bbox_memory = VK_NULL_HANDLE;
+static bool           g_bbox_failed = false;
+#define BBOX_VERT_COUNT 24
+
+static bool create_bbox_mesh(void)
+{
+    if (g_bbox_buffer != VK_NULL_HANDLE) return true;
+    if (g_bbox_failed) return false;
+
+    VkDevice         device          = render_context.logical_device;
+    VkPhysicalDevice physical_device = render_context.physical_device;
+    if (!device || !physical_device) return false;
+
+    const float h = 0.5f;                                   /* a unit cube, the draw call stretches it over the real bounds */
+    const float p[8][3] = {
+        {-h,-h,-h}, { h,-h,-h}, { h, h,-h}, {-h, h,-h},
+        {-h,-h, h}, { h,-h, h}, { h, h, h}, {-h, h, h}
+    };
+    const int edges[12][2] = {
+        {0,1},{1,2},{2,3},{3,0},
+        {4,5},{5,6},{6,7},{7,4},
+        {0,4},{1,5},{2,6},{3,7}
+    };
+    const float color[4] = { 1.0f, 0.95f, 0.70f, 1.0f };
+
+    editor_vertex verts[BBOX_VERT_COUNT];
+    uint32_t count = 0;
+    for (int e = 0; e < 12; e++) {
+        push_wire_line(verts, &count, p[edges[e][0]], p[edges[e][1]], color);
+    }
+    if (!create_buffer_with_data(device, physical_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                 verts, sizeof(editor_vertex) * count, &g_bbox_buffer, &g_bbox_memory)) {
+        g_bbox_failed = true;
+        phoenix_error("SCENE3D", "Bounding box mesh creation failed.");
+        return false;
+    }
+    return true;
+}
+
+/* smallest box around the object's vertices, in object space */
+static bool get_mesh_bounds(const system_scene_object* o, float lo[3], float hi[3])
+{
+    const void*     vertices     = NULL;
+    uint32_t        vertex_size  = 0;
+    uint32_t        vertex_count = 0;
+    const uint32_t* indices      = NULL;
+    uint32_t        index_count  = 0;
+    if (!get_object_mesh_data(o->id, &vertices, &vertex_size, &vertex_count, &indices, &index_count)) return false;
+    if (vertex_size != sizeof(editor_vertex) || vertex_count == 0) return false;
+
+    const editor_vertex* v = (const editor_vertex*)vertices;
+    lo[0] = hi[0] = v[0].x;
+    lo[1] = hi[1] = v[0].y;
+    lo[2] = hi[2] = v[0].z;
+    for (uint32_t i = 1; i < vertex_count; i++) {
+        if (v[i].x < lo[0]) lo[0] = v[i].x;
+        if (v[i].y < lo[1]) lo[1] = v[i].y;
+        if (v[i].z < lo[2]) lo[2] = v[i].z;
+        if (v[i].x > hi[0]) hi[0] = v[i].x;
+        if (v[i].y > hi[1]) hi[1] = v[i].y;
+        if (v[i].z > hi[2]) hi[2] = v[i].z;
+    }
+    return true;
+}
+
+static void draw_selection_bounding_box(VkCommandBuffer cmd, const editor_mat4* view, const editor_mat4* proj)
+{
+    if (g_line_pipeline == VK_NULL_HANDLE) return;
+
+    const system_scene_object* o = find_scene_object_by_id(g_scene_registry.selected_object_id);
+    if (!o || o == &g_scene_registry.objects[0] || o->type != scene_object_mesh) return;
+
+    float lo[3], hi[3];
+    if (!get_mesh_bounds(o, lo, hi)) return;
+    if (!create_bbox_mesh()) return;
+
+    editor_vec3 center = { (lo[0] + hi[0]) * 0.5f, (lo[1] + hi[1]) * 0.5f, (lo[2] + hi[2]) * 0.5f };
+    editor_vec3 size   = { hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2] };
+    if (size.x < 0.001f) size.x = 0.001f;                   /* a flat mesh still gets a visible box */
+    if (size.y < 0.001f) size.y = 0.001f;
+    if (size.z < 0.001f) size.z = 0.001f;
+    size.x = size.x * 1.04f + 0.02f;                        /* a little air, so a box-shaped mesh does not hide its own bounds */
+    size.y = size.y * 1.04f + 0.02f;
+    size.z = size.z * 1.04f + 0.02f;
+
+    editor_mat4 fit   = system_math_model_matrix(center, (editor_vec3){ 0.0f, 0.0f, 0.0f }, size);
+    editor_mat4 model = system_math_model_matrix(o->position, o->rotation, o->scale);
+    editor_mat4 mv    = system_math_mat4_multiply(*view, system_math_mat4_multiply(model, fit));
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_line_pipeline);
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &g_bbox_buffer, &off);
+    push_mesh_pc(cmd, &mv, proj, k_unlit);
+    vkCmdDraw(cmd, BBOX_VERT_COUNT, 1, 0, 0);
+}
+
+/* the chunk picked in the Scene view or the Scene Archive: its faces, drawn as the yellow cell grid on top of the terrain.
+   the region mesh is one merged buffer, so the chunk is a range of its indices (same loop order as upload_region in system_terrain.c). */
+static void draw_picked_terrain_chunk(VkCommandBuffer cmd, const editor_mat4* view, const editor_mat4* proj)
+{
+    if (!g_terrain.exists || g_pick_chunk_x < 0 || g_pick_chunk_z < 0 || g_wiregrid_pipeline == VK_NULL_HANDLE) return;
+    if (g_scene_registry.selected_object_id != g_pick_chunk_region_object_id) return;
+
+    int region = -1;
+    for (int r = 0; r < terrain_region_count; r++) if (g_terrain.region_ids[r] == g_pick_chunk_region_object_id) region = r;
+    if (region < 0 || !g_terrain.region_valid) return;
+    const system_scene_object* obj = find_scene_object_by_id(g_pick_chunk_region_object_id);
+    if (!obj || obj->vertex_buffer == 0 || obj->index_buffer == 0 || obj->index_count == 0) return;
+
+    const int rc = g_terrain.dims.region_chunks, rx = region % terrain_region_grid, rz = region / terrain_region_grid;
+    const int ax = (g_terrain.region_cx0 > rx * rc) ? g_terrain.region_cx0 : rx * rc;
+    const int bx = (g_terrain.region_cx1 < (rx + 1) * rc) ? g_terrain.region_cx1 : (rx + 1) * rc;
+    const int az = (g_terrain.region_cz0 > rz * rc) ? g_terrain.region_cz0 : rz * rc;
+    const int bz = (g_terrain.region_cz1 < (rz + 1) * rc) ? g_terrain.region_cz1 : (rz + 1) * rc;
+
+    uint32_t first_index = 0, index_total = 0;
+    for (int cz = az; cz < bz && index_total == 0; cz++) {
+        for (int cx = ax; cx < bx; cx++) {
+            const terrain_chunk* c = &g_terrain.layers[terrain_layer_terrain].chunks[cz * g_terrain.dims.chunks_x + cx];
+            if (!c->mesh_built || c->mesh_vc == 0) continue;
+            if (cx == g_pick_chunk_x && cz == g_pick_chunk_z) { index_total = c->mesh_ic; break; }
+            first_index += c->mesh_ic;
+        }
+    }
+    if (index_total == 0 || first_index + index_total > obj->index_count) return;   /* the chunk has no mesh right now (too far from the camera) */
+
+    editor_mat4 model = system_math_model_matrix(obj->position, obj->rotation, obj->scale);
+    editor_mat4 mv    = system_math_mat4_multiply(*view, model);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_wiregrid_pipeline);
+    push_mesh_pc_wiregrid(cmd, &mv, proj, 1.0f, 0.85f, 0.2f);
+    VkBuffer vb = (VkBuffer)(uintptr_t)obj->vertex_buffer;
+    VkBuffer ib = (VkBuffer)(uintptr_t)obj->index_buffer;
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &vb, &off);
+    vkCmdBindIndexBuffer(cmd, ib, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, index_total, 1, first_index, 0, 0);
+}
+
 /* Scene view: origin marker, every mesh object, then camera outlines + frustum lines. */
 void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* proj16)
 {
@@ -918,6 +1074,7 @@ void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* p
         if (empty != VK_NULL_HANDLE)
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_layout, 0, 1, &empty, 0, NULL);
     }
+    bind_light_gpu_set(cmd, g_obj_layout, &view);
 
     /* Origin marker first (the depth buffer sorts it against the real objects). */
     if (g_scene_view.show_origin) draw_origin_marker(cmd, &view, &proj);
@@ -949,7 +1106,11 @@ void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* p
 
     draw_terrain_borders(cmd, &view, &proj);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
+    draw_picked_terrain_chunk(cmd, &view, &proj);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
 
+    draw_selection_bounding_box(cmd, &view, &proj);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
     /* Lines last so the outline sits on top of the camera glyph. */
     if (g_scene_view.show_cameras) {
         draw_camera_wire_outlines(cmd, &view, &proj);
@@ -979,6 +1140,7 @@ void shutdown_scene_object_rendering(VkDevice device)
     vkDeviceWaitIdle(device);
     scene_look_shutdown(device);
     skin_gpu_shutdown(device);   /* skin buffers, sets, pool and set layout (after the pipelines that use them are idle) */
+    destroy_light_gpu(device);
 
     for (uint32_t i = 0; i < g_scene_registry.object_count; i++) {
         system_scene_object* o = &g_scene_registry.objects[i];
@@ -996,6 +1158,9 @@ void shutdown_scene_object_rendering(VkDevice device)
     if (g_origin_index_memory  != VK_NULL_HANDLE) { vkFreeMemory(device, g_origin_index_memory, NULL);     g_origin_index_memory  = VK_NULL_HANDLE; }
     g_origin_marker_failed = false;
 
+    if (g_bbox_buffer != VK_NULL_HANDLE) { vkDestroyBuffer(device, g_bbox_buffer, NULL); g_bbox_buffer = VK_NULL_HANDLE; }
+    if (g_bbox_memory != VK_NULL_HANDLE) { vkFreeMemory(device, g_bbox_memory, NULL);    g_bbox_memory = VK_NULL_HANDLE; }
+    g_bbox_failed = false;
     if (g_camera_wire_buffer != VK_NULL_HANDLE) { vkDestroyBuffer(device, g_camera_wire_buffer, NULL); g_camera_wire_buffer = VK_NULL_HANDLE; }
     if (g_camera_wire_memory != VK_NULL_HANDLE) { vkFreeMemory(device, g_camera_wire_memory, NULL);    g_camera_wire_memory = VK_NULL_HANDLE; }
     g_camera_wire_vertex_count = 0;

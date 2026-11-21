@@ -26,12 +26,15 @@ static system_dock_node* new_node(enum_dock_node_type type, float ratio, system_
     return n;
 }
 
+/* true while the mode menu opens a mode's windows: new tabs are added but the tab you are looking at stays in front */
+bool dock_spawn_background = false;
+
 static bool leaf_add(system_dock_node* leaf, enum_view_type vert_to_edge_array)
 {
     if (!leaf || leaf->node_type != dock_node_leaf || vert_to_edge_array == view_type_none) return false;
-    for (int i = 0; i < leaf->view_count; i++) if (leaf->active_views[i] == vert_to_edge_array) { leaf->active_view_index = i; return true; }
+    for (int i = 0; i < leaf->view_count; i++) if (leaf->active_views[i] == vert_to_edge_array) { if (!dock_spawn_background) leaf->active_view_index = i; return true; }
     if (leaf->view_count >= 8) return false;
-    leaf->active_view_index = leaf->view_count;
+    if (!dock_spawn_background || leaf->view_count == 0) leaf->active_view_index = leaf->view_count;
     leaf->active_views[leaf->view_count++] = vert_to_edge_array;
     return true;
 }
@@ -126,7 +129,7 @@ void push_dock_view(manage_docking* mesh, enum_view_type view)
     if (!mesh || !mesh->root || view == view_type_none) return;
     system_dock_node* leaf = NULL;
     int idx = 0;
-    if (find_view(mesh->root, view, &leaf, &idx)) { leaf->active_view_index = idx; return; }
+    if (find_view(mesh->root, view, &leaf, &idx)) { if (!dock_spawn_background) leaf->active_view_index = idx; return; }
 
     leaf = mesh->root;
     while (leaf->node_type != dock_node_leaf) leaf = leaf->right_child ? leaf->right_child : leaf->left_child;
@@ -158,7 +161,7 @@ void spawn_dock_view_beside(manage_docking* mesh, enum_view_type anchor_a, enum_
 
     system_dock_node* leaf = NULL;
     int idx = 0;
-    if (find_view(mesh->root, view, &leaf, &idx)) { leaf->active_view_index = idx; return; }
+    if (find_view(mesh->root, view, &leaf, &idx)) { if (!dock_spawn_background) leaf->active_view_index = idx; return; }
 
     system_dock_node* target = dock_find_leaf_with_view(mesh->root, anchor_a);
     if (!target) target = dock_find_leaf_with_view(mesh->root, anchor_b);
@@ -324,6 +327,39 @@ void start_dock_system(VkCommandBuffer cmd, manage_docking* mesh, system_element
 
     compute_dock_layout(mesh->root, 0, dock_top, (int)program_state.width, (int)program_state.height - dock_top - statusbar_h, NULL);
     traverse_dock_tree(ui_element, mesh->root, cmd);
+}
+
+/* the cursor for the dock: 0 = normal arrow, 1 = left/right arrow, 2 = up/down arrow.
+   a resize arrow shows over a divider that can really be dragged (the mode strip is fixed, so its edges do not count),
+   and stays while one is being dragged. */
+int get_dock_cursor_kind(const manage_docking* mesh, int mx, int my)
+{
+    if (!mesh || !mesh->root) return 0;
+
+    if (mesh->is_resizing_splitter && mesh->resizing_splitter_node) {
+        if (mesh->resizing_splitter_node->node_type == dock_node_split_horizontal) return 1;
+        return 2;
+    }
+    if (mesh->is_dragging) return 0;
+
+    const system_dock_node* stack[128];
+    int sp = 0;
+    stack[sp++] = mesh->root;
+    while (sp > 0) {
+        const system_dock_node* n = stack[--sp];
+        if (!n || n->node_type == dock_node_leaf || !n->left_child || !n->right_child) continue;
+
+        const system_dock_node *l = n->left_child, *r = n->right_child;
+        if (!dock_is_mode_menu(l) && !dock_is_mode_menu(r)) {
+            if (n->node_type == dock_node_split_horizontal) {
+                if (mx >= r->x - dock_grab && mx <= r->x + dock_grab && my >= n->y && my < n->y + n->h) return 1;
+            } else {
+                if (my >= r->y - dock_grab && my <= r->y + dock_grab && mx >= n->x && mx < n->x + n->w) return 2;
+            }
+        }
+        if (sp < 126) { stack[sp++] = r; stack[sp++] = l; }
+    }
+    return 0;
 }
 
 /* Finds the split whose 1px divider line is under the mouse (within DOCK_GRAB pixels).

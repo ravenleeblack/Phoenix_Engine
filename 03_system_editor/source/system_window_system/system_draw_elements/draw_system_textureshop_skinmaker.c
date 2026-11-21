@@ -9,7 +9,7 @@ enum {
     sm_button_h = 22, sm_gap = 4, sm_pad = 8, sm_header_h = 20, sm_text_h = 16,
     sm_status_h = 18, sm_bottom_h = 30,
     sm_sub_gap = 2, sm_sub_sep = 7,
-    sm_section_count = 4, sm_scroll_step = 60
+    sm_section_count = 5, sm_scroll_step = 60
 };
 
 typedef struct { int left, right, top, bottom, x, y, row_h; bool edge_to_face_array; } sm_cursor;
@@ -215,6 +215,80 @@ static void draw_sm_layer_section(VkCommandBuffer cmd, system_element_context* u
     if (draw_sm_button(cmd, ui_element, c, "Triplanar", false,  l->triplanar, system_theme.system_edit_mode_active_face_hover)) l->triplanar = true;
 }
 
+static float sm_step_range(float value, float delta, float lo, float hi)
+{
+    value += delta;
+    if (value < lo) value = lo;
+    if (value > hi) value = hi;
+    return floorf(value * 100.0f + 0.5f) / 100.0f;
+}
+
+/* one value row: "Label 0.25" then - and + buttons on the same row */
+static void draw_sm_value_row(VkCommandBuffer cmd, system_element_context* ui_element, sm_cursor* c, const char* label,
+                              float* value, float lo, float hi)
+{
+    char text[40];
+    snprintf(text, sizeof(text), "%s %.2f", label, *value);
+    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
+    char minus[24], plus[24];
+    snprintf(minus, sizeof(minus), "%.4s -", label);
+    snprintf(plus,  sizeof(plus),  "%.4s +", label);
+    if (draw_sm_button(cmd, ui_element, c, minus, false, false, system_theme.toolbar_background)) *value = sm_step_range(*value, -0.05f, lo, hi);
+    if (draw_sm_button(cmd, ui_element, c, plus,  false, false, system_theme.toolbar_background)) *value = sm_step_range(*value,  0.05f, lo, hi);
+}
+
+/* the png picked in the File Archive becomes the map. it must be in assets/textures (a PNG import puts it there). */
+void set_skin_map_from_archive(char* map_file, size_t cap)
+{
+    const file_archive_node* node = file_archive_node_at(file_archive_selected());
+    if (!node || node->kind != file_node_file) {
+        set_texshop_status("Select a PNG in the Files window first.");
+        return;
+    }
+    const char* dot = strrchr(node->name, '.');
+    if (!dot || _stricmp(dot, ".png") != 0) {
+        set_texshop_status("The selected file is not a PNG.");
+        return;
+    }
+    if (strlen(node->name) >= cap) {
+        set_texshop_status("That file name is too long (31 characters max).");
+        return;
+    }
+    snprintf(map_file, cap, "%s", node->name);
+    set_texshop_status("Map set from the Files window.");
+}
+
+static void draw_sm_surface_section(VkCommandBuffer cmd, system_element_context* ui_element, sm_cursor* c, texshop_skin* s)
+{
+    draw_sm_text(cmd, ui_element, c, "Shader profile: specular, height, ambient", system_theme.system_text);
+    draw_sm_value_row(cmd, ui_element, c, "Specular", &s->specular, 0.0f, 1.0f);
+    draw_sm_value_row(cmd, ui_element, c, "Gloss", &s->gloss, 0.0f, 1.0f);
+    draw_sm_value_row(cmd, ui_element, c, "Height", &s->height_scale, 0.0f, 1.0f);
+    draw_sm_value_row(cmd, ui_element, c, "Ambient", &s->ambient, 0.0f, 2.0f);
+
+    draw_sm_text(cmd, ui_element, c, "Maps (pick a PNG in Files, then press)", system_theme.system_text);
+    char text[64];
+    snprintf(text, sizeof(text), "Spec map: %.20s", s->spec_file[0] ? s->spec_file : "none");
+    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
+    if (draw_sm_button(cmd, ui_element, c, "Set spec", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->spec_file, sizeof(s->spec_file));
+    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->spec_file[0] = '\0';
+
+    snprintf(text, sizeof(text), "Height map: %.18s", s->height_file[0] ? s->height_file : "none");
+    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
+    if (draw_sm_button(cmd, ui_element, c, "Set height", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->height_file, sizeof(s->height_file));
+    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->height_file[0] = '\0';
+
+    snprintf(text, sizeof(text), "Ambient map: %.16s", s->ambient_file[0] ? s->ambient_file : "none");
+    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
+    if (draw_sm_button(cmd, ui_element, c, "Set ambient", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->ambient_file, sizeof(s->ambient_file));
+    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->ambient_file[0] = '\0';
+
+    snprintf(text, sizeof(text), "Color map: %.20s", s->map_file[0] ? s->map_file : "none");
+    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
+    if (draw_sm_button(cmd, ui_element, c, "Set color", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->map_file, sizeof(s->map_file));
+    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->map_file[0] = '\0';
+}
+
 static void draw_sm_masks_section(VkCommandBuffer cmd, system_element_context* ui_element, sm_cursor* c, texshop_skin* s)
 {
     texshop_layer* l = get_texshop_layer(s);
@@ -366,6 +440,7 @@ void draw_textureshop_skinmaker_window(system_element_context* ui_ctx, system_do
     if (skin) {
         if (draw_sm_section(cmd, ui_ctx, &c, "Layer Stack", &open[1]))    draw_sm_layers_section(cmd, ui_ctx, &c, skin);
         if (draw_sm_section(cmd, ui_ctx, &c, "Selected Layer", &open[2])) draw_sm_layer_section(cmd, ui_ctx, &c, skin);
+        if (draw_sm_section(cmd, ui_ctx, &c, "Surface", &open[4]))        draw_sm_surface_section(cmd, ui_ctx, &c, skin);
         if (draw_sm_section(cmd, ui_ctx, &c, "Masks", &open[3]))          draw_sm_masks_section(cmd, ui_ctx, &c, skin);
     }
     finish_sm_row(&c);
@@ -389,10 +464,31 @@ void draw_textureshop_skinmaker_window(system_element_context* ui_ctx, system_do
 }
 
 /* ------------------------------------------------------------------------- */
-/* Texture Shop window: the shader profile side. Lists the profiles (skins), assigns them to the obj_vert_selected object, exports.  */
-/* It lives in this file only to share the helpers above, it can move out once it has its own widgets.                      */
-/* Next things that belong here, not in the Skin Maker: shading model, feature flags, texture inputs, exposed params.       */
+/* Texture Shop window: the skin library. Every skin is a lit sphere, like the material balls of a sculpting tool.          */
+/* Click one to pick it, Assign / Clear put it on the selected object. Making and editing skins is the Skin Maker's job.   */
+/* Next things that belong here: shading model, feature flags, texture inputs, exposed params, the render preview.          */
 /* ------------------------------------------------------------------------- */
+enum { ts_sphere_radius = 30, ts_cell_w = 92, ts_cell_h = 98 };
+
+/* a lit sphere in a skin's color: a dark disc, then smaller and lighter discs pushed toward the light (upper left), then a highlight */
+static void draw_skin_sphere(VkCommandBuffer cmd, float cx, float cy, float radius, const float rgb[3])
+{
+    const float shade[6]  = { 0.30f, 0.50f, 0.72f, 0.92f, 1.10f, 1.40f };
+    const float size[6]   = { 1.00f, 0.92f, 0.78f, 0.60f, 0.40f, 0.16f };
+    const float offset[6] = { 0.00f, 0.05f, 0.12f, 0.20f, 0.28f, 0.38f };
+    for (int k = 0; k < 6; k++) {
+        system_color color;
+        color.red   = rgb[0] * shade[k];
+        color.green = rgb[1] * shade[k];
+        color.blue  = rgb[2] * shade[k];
+        color.alpha = 1.0f;
+        if (color.red   > 1.0f) color.red   = 1.0f;
+        if (color.green > 1.0f) color.green = 1.0f;
+        if (color.blue  > 1.0f) color.blue  = 1.0f;
+        push_circle_element(cmd, cx - radius * offset[k], cy - radius * offset[k], radius * size[k], 0.0f, color);
+    }
+}
+
 void draw_textureshop_window(system_element_context* ui_ctx, system_dock_node* node, int content_y, int content_h, VkCommandBuffer cmd)
 {
     draw_window_element(cmd, ui_ctx, "Texture Shop", node->x, content_y, node->w, content_h, system_theme.tab_content_window_textureshop);
@@ -417,20 +513,71 @@ void draw_textureshop_window(system_element_context* ui_ctx, system_dock_node* n
     c.row_h = 0;
     c.edge_to_face_array = edge_to_face_array;
 
-    draw_sm_text(cmd, ui_ctx, &c, "Shader Profiles", system_theme.system_color_edit_mode_normal_color);
+    draw_sm_text(cmd, ui_ctx, &c, "Skins", system_theme.system_color_edit_mode_normal_color);
 
-    static bool s_open = true;
-    if (draw_sm_section(cmd, ui_ctx, &c, "Profiles", &s_open)) {
-        draw_sm_skins_section(cmd, ui_ctx, &c);
-        if (draw_sm_button(cmd, ui_ctx, &c, "Export", false, false, system_theme.system_edit_mode_active_face_hover)) export_texshop_skin();
+    /* the sphere grid */
+    if (g_texshop.skin_count == 0) {
+        draw_sm_text(cmd, ui_ctx, &c, "No skin yet. Make one in the Skin Maker.", system_theme.system_text);
     }
+    int columns = (c.right - c.left) / ts_cell_w;
+    if (columns < 1) columns = 1;
+    const int grid_top = c.y + 4;
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        const int cell_x = c.left + (i % columns) * ts_cell_w;
+        const int cell_y = grid_top + (i / columns) * ts_cell_h;
+        if (cell_y + ts_cell_h > c.bottom) {
+            break;                                      /* the rest would run over the buttons below */
+        }
+        texshop_skin* skin = &g_texshop.skins[i];
+        float rgb[3];
+        texshop_get_preview_color(skin, rgb);
+
+        const float cx = (float)(cell_x + ts_cell_w / 2);
+        const float cy = (float)(cell_y + ts_sphere_radius + 4);
+        const float dx = (float)ui_ctx->input.mouse_x - cx;
+        const float dy = (float)ui_ctx->input.mouse_y - cy;
+        const bool hovered = (dx * dx + dy * dy) <= (float)((ts_sphere_radius + 3) * (ts_sphere_radius + 3));
+        if (hovered && edge_to_face_array) {
+            g_texshop.selected_skin = i;
+        }
+
+        if (g_texshop.selected_skin == i) {
+            push_circle_element(cmd, cx, cy, (float)(ts_sphere_radius + 5), 2.0f, system_theme.system_edit_mode_active_face_hover);
+        } else if (hovered) {
+            push_circle_element(cmd, cx, cy, (float)(ts_sphere_radius + 5), 1.0f, system_theme.system_text);
+        }
+        draw_skin_sphere(cmd, cx, cy, (float)ts_sphere_radius, rgb);
+
+        char label[32];
+        snprintf(label, sizeof(label), "%.10s", skin->name);
+        draw_sm_text_at(cmd, ui_ctx, label, cell_x + (ts_cell_w - (int)strlen(label) * ui_font_w) / 2,
+                        cell_y + 2 * ts_sphere_radius + 12, ts_cell_w - 4, system_theme.system_text);
+    }
+    if (g_texshop.skin_count > 0) {
+        const int rows = (g_texshop.skin_count + columns - 1) / columns;
+        c.y = grid_top + rows * ts_cell_h;
+        c.x = c.left;
+        c.row_h = 0;
+    }
+
+    /* use the picked skin */
+    if (draw_sm_button(cmd, ui_ctx, &c, "Assign", false, false, system_theme.system_edit_mode_active_face_hover)) assign_texshop_skin_to_selected();
+    if (draw_sm_button(cmd, ui_ctx, &c, "Clear",  false, false, system_theme.toolbar_background)) clear_texshop_skin_on_selected();
+
+    char line[64];
+    texshop_describe_target(line, sizeof(line));
+    draw_sm_text(cmd, ui_ctx, &c, line, system_theme.system_color_edit_mode_normal_color);
 
     const texshop_skin* s = get_texshop_skin();
     if (s) {
         char text[64];
         snprintf(text, sizeof(text), "%.16s: %d layer(s)", s->name, s->layer_count);
         draw_sm_text(cmd, ui_ctx, &c, text, system_theme.system_text);
-        draw_sm_text(cmd, ui_ctx, &c, "Edit layers in Skin Maker.", system_theme.system_text);
+        if (s->map_file[0]) {
+            snprintf(text, sizeof(text), "map: %.24s", s->map_file);
+            draw_sm_text(cmd, ui_ctx, &c, text, system_theme.system_text);
+        }
+        draw_sm_text(cmd, ui_ctx, &c, "Edit the skin in Skin Maker.", system_theme.system_text);
     }
 
     push_quad_element(cmd, (float)node->x, (float)status_y, (float)node->w, (float)sm_status_h, system_theme.tab_content_window_textureshop_skin);

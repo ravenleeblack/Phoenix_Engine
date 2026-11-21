@@ -6,6 +6,8 @@
 
 The game DLL owns project-specific simulation, game state, and gameplay behavior. It must depend on engine runtime APIs through the engine module boundary rather than reach into editor implementation files.
 
+Version 1.4 has no game API changes. See [VERSION.md](VERSION.md).
+
 ## Source Layout
 
 ```text

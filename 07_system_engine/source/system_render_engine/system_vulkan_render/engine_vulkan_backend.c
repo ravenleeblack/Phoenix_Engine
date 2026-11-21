@@ -634,8 +634,9 @@ bool begin_vulkan_render_backend_frame(render_backend* backend, float delta_time
     /* cache the verified image slot index */
     render_context.swapchain_main.current_frame = acquired_image_index;
 
-    /* 3. reset the command buffer linked to this image and start recording */
-    VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[acquired_image_index];
+    /* 3. reset this cpu frame slot's command buffer and start recording. It is the slot's fence that was just waited on, so the buffer is
+       guaranteed finished. (Indexing by image used to reset a buffer another slot was still executing: device lost on a slow gpu frame.) */
+    VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[g_current_inflight_cpu_frame];
     vkResetCommandBuffer(cmd, 0);
 
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -655,7 +656,7 @@ bool end_vulkan_render_backend_frame(render_backend* backend, float delta_time)
     (void)delta_time;
 
     uint32_t active_image_index = render_context.swapchain_main.current_frame;
-    VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[active_image_index];
+    VkCommandBuffer cmd = render_context.swapchain_main.command_buffers[g_current_inflight_cpu_frame];
 
     /* 1. close the recording */
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {

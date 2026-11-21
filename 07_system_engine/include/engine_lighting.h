@@ -43,6 +43,13 @@ typedef struct
     int   layer;            /* terrain_layer_id the light cells live on (1 .. terrain_max_layers-1, never the height layer) */
     float sun_intensity;    /* sun brightness: 1 = normal, 0 = no sun (ambient only), up to 3 = very bright */
     float sun_warmth;       /* -1 = cool / blue, 0 = white, +1 = warm / orange */
+
+    /* a directional light object drives the sun: the editor fills these every frame (update_light_from_scene),
+       the engine's get_light_sun_color then uses them instead of sun_intensity / sun_warmth. */
+    bool  sun_driven;
+    float sun_driver_color[3];
+    float sun_driver_intensity;
+    float sun_driver_warmth;
 } light_settings;
 
 /* g_light: extern in engine_globals.h, init in engine_globals.c */
@@ -58,6 +65,9 @@ phoenix_engine_api int  get_terrain_light_layer(void);
 /* Sun colour for the mesh shader: rgb = tint * brightness, a = unused.
    `ambient` is the ambient value that goes to the shader next to the sun direction. (was light_get_sun_color) */
 phoenix_engine_api void get_light_sun_color(float ambient, float out[4]);
+
+/* Tints rgb toward orange (warmth > 0) or blue (warmth < 0). -1..1, 0 = unchanged. */
+phoenix_engine_api void apply_light_warmth(float rgb[3], float warmth);
 
 /* Re-bake the light into every terrain mesh (after min_light changed, for example). (was terrain_light_rebuild_all) */
 phoenix_engine_api void rebuild_terrain_light_all(void);

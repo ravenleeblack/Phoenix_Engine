@@ -33,6 +33,27 @@ typedef struct {
 
 extern editor_prefs g_prefs;
 
+/* Which program's measurements a model uses. Chosen in Preferences > Import / Export. Engine units are meters (a cube is 4 m). */
+typedef enum {
+    unit_profile_phoenix = 0,   /* meters */
+    unit_profile_maya,          /* centimeters */
+    unit_profile_unity,         /* meters */
+    unit_profile_zbrush,        /* centimeters, import only */
+    unit_profile_count
+} enum_unit_profile;
+
+typedef struct {
+    int import_profile;         /* enum_unit_profile: how incoming .obj numbers (and .fbx without trusted units) are read */
+    int export_profile;         /* enum_unit_profile: phoenix, maya or unity only */
+} unit_prefs;
+
+extern unit_prefs g_unit_prefs;
+
+const char* get_unit_profile_name(int profile);
+float       get_unit_profile_meters_per_unit(int profile);   /* import: file units -> meters */
+bool        get_unit_profile_trusts_fbx_units(int profile);  /* import: true = use the UnitScaleFactor written in the .fbx */
+float       get_unit_profile_units_per_meter(int profile);   /* export: meters -> file units */
+
 void prefs_load(void);   /* call once, before the renderer starts */
 void update_system_preference(void);   /* call AFTER every system is initialized: re-reads the save file and re-applies all options */
 void prefs_save(void);

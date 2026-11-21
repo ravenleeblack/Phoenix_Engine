@@ -2,7 +2,7 @@
 
 /* Maya default shaded grey (sRGB 0.55). The mesh shader writes vertex colour as-is, so convert to linear
    when the swapchain is an sRGB format (same rule push_quad_element uses for UI colors). */
-#define CUBE_MAYA_GREY_SRGB 0.55f
+#define CUBE_MAYA_GREY_SRGB 0.62f
 
 static float convert_srgb_to_linear(float c)
 {

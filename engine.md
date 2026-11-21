@@ -17,6 +17,8 @@ The executable owns:
 - Dynamic loading of editor, loader, and game DLLs
 - Plugin function-table resolution
 
+Version 1.4 adds light kinds (directional, point, spot, hemisphere, area), a scene-driven sun, and skin maps (specular, height, ambient) in the mesh shader. See [VERSION.md](VERSION.md).
+
 ## Source Layout
 
 Common engine areas include:

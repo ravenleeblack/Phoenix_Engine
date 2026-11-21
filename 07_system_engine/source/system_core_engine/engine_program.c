@@ -89,6 +89,9 @@ bool start_program(void* h_instance_ptr)
     }
     program_stage = program_boot_stage_editor;
 
+    /* 7b. every system is up: re-apply the saved preferences (theme, grid, units...) and allow them to be written back to phoenix_editor.pdb */
+    g_editor.apply_settings();
+
     /* 8. everything is up: show the window */
     program_state.is_running   = true;
     program_state.is_suspended = false;

@@ -51,10 +51,23 @@ typedef struct {
 } loader_image_data;
 
 // Clean Exported Function Signatures
-// load_3d_mesh_asset reads .fbx (binary or ascii, mesh geometry only). positions come out in meters.
+// load_3d_mesh_asset reads .fbx (binary or ascii, mesh geometry only) and .obj. positions come out in meters.
 PHOENIX_LOADER_API bool load_3d_mesh_asset(const char* filepath, loader_mesh_data* out_mesh);
 PHOENIX_LOADER_API void remove_3d_mesh_asset(loader_mesh_data* mesh);
 PHOENIX_LOADER_API bool save_3d_mesh_asset(const char* filepath, const loader_mesh_data* mesh, bool binary);
+
+// unit aware versions (.fbx and .obj). meshes inside the engine are always in meters (a cube is 4 m).
+// load_3d_mesh_asset_scaled: .obj has no units, so its numbers are multiplied by meters_per_unit (0.01 = centimeters).
+//   .fbx uses the UnitScaleFactor stored in the file when honor_file_units is true, otherwise meters_per_unit.
+// save_3d_mesh_asset_scaled: vertices are multiplied by units_per_meter (100 = centimeters) and the fbx UnitScaleFactor is written to match.
+typedef enum {
+    loader_mesh_format_fbx_binary = 0,
+    loader_mesh_format_fbx_ascii,
+    loader_mesh_format_obj
+} loader_mesh_format;
+
+PHOENIX_LOADER_API bool load_3d_mesh_asset_scaled(const char* filepath, loader_mesh_data* out_mesh, float meters_per_unit, bool honor_file_units);
+PHOENIX_LOADER_API bool save_3d_mesh_asset_scaled(const char* filepath, const loader_mesh_data* mesh, int format, float units_per_meter);
 
 // load_image_asset reads .png and uncompressed .tga into 4 channel pixels. save_image_asset writes a .png.
 PHOENIX_LOADER_API bool load_image_asset(const char* filepath, loader_image_data* out_image);
@@ -67,6 +80,9 @@ typedef bool (*save_image_asset_ptr)(const char* filepath, const loader_image_da
 typedef bool (*load_3d_mesh_asset_ptr)(const char* filepath, loader_mesh_data* out_mesh);
 typedef void (*remove_3d_mesh_asset_ptr)(loader_mesh_data* mesh);
 typedef bool (*save_3d_mesh_asset_ptr)(const char* filepath, const loader_mesh_data* mesh, bool binary);
+
+typedef bool (*load_3d_mesh_asset_scaled_ptr)(const char* filepath, loader_mesh_data* out_mesh, float meters_per_unit, bool honor_file_units);
+typedef bool (*save_3d_mesh_asset_scaled_ptr)(const char* filepath, const loader_mesh_data* mesh, int format, float units_per_meter);
 
 typedef struct loader_plugin
 {
