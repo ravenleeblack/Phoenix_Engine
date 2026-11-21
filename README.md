@@ -42,7 +42,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 - Status bar showing program info.
 - Tab sub-menu options.
 - Preferences window, with universal theme settings that apply everywhere and can be saved.
-- Docking system: windows can be moved into different areas. Drag-to-reorder tabs is currently broken.
+- Docking system: windows can be moved into different areas. Drag-to-reorder tabs.
 
 **Right-click menus**
 
@@ -73,14 +73,19 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 - Textures can be assigned.
 - Object mode can assign skins onto objects.
 
-## In Progress
+## Future Progress
 
 - Installer module and a working build for it.
-- Texture Shop: finishing UV map collection.
-- A possible node system on top of the shader profile.
-- Sculpt and paint on terrain.
-- Drag-to-reorder for docked tabs.
+- Texture Shop: finishing getting UV map collection object database then start making tab sub menu buttons work for uv mapping.
+- A possible node system on top of the shader profile. Textureshop should be our go to place: for uving, skinning objects, and texturing a substance like program.
+- Sculpt and paint on terrain. Terrain right now is a true 3D Heightmap will should allow vertical tunnel, trenches, overhangs, holes. See wiki.
+- Getting sculpt and paint icons to look more like skins icons.
 - The toolbar Run button.
+- skybox system with volume for fog since we have lighting.
+- 
+
+
+If window loses focus while tabbing press alt and move camera around then try again. Working on it. 
 
 ## Current Release
 
