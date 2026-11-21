@@ -146,6 +146,44 @@ bool check_path_extension(const char* path, const char* extension)
     return _stricmp(path + (path_length - extension_length), extension) == 0;
 }
 
+/* File > Save All. The scene itself has no file format yet, so this saves everything that does:
+   preferences + view state + sky and fog (phoenix_editor.pdb), every skin as a .sprof, and the paint map of every painted mesh. */
+int save_all_editor_data(void)
+{
+    int written = 0;
+
+    prefs_save();
+    written++;
+
+    check_texshop_ready();
+    const int previous_skin = g_texshop.selected_skin;
+    int skin_files = 0;
+    for (int i = 0; i < g_texshop.skin_count; i++) {
+        g_texshop.selected_skin = i;
+        export_texshop_skin();
+        skin_files++;
+    }
+    g_texshop.selected_skin = previous_skin;
+    written += skin_files;
+
+    int paint_files = 0;
+    for (uint32_t i = 1; i < g_scene_registry.object_count; i++) {
+        const system_scene_object* obj = &g_scene_registry.objects[i];
+        if (obj->type != scene_object_mesh || is_terrain_object(obj) || is_sky_dome_object(obj)) {
+            continue;
+        }
+        char file[96];
+        if (paint_texture_export_for_object(obj->id, obj->name, file, sizeof(file))) {
+            paint_files++;
+        }
+    }
+    written += paint_files;
+
+    file_archive_refresh();
+    set_statusbar_message("Saved all: preferences, %d skin(s), %d paint map(s). Scenes have no file format yet.", skin_files, paint_files);
+    return written;
+}
+
 /* assets\models\name.fbx, or "name 2.fbx" when that is taken */
 void make_unique_asset_path(const char* folder, const char* base, const char* extension, char* out, size_t out_size)
 {

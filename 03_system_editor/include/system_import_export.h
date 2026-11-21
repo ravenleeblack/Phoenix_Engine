@@ -70,4 +70,7 @@ extern int  export_source;
 
 bool check_path_extension(const char* path, const char* extension);
 
+/* ---- File > Save All: preferences and view state, every skin (assets/skins), every painted mesh's paint map (assets/textures) ---- */
+int save_all_editor_data(void);                      /* returns how many files were written, and reports to the status bar */
+
 #endif

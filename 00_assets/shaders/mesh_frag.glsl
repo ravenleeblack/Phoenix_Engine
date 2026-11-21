@@ -43,6 +43,16 @@ layout(set = 1, binding = 0, std140) uniform light_block {
     vec4        hemi_sky;    // rgb sky color, w = 1 when a hemisphere light is on
     vec4        hemi_ground;
     scene_light lights[8];
+    // sky and fog (system_sky.c), 15 vec4 after the lights
+    vec4        fog_a;       // rgb fog color (linear), w = 1 when fog is on in this view
+    vec4        fog_b;       // x density per meter, y height falloff per meter, z base height, w start distance
+    vec4        fog_c;       // x camera world height, y max opacity, z sun glow strength, w sun glow exponent
+    vec4        sky_top;     // rgb sky color overhead
+    vec4        sky_horizon; // rgb sky color at the horizon
+    vec4        sun_dir;     // xyz view space direction toward the sun, w = 1 when a sun is on
+    vec4        sun_color;   // rgb sun color * brightness
+    vec4        vol_center[4]; // fog volume spheres: xyz view space center, w radius (0 = unused)
+    vec4        vol_color[4];  // rgb color, w density per meter at the middle of the sphere
 } scene_lights;
 
 vec3 blend_layer(vec3 base, vec3 src, float mode, float amount)
@@ -84,8 +94,83 @@ vec4 surface_color()
     return vec4(c, v_color.a);
 }
 
+// Glow toward the sun: fog and volumes catch the sun like Unreal's directional inscattering.
+vec3 fog_inscatter(vec3 fog_rgb, vec3 dir)
+{
+    float glow = 0.0;
+    if (scene_lights.sun_dir.w > 0.5) {
+        float facing = max(dot(dir, normalize(scene_lights.sun_dir.xyz)), 0.0);
+        glow = pow(facing, max(scene_lights.fog_c.w, 1.0)) * scene_lights.fog_c.z;
+    }
+    return fog_rgb + scene_lights.sun_color.rgb * glow;
+}
+
+// Fog: exponential height fog (density falls off with height, integrated along the whole ray like Unreal's
+// Exponential Height Fog), then every fog volume: a sphere that is thickest in the middle and fades to nothing at its edge.
+vec3 apply_fog(vec3 color, vec3 view_pos)
+{
+    if (scene_lights.fog_a.w < 0.5) return color;
+
+    float dist = length(view_pos);
+    vec3  dir  = view_pos / max(dist, 1e-4);
+
+    float falloff = max(scene_lights.fog_b.y, 1e-4);
+    float dir_y   = dot(dir, scene_lights.counts.yzw);                     // how much the ray climbs
+    float low     = clamp(-falloff * (scene_lights.fog_c.x - scene_lights.fog_b.z), -20.0, 20.0);
+    float length_in_fog = max(dist - scene_lights.fog_b.w, 0.0);
+    float climb   = falloff * dir_y * length_in_fog;
+    float depth   = length_in_fog;                                         // integral of exp(-falloff * height) along the ray
+    if (abs(climb) > 1e-3) {
+        depth = (1.0 - exp(clamp(-climb, -20.0, 20.0))) / (falloff * dir_y);
+    }
+    float tau     = scene_lights.fog_b.x * exp(low) * depth;
+    float amount  = clamp((1.0 - exp(-tau)) * scene_lights.fog_c.y, 0.0, 1.0);
+    color = mix(color, fog_inscatter(scene_lights.fog_a.rgb, dir), amount);
+
+    for (int i = 0; i < 4; ++i) {
+        vec4 c = scene_lights.vol_center[i];
+        if (c.w <= 0.0) continue;
+        float b    = dot(c.xyz, dir);
+        float h2   = dot(c.xyz, c.xyz) - b * b;                            // squared distance of the ray from the center
+        float r2   = c.w * c.w;
+        if (h2 >= r2) continue;
+        float s  = sqrt(r2 - h2);
+        float t0 = max(b - s, 0.0);
+        float t1 = min(b + s, dist);
+        if (t1 <= t0) continue;
+        // density = d * (1 - distance_from_center^2 / radius^2), integrated exactly between t0 and t1
+        float a0 = t0 - b;
+        float a1 = t1 - b;
+        float inside = (1.0 - h2 / r2) * (t1 - t0) - (a1 * a1 * a1 - a0 * a0 * a0) / (3.0 * r2);
+        float a = 1.0 - exp(-scene_lights.vol_color[i].w * max(inside, 0.0));
+        color = mix(color, fog_inscatter(scene_lights.vol_color[i].rgb, dir), clamp(a, 0.0, 1.0));
+    }
+    return color;
+}
+
+// Sky dome color for a view direction: horizon to zenith gradient, darker below the horizon, a soft glow and a disc at the sun.
+vec3 sky_color(vec3 dir)
+{
+    float up      = dot(dir, scene_lights.counts.yzw);
+    vec3  horizon = mix(scene_lights.sky_horizon.rgb, scene_lights.fog_a.rgb, scene_lights.fog_a.w);
+    vec3  color   = mix(horizon, scene_lights.sky_top.rgb, pow(clamp(up, 0.0, 1.0), 0.5));
+    if (up < 0.0) color = horizon * mix(1.0, 0.6, clamp(-up * 3.0, 0.0, 1.0));
+    if (scene_lights.sun_dir.w > 0.5) {
+        float facing = max(dot(dir, normalize(scene_lights.sun_dir.xyz)), 0.0);
+        color += scene_lights.sun_color.rgb * (pow(facing, 4.0) * 0.10 + pow(facing, 48.0) * 0.30);
+        color += scene_lights.sun_color.rgb * smoothstep(0.9990, 0.9997, facing) * 4.0;
+    }
+    return color;
+}
+
 void main()
 {
+    // Sky dome: light.xyz = 0 and light.w < -2.5.
+    if (dot(v_light.xyz, v_light.xyz) < 1e-6 && v_light.w < -2.5) {
+        out_color = vec4(sky_color(normalize(v_view_pos)), 1.0);
+        return;
+    }
+
     // Flat colour override (wireframe lines): light.xyz = 0 and light.w < 0, colour comes in v_sun.rgb
     if (dot(v_light.xyz, v_light.xyz) < 1e-6 && v_light.w < 0.0) {
         // light.w < -1.5: terrain cell grid. The triangles are drawn FILLED and every fragment that is not on a
@@ -115,7 +200,7 @@ void main()
 
     // Unlit (Unl button, camera glyphs, wire helpers): plain surface colour.
     if (dot(v_light.xyz, v_light.xyz) < 1e-6) {
-        out_color = base;
+        out_color = vec4(apply_fog(base.rgb, v_view_pos), base.a);
         return;
     }
 
@@ -231,5 +316,5 @@ void main()
         specular += sky * fres * spec_strength * 0.9;
     }
 
-    out_color = vec4(base.rgb * diffuse + specular, base.a);
+    out_color = vec4(apply_fog(base.rgb * diffuse + specular, v_view_pos), base.a);
 }

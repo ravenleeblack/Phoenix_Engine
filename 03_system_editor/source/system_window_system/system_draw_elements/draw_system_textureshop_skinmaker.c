@@ -470,25 +470,6 @@ void draw_textureshop_skinmaker_window(system_element_context* ui_ctx, system_do
 /* ------------------------------------------------------------------------- */
 enum { ts_sphere_radius = 30, ts_cell_w = 92, ts_cell_h = 98 };
 
-/* a lit sphere in a skin's color: a dark disc, then smaller and lighter discs pushed toward the light (upper left), then a highlight */
-static void draw_skin_sphere(VkCommandBuffer cmd, float cx, float cy, float radius, const float rgb[3])
-{
-    const float shade[6]  = { 0.30f, 0.50f, 0.72f, 0.92f, 1.10f, 1.40f };
-    const float size[6]   = { 1.00f, 0.92f, 0.78f, 0.60f, 0.40f, 0.16f };
-    const float offset[6] = { 0.00f, 0.05f, 0.12f, 0.20f, 0.28f, 0.38f };
-    for (int k = 0; k < 6; k++) {
-        system_color color;
-        color.red   = rgb[0] * shade[k];
-        color.green = rgb[1] * shade[k];
-        color.blue  = rgb[2] * shade[k];
-        color.alpha = 1.0f;
-        if (color.red   > 1.0f) color.red   = 1.0f;
-        if (color.green > 1.0f) color.green = 1.0f;
-        if (color.blue  > 1.0f) color.blue  = 1.0f;
-        push_circle_element(cmd, cx - radius * offset[k], cy - radius * offset[k], radius * size[k], 0.0f, color);
-    }
-}
-
 void draw_textureshop_window(system_element_context* ui_ctx, system_dock_node* node, int content_y, int content_h, VkCommandBuffer cmd)
 {
     draw_window_element(cmd, ui_ctx, "Texture Shop", node->x, content_y, node->w, content_h, system_theme.tab_content_window_textureshop);
@@ -546,7 +527,7 @@ void draw_textureshop_window(system_element_context* ui_ctx, system_dock_node* n
         } else if (hovered) {
             push_circle_element(cmd, cx, cy, (float)(ts_sphere_radius + 5), 1.0f, system_theme.system_text);
         }
-        draw_skin_sphere(cmd, cx, cy, (float)ts_sphere_radius, rgb);
+        draw_icon_sphere(cmd, cx, cy, (float)ts_sphere_radius, rgb);
 
         char label[32];
         snprintf(label, sizeof(label), "%.10s", skin->name);

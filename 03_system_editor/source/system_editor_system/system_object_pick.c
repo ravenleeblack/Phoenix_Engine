@@ -441,8 +441,8 @@ void update_system_object_picking(system_element_context* ui_ctx)
     float hit_depth = -1.0f;
     for (uint32_t i = 1; i < g_scene_registry.object_count; i++) {
         const system_scene_object* obj = &g_scene_registry.objects[i];
-        if (is_terrain_object(obj)) {
-            continue;                                /* the terrain is tested against its height map below */
+        if (is_terrain_object(obj) || is_sky_dome_object(obj)) {
+            continue;                                /* the terrain is tested against its height map below, the sky dome is never clicked */
         }
         const float depth = get_object_pick_depth(ui_ctx, obj, mx, my);
         if (depth >= 0.0f && (hit_depth < 0.0f || depth < hit_depth)) {

@@ -27,7 +27,9 @@ enum {
     toolbar_icon_point,
     toolbar_icon_spot,
     toolbar_icon_area,
-    toolbar_icon_hemisphere
+    toolbar_icon_hemisphere,
+    toolbar_icon_sky,
+    toolbar_icon_fog
 };
 
 static int get_toolbar_icon_abs(int value)
@@ -302,6 +304,28 @@ static void draw_toolbar_icon_hemisphere_light(VkCommandBuffer cmd, int x, int y
     draw_toolbar_icon_line(cmd, x + 3, y + 14, x + 12, y + 14, color);
 }
 
+/* sky dome: an octagon dome (flat sides, facet lines) over a ground line */
+static void draw_toolbar_icon_sky(VkCommandBuffer cmd, int x, int y, int size, system_color color)
+{
+    (void)size;
+    const int dome[] = { 0, 12,  2, 6,  5, 2,  11, 2,  14, 6,  16, 12 };
+    draw_toolbar_icon_polygon(cmd, x, y, dome, 6, color);
+    draw_toolbar_icon_line(cmd, x + 5, y + 2, x + 5, y + 12, color);
+    draw_toolbar_icon_line(cmd, x + 8, y + 2, x + 8, y + 12, color);
+    draw_toolbar_icon_line(cmd, x + 11, y + 2, x + 11, y + 12, color);
+    draw_toolbar_icon_line(cmd, x + 0, y + 12, x + 15, y + 12, color);
+}
+
+/* fog: layered soft bars of different lengths */
+static void draw_toolbar_icon_fog(VkCommandBuffer cmd, int x, int y, int size, system_color color)
+{
+    (void)size;
+    draw_toolbar_icon_line(cmd, x + 2, y + 3,  x + 12, y + 3,  color);
+    draw_toolbar_icon_line(cmd, x + 0, y + 7,  x + 9,  y + 7,  color);
+    draw_toolbar_icon_line(cmd, x + 5, y + 11, x + 15, y + 11, color);
+    draw_toolbar_icon_line(cmd, x + 1, y + 14, x + 8,  y + 14, color);
+}
+
 /* picks the right icon function for a kind */
 static void draw_toolbar_icon(VkCommandBuffer cmd, int icon_kind, int x, int y, int size, system_color color)
 {
@@ -318,6 +342,8 @@ static void draw_toolbar_icon(VkCommandBuffer cmd, int icon_kind, int x, int y, 
         case toolbar_icon_spot:     draw_toolbar_icon_spot_light(cmd, x, y, size, color);       break;
         case toolbar_icon_area:     draw_toolbar_icon_area_light(cmd, x, y, size, color);       break;
         case toolbar_icon_hemisphere: draw_toolbar_icon_hemisphere_light(cmd, x, y, size, color); break;
+        case toolbar_icon_sky:      draw_toolbar_icon_sky(cmd, x, y, size, color);              break;
+        case toolbar_icon_fog:      draw_toolbar_icon_fog(cmd, x, y, size, color);              break;
         default: break;
     }
 }
@@ -325,6 +351,28 @@ static void draw_toolbar_icon(VkCommandBuffer cmd, int icon_kind, int x, int y, 
 /* themed icon button with the icon drawn on top. returns the click result of the button. */
 static int draw_toolbar_icon_button(VkCommandBuffer cmd, system_element_context* ui_ctx, int id, int icon_kind, int x, int y)
 {
+    const char* tips[14] = {
+        "Cube: create a 4 m cube.",
+        "Camera: create a camera object.",
+        "Terrain: create the terrain, or rebuild it from the Inspector settings.",
+        "Board Octagon: create an octagon board tile.",
+        "Board Diamond: create a diamond tile that fills the gaps between octagons.",
+        "Board Half: create a half-triangle border tile.",
+        "Board Quarter: create a quarter-triangle corner tile.",
+        "Directional Light: create the sun. While it exists it drives the sun.",
+        "Point Light: light in all directions that fades out at its range.",
+        "Spot Light: a cone of light with a soft edge.",
+        "Area Light: a soft panel of light.",
+        "Hemisphere Light: soft sky and ground fill light.",
+        "Sky Dome: create the octagon sky dome that follows the camera.",
+        "Fog Volume: create a sphere of thick fog. Position = center, scale = radius."
+    };
+    if (icon_kind >= 0 && icon_kind < 14 &&
+        ui_ctx->input.mouse_x >= x && ui_ctx->input.mouse_x < x + toolbar_icon_btn_w &&
+        ui_ctx->input.mouse_y >= y && ui_ctx->input.mouse_y < y + toolbar_btn_h) {
+        set_tooltip_text(tips[icon_kind]);
+    }
+
     int clicked = draw_button_element(cmd, ui_ctx, id, "", x, y, toolbar_icon_btn_w, toolbar_btn_h, system_theme.toolbar_icon_button);
 
     int icon_x = x + (toolbar_icon_btn_w - toolbar_icon_size) / 2;
@@ -441,5 +489,15 @@ void draw_system_toolbar(VkCommandBuffer cmd, system_element_context* ui_ctx, ed
     if (draw_toolbar_icon_button(cmd, ui_ctx, 90013, toolbar_icon_hemisphere, btn_x, btn_y)) {
         create_system_light(light_kind_hemisphere, (editor_vec3){ 0.0f, 16.0f, 0.0f }, render_context.logical_device, render_context.physical_device);
         set_toolbar_status("Created: Hemisphere Light.");
+    }
+    btn_x += btn_step;
+
+    /* the sky dome (an octagon dome that follows the camera) and a fog volume (a sphere of thick fog: position = center, scale = radius) */
+    if (draw_toolbar_icon_button(cmd, ui_ctx, 90014, toolbar_icon_sky, btn_x, btn_y)) {
+        create_system_sky_dome(render_context.logical_device, render_context.physical_device);
+    }
+    btn_x += btn_step;
+    if (draw_toolbar_icon_button(cmd, ui_ctx, 90015, toolbar_icon_fog, btn_x, btn_y)) {
+        create_system_fog_volume((editor_vec3){ 0.0f, 10.0f, 0.0f });
     }
 }

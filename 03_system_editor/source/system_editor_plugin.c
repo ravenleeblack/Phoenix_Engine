@@ -141,6 +141,7 @@ __declspec(dllexport) void editor_draw_statusbar(VkCommandBuffer cmd)
 __declspec(dllexport) void editor_flush_ui(VkCommandBuffer cmd)
 {
     draw_preferences_overlay(cmd, &element_context, &render_context.swapchain_main);
+    draw_tooltip_overlay(cmd, &element_context, (int)render_context.swapchain_main.extent.width, (int)render_context.swapchain_main.extent.height);
     render_element_commands(cmd,
                             render_context.swapchain_main.extent,
                             render_context.pipeline_layout);

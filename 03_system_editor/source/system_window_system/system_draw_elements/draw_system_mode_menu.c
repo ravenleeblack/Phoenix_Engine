@@ -49,11 +49,11 @@ static bool entry_selected(const system_element_context* ui_element, uint32_t id
 void mode_menu_open_sculpt_windows(system_element_context* ui_element)
 {
     (void)ui_element;
-    /* Brushes tab next to the Hierarchy (scene archive), Sculpt tab next to Lighting (Inspector as the fallback anchor) */
+    /* Brushes tab next to the Hierarchy (scene archive), Sculpt tab where the Paint window opens (Inspector, Hierarchy as the fallback anchor) */
     if (!dock_find_leaf_with_view(dock_workspace.root, view_type_brush))
         spawn_dock_view_beside(&dock_workspace, view_type_hierarchy, view_type_inspector, view_type_brush);
     if (!dock_find_leaf_with_view(dock_workspace.root, view_type_sculpt))
-        spawn_dock_view_beside(&dock_workspace, view_type_light,     view_type_inspector, view_type_sculpt);
+        spawn_dock_view_beside(&dock_workspace, view_type_inspector, view_type_hierarchy, view_type_sculpt);
 }
 
 void mode_menu_open_board_builder(system_element_context* ui_element)
@@ -82,9 +82,13 @@ static void close_view(enum_view_type vert_to_edge_array)
     if (view_is_open(vert_to_edge_array)) dock_close_view_type(&dock_workspace, vert_to_edge_array);
 }
 
-static void open_view_once(enum_view_type beside, enum_view_type fallback, enum_view_type vert_to_edge_array)
+/* the mode's own window: opened if missing, and always brought in front of the other tabs in its dock leaf */
+static void show_view_front(enum_view_type beside, enum_view_type fallback, enum_view_type view)
 {
-    if (!view_is_open(vert_to_edge_array)) spawn_dock_view_beside(&dock_workspace, beside, fallback, vert_to_edge_array);
+    const bool was_background = dock_spawn_background;
+    dock_spawn_background = false;
+    spawn_dock_view_beside(&dock_workspace, beside, fallback, view);
+    dock_spawn_background = was_background;
 }
 
 /* prev_ctx = the context whose windows are open right now (-1 = none laid out yet) */
@@ -100,19 +104,19 @@ static void mode_windows_apply(system_element_context* ui_element, system_mode_c
         close_view(view_type_sculpt);
         close_view(view_type_brush);
         close_view(view_type_paint);
-        open_view_once(view_type_inspector, view_type_hierarchy, view_type_modeler);
+        show_view_front(view_type_inspector, view_type_hierarchy, view_type_modeler);
         break;
     case mode_context_sculpt:
         close_view(view_type_modeler);
         close_view(view_type_paint);
-        open_view_once(view_type_hierarchy, view_type_inspector, view_type_brush);
-        open_view_once(view_type_light,     view_type_inspector, view_type_sculpt);
+        show_view_front(view_type_inspector, view_type_hierarchy, view_type_sculpt);     /* same place the Paint window opens */
+        show_view_front(view_type_hierarchy, view_type_inspector, view_type_brush);     /* the Brushes window, in front, like Paint */
         break;
     case mode_context_paint:
         close_view(view_type_modeler);
         close_view(view_type_sculpt);
-        close_view(view_type_brush);
-        open_view_once(view_type_inspector, view_type_hierarchy, view_type_paint);
+        show_view_front(view_type_inspector, view_type_hierarchy, view_type_paint);
+        show_view_front(view_type_hierarchy, view_type_inspector, view_type_brush);     /* the Brushes window stays open when going Sculpt <-> Paint */
         break;
     case mode_context_textureshop:
         close_view(view_type_modeler);
@@ -226,8 +230,46 @@ void draw_mode_menu_window(system_element_context* ui_element, system_dock_node*
 
         const system_color body = entry_selected(ui_element, e->id) ? system_theme.strip_button_selected : system_theme.strip_button;
 
-        if (draw_button_element(cmd, ui_element, e->id, e->label, bx, y, strip_button_w, strip_button_h, body))
+        const bool is_sculpt_entry = (e->id == id_work_sculpt);
+        const bool is_paint_entry  = (e->id == id_work_paint);
+        const bool has_icon        = is_sculpt_entry || is_paint_entry;
+
+        if (ui_element->input.mouse_x >= bx && ui_element->input.mouse_x < bx + strip_button_w &&
+            ui_element->input.mouse_y >= y && ui_element->input.mouse_y < y + strip_button_h) {
+            const char* tip = "";
+            switch (e->id) {
+            case id_tool_grab:       tip = "Grab: select and drag objects.";                  break;
+            case id_tool_translate:  tip = "Move: move the selected object.";                 break;
+            case id_tool_rotate:     tip = "Rotate: rotate the selected object.";             break;
+            case id_tool_scale:      tip = "Scale: scale the selected object.";               break;
+            case id_mode_object:     tip = "Object mode: select and move whole objects.";     break;
+            case id_mode_mesh:       tip = "Edit mode: work on vertices, edges and faces.";   break;
+            case id_work_sculpt:     tip = "Sculpt mode: shape the mesh with brushes.";       break;
+            case id_work_paint:      tip = "Paint mode: paint colors onto the mesh.";         break;
+            case id_spawn_texshop:   tip = "Texture Shop: make skins and UV maps.";           break;
+            case id_spawn_board:     tip = "Board Builder: build boards from tiles.";         break;
+            case id_spawn_card:      tip = "Card Builder: build cards.";                      break;
+            case id_work_anim:       tip = "Animation: open the timeline.";                   break;
+            default: break;
+            }
+            set_tooltip_text(tip);
+        }
+
+        if (draw_button_element(cmd, ui_element, e->id, has_icon ? "" : e->label, bx, y, strip_button_w, strip_button_h, body))
             mode_menu_activate(ui_element, e->id);
+
+        if (has_icon) {
+            const float icon_cx = (float)bx + (float)strip_button_w * 0.5f;
+            const float icon_cy = (float)y + (float)strip_button_h * 0.5f;
+            const float icon_r  = (float)strip_button_h * 0.5f - 3.0f;
+            if (is_sculpt_entry) {
+                const float clay[3] = { 0.72f, 0.62f, 0.52f };
+                draw_icon_brush(cmd, icon_cx, icon_cy, icon_r, clay, 2);
+            } else {
+                const float red[3] = { 0.90f, 0.35f, 0.30f };
+                draw_icon_brush(cmd, icon_cx, icon_cy, icon_r, red, 9);
+            }
+        }
 
         y += strip_button_h + strip_button_gap;
     }

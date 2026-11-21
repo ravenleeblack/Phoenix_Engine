@@ -63,6 +63,7 @@ void editor_state_apply_from_db(void)
     get_bool("view.cameras",        &g_scene_view.show_cameras);
     get_bool("view.wire_on_shaded", &g_scene_view.wire_on_shaded);
     get_bool("view.xray",           &g_scene_view.xray);
+    get_bool("view.hide_selection", &g_scene_view.hide_selection);
     if (settings_db_get_int("view.shading", &vert_to_edge_array) && vert_to_edge_array >= scene_shading_wire && vert_to_edge_array <= scene_shading_textured)
         g_scene_view.shading = (enum_scene_shading)vert_to_edge_array;
 
@@ -103,6 +104,7 @@ void editor_state_write_to_db(void)
     set_bool("view.cameras",        g_scene_view.show_cameras);
     set_bool("view.wire_on_shaded", g_scene_view.wire_on_shaded);
     set_bool("view.xray",           g_scene_view.xray);
+    set_bool("view.hide_selection", g_scene_view.hide_selection);
     settings_db_set_int("view.shading", (int)g_scene_view.shading);
     settings_db_set_floats("view.wire_color",           g_scene_view.wire_color, 3);
     settings_db_set_floats("view.wire_on_shaded_color", g_scene_view.wire_on_shaded_color, 3);

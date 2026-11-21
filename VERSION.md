@@ -1,6 +1,33 @@
 # Phoenix Engine Version
 
-**Current version:** 1.4 ([tag v1.4](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.4))
+**Current version:** 1.5 ([tag v1.5](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.5))
+
+## What changed in 1.5
+
+### Sculpt and Paint
+- Entering Sculpt mode opens the Brushes window in front (next to the Hierarchy) and the Sculpt window next to the Inspector, the same places Paint uses. Switching between Sculpt and Paint keeps the Brushes window open.
+- Each mode's own window is brought in front of the other tabs in its dock area when you enter the mode.
+- Brush icons are lit spheres like the skins in Texture Shop. Every sculpt and paint brush has its own color and its own glyph. A ring shows hover and the picked brush. The Sc and Pt buttons in the mode strip use the same icons.
+- Brushes window: rounded section lines, circle hit areas.
+
+### Scene view and Game view
+- Selection Highlight button: hides the outline and brackets around the selected object (useful while painting). Saved with the view options.
+- Tooltips: a small rounded box with a description comes up when the mouse rests on a button (Scene and Game sub menus, toolbar, mode strip, Sculpt/Paint bars).
+- Sky and Fog buttons on the Scene sub menu, and a Game sub menu with its own Sky and Fog buttons.
+
+### Sky and fog
+- Sky dome: an octagon dome (8 sides, 4 rings) that follows the camera. Gradient from the horizon to the top color, darker below the horizon, glow and disc at the sun. The horizon takes the fog color when fog is on.
+- Fog: exponential height fog integrated along the view ray (density, height falloff, start distance, max opacity), with sun glow (directional inscattering).
+- Fog volumes: Empty objects. Position = center, largest scale = radius. Each is a soft sphere, thickest in the middle, with its own density and color.
+- Toolbar buttons create the sky dome and fog volumes. Preferences has a new Sky / Fog tab. All sky and fog settings are saved.
+- Fog is applied in the mesh shader (`mesh_frag.glsl`), also when Lit is off.
+
+### File > Save All
+- Save Scene, Save Project and Save All now work: they save preferences and view state, every skin to `assets/skins`, and the paint map of every painted mesh. Scenes have no file format yet.
+
+### Build fixes
+- `system_editor_plugin.c` was missing the `draw_preferences_overlay` declaration (it was already broken in 1.4 but only showed up when the file was rebuilt).
+- The makefile does not track header changes. After a header change run `make clean` (it keeps the preferences) and `make all`.
 
 ## What changed in 1.4
 

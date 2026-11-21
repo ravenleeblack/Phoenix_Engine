@@ -26,7 +26,10 @@ The editor currently provides:
 - Skin maps: specular, height, and ambient occlusion
 - Preferences > Import / Export unit profiles: Phoenix, Maya, Unity, ZBrush (import only)
 
-See [VERSION.md](VERSION.md) for what changed in 1.4.
+See [VERSION.md](VERSION.md) for what changed in 1.5.
+
+- Sky dome, height fog with sun glow and fog volumes (Preferences > Sky / Fog, Sky and Fog buttons in the Scene and Game tabs)
+- Tooltips on buttons, Selection Highlight toggle, File > Save All (preferences, skins, paint maps)
 
 ## Import and Export
 

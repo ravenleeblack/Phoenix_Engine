@@ -64,6 +64,17 @@ static void push_mesh_pc_wiregrid(VkCommandBuffer cmd, const editor_mat4* mv, co
     vkCmdPushConstants(cmd, g_obj_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
 }
 
+/* sky dome (mesh_frag.glsl: light.xyz = 0 and light.w < -2.5 -> gradient from the sky colors in the light block) */
+static void push_mesh_pc_sky(VkCommandBuffer cmd, const editor_mat4* mv, const editor_mat4* proj)
+{
+    float pc[40];
+    memcpy(&pc[0],  mv,   sizeof(editor_mat4));
+    memcpy(&pc[16], proj, sizeof(editor_mat4));
+    pc[32] = 0.0f; pc[33] = 0.0f; pc[34] = 0.0f; pc[35] = -3.0f;
+    pc[36] = 0.0f; pc[37] = 0.0f; pc[38] = 0.0f; pc[39] = 1.0f;
+    vkCmdPushConstants(cmd, g_obj_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
+}
+
 #define XRAY_ALPHA 0.35f
 
 /* ------------------------------------------------------------------ */
@@ -693,6 +704,23 @@ static void draw_scene_mesh_list(VkCommandBuffer cmd, const editor_mat4* view, c
         }
         if (skip_cameras && o->type == scene_object_camera) continue;
 
+        if (is_sky_dome_object(o)) {
+            if (flat_rgb != NULL || !g_sky.draw_sky_now) continue;     /* no sky in the wire passes, or when the Sky button is off */
+            editor_mat4 dome_model;
+            get_sky_dome_matrix(view, o, &dome_model);
+            editor_mat4 dome_mv = system_math_mat4_multiply(*view, dome_model);
+            bind_skin_set(cmd, skin_gpu_get_empty_set(), &bound);
+            push_mesh_pc_sky(cmd, &dome_mv, proj);
+            VkBuffer dome_vb = (VkBuffer)(uintptr_t)o->vertex_buffer;
+            VkBuffer dome_ib = (VkBuffer)(uintptr_t)o->index_buffer;
+            VkDeviceSize dome_off = 0;
+            vkCmdBindVertexBuffers(cmd, 0, 1, &dome_vb, &dome_off);
+            vkCmdBindIndexBuffer(cmd, dome_ib, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(cmd, o->index_count, 1, 0, 0, 0);
+            drawn++;
+            continue;
+        }
+
         if (skins_active) {
             VkDescriptorSet want = skin_gpu_get_empty_set();           /* no skin: shared grey set */
             if (o->type != scene_object_camera) {
@@ -1066,6 +1094,10 @@ void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* p
     memcpy(&view, view16, sizeof(view));
     memcpy(&proj, proj16, sizeof(proj));
 
+    g_sky.draw_sky_now = g_sky.scene_sky_on;
+    g_sky.draw_fog_now = g_sky.scene_fog_on;
+    g_sky.draw_far     = g_camera_prefs.far_clip;
+
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
 
     /* The origin marker, camera outlines and wire passes draw with this layout too, so a set must be bound for them. */
@@ -1126,6 +1158,10 @@ void draw_game_scene_objects(VkCommandBuffer cmd, const float* view16, const flo
     editor_mat4 view, proj;
     memcpy(&view, view16, sizeof(view));
     memcpy(&proj, proj16, sizeof(proj));
+
+    g_sky.draw_sky_now = g_sky.game_sky_on;
+    g_sky.draw_fog_now = g_sky.game_fog_on;
+    g_sky.draw_far     = game_camera_far;
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
     draw_scene_mesh_list(cmd, &view, &proj, true, NULL, true);   /* the Game view always shows skins */

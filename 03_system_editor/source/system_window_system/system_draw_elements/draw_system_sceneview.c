@@ -32,9 +32,13 @@ const scene_button scene_view_buttons[] = {
     { scene_icon_textured,       "Textured",             false },
     { scene_icon_wire_on_shaded, "Wireframe on Shaded",  false },
     { scene_icon_xray,           "X-Ray",                false },
+    { scene_icon_selection,      "Selection Highlight", false },
 
     { scene_icon_lit,            "Use Lights (Lit)",     true  },
     { scene_icon_aa,             "Anti-aliasing (FXAA)", false },
+
+    { scene_icon_sky,            "Sky Dome",             true  },
+    { scene_icon_fog,            "Fog",                  false },
 };
 system_color scaled_alpha(system_color c, float k) { c.alpha *= k; return c; }
 
@@ -152,6 +156,35 @@ void draw_scene_icon(VkCommandBuffer cmd, system_element_context* ui_element, en
         break;
     }
 
+    case scene_icon_sky: {                            /* octagon dome: flat top, two slanted sides, two straight sides, ground line */
+        const int top_w = s / 2;
+        const int slant = s / 4;
+        draw_icon_element(cmd, ix + slant, iy + 1, top_w, 1, c);
+        for (int i = 0; i < slant; i++) {
+            draw_icon_element(cmd, ix + slant - i - 1, iy + 2 + i, 1, 1, c);
+            draw_icon_element(cmd, ix + slant + top_w + i, iy + 2 + i, 1, 1, c);
+        }
+        draw_icon_element(cmd, ix, iy + 2 + slant, 1, s - slant - 4, c);
+        draw_icon_element(cmd, ix + s - 1, iy + 2 + slant, 1, s - slant - 4, c);
+        draw_icon_element(cmd, ix, iy + s - 2, s, 1, c);
+        break;
+    }
+
+    case scene_icon_fog:                              /* three soft bars of different length */
+        draw_icon_element(cmd, ix + 1, iy + s / 5,     s - 3, 2, scaled_alpha(c, 0.55f));
+        draw_icon_element(cmd, ix,     iy + s / 2 - 1, s - 5, 2, c);
+        draw_icon_element(cmd, ix + 3, iy + s * 4 / 5 - 1, s - 3, 2, scaled_alpha(c, 0.80f));
+        break;
+
+    case scene_icon_selection: {                      /* four corner brackets: the highlight drawn around the selected object */
+        const int len = (s / 3 > 2) ? s / 3 : 2;
+        draw_icon_element(cmd, ix, iy, len, 1, c);                draw_icon_element(cmd, ix, iy, 1, len, c);
+        draw_icon_element(cmd, ix + s - len, iy, len, 1, c);      draw_icon_element(cmd, ix + s - 1, iy, 1, len, c);
+        draw_icon_element(cmd, ix, iy + s - 1, len, 1, c);        draw_icon_element(cmd, ix, iy + s - len, 1, len, c);
+        draw_icon_element(cmd, ix + s - len, iy + s - 1, len, 1, c); draw_icon_element(cmd, ix + s - 1, iy + s - len, 1, len, c);
+        break;
+    }
+
     case scene_icon_aa: {                             /* text, centred */
         const int tw = 2 * ui_font_w;
         draw_text_element(cmd, ui_element, "AA", ix + (s - tw) / 2, iy + (s - ui_font_h) / 2, c);
@@ -176,6 +209,9 @@ bool scene_button_on(enum_scene_icon icon)
     case scene_icon_xray:           return g_scene_view.xray;
     case scene_icon_lit:            return get_terrain_lighting_enabled();
     case scene_icon_aa:             return g_prefs.fxaa;
+    case scene_icon_selection:      return !g_scene_view.hide_selection;
+    case scene_icon_sky:            return g_sky.scene_sky_on;
+    case scene_icon_fog:            return g_sky.scene_fog_on;
     default:                        return false;     /* home is an action, never "on" */
     }
 }
@@ -201,6 +237,9 @@ void scene_button_click(enum_scene_icon icon, world_camera* cam)
     case scene_icon_xray:           g_scene_view.xray           = !g_scene_view.xray;           break;
     case scene_icon_lit:            set_terrain_lighting_enabled(!get_terrain_lighting_enabled()); break;   /* also rebuilds the terrain meshes: light is baked into their vertex colour */
     case scene_icon_aa:             g_prefs.fxaa    = !g_prefs.fxaa;                            break;
+    case scene_icon_selection:      g_scene_view.hide_selection = !g_scene_view.hide_selection; break;
+    case scene_icon_sky:            g_sky.scene_sky_on = !g_sky.scene_sky_on;                   break;
+    case scene_icon_fog:            g_sky.scene_fog_on = !g_sky.scene_fog_on;                   break;
     }
 }
 
@@ -224,13 +263,39 @@ void report_scene_button(const scene_button* b)
 
 /* ------------------------------------------------------------------ button */
 
+/* the description shown in the tooltip box */
+const char* get_scene_icon_tip(enum_scene_icon icon)
+{
+    switch (icon) {
+    case scene_icon_lock:           return "Camera Lock: freeze the editor camera so it cannot be moved by accident.";
+    case scene_icon_home:           return "Home: frame the selected object, or reset the view.";
+    case scene_icon_grid:           return "Grid: show or hide the floor grid. One cell is 4 m.";
+    case scene_icon_origin:         return "Origin Marker: show or hide the marker at the world center.";
+    case scene_icon_camera:         return "Cameras: show camera objects, their frustum and the cull plane.";
+    case scene_icon_wire:           return "Wireframe: draw only the edges of every object.";
+    case scene_icon_shaded:         return "Smooth Shade: solid surfaces without skins.";
+    case scene_icon_textured:       return "Textured: solid surfaces with skins and maps.";
+    case scene_icon_wire_on_shaded: return "Wireframe on Shaded: draw the edges over the surface.";
+    case scene_icon_xray:           return "X-Ray: see through surfaces.";
+    case scene_icon_lit:            return "Lit: use the sun and the light objects. Off = flat colors.";
+    case scene_icon_aa:             return "FXAA: smooth jagged edges (post effect).";
+    case scene_icon_selection:      return "Selection Highlight: show or hide the outline around the selected object. Turn it off while painting.";
+    case scene_icon_sky:            return "Sky Dome: show or hide the octagon sky dome (create it with the toolbar sky button).";
+    case scene_icon_fog:            return "Fog: show or hide the height fog, the sun glow and the fog volumes.";
+    default:                        return "";
+    }
+}
+
 /* one flat square button. returns true on click (press and release on it). */
 bool draw_scene_icon_button(VkCommandBuffer cmd, system_element_context* ui_element, uint32_t id, enum_scene_icon icon,
                                    int x, int y, int s, bool on, const char* name, const char** hover_name)
 {
     const int mx = ui_element->input.mouse_x, my = ui_element->input.mouse_y;
     const bool hovered = mx >= x && mx < x + s && my >= y && my < y + s;
-    if (hovered) *hover_name = name;
+    if (hovered) {
+        *hover_name = name;
+        set_tooltip_text(get_scene_icon_tip(icon));
+    }
 
     if (on) {
         draw_icon_element(cmd, x, y, s, s, color_with_alpha(system_theme.system_accent, 0.60f));
@@ -289,6 +354,44 @@ void draw_scene_sub_menu(system_element_context* ui_element, system_dock_node* n
     }
 
     /* name of the hovered button, right aligned, only when it fits */
+    if (hover_name) {
+        const int tw = (int)strlen(hover_name) * ui_font_w;
+        const int tx = right_limit - tw;
+        if (tx > bx + 8) draw_text_element(cmd, ui_element, hover_name, tx, by + (s - ui_font_h) / 2, system_theme.tab_item_text);
+    }
+}
+
+/* the Game tab's sub menubar: its own Sky and Fog switches (the Game view and the Scene view are set separately) */
+void draw_game_sub_menu(system_element_context* ui_element, system_dock_node* node, VkCommandBuffer cmd)
+{
+    const int x = node->x, y = node->y + tab_bar_h, w = node->w, h = tab_menu_h;
+    draw_tab_sub_menubar(cmd, ui_element, x, y, w, h);
+
+    int s = h - 5;
+    if (s > 22) s = 22;
+    if (s < 12) return;
+
+    const int by = y + (h - 1 - s) / 2;
+    const int right_limit = x + w - 6;
+    int bx = x + 6;
+    const char* hover_name = NULL;
+
+    if (bx + s <= right_limit) {
+        if (draw_scene_icon_button(cmd, ui_element, dock_tab_id + 840u, scene_icon_sky, bx, by, s, g_sky.game_sky_on, "Game view: Sky Dome", &hover_name)) {
+            g_sky.game_sky_on = !g_sky.game_sky_on;
+            prefs_save();
+            set_sceneview_status("Game view sky: %s.", g_sky.game_sky_on ? "on" : "off");
+        }
+        bx += s + 2;
+    }
+    if (bx + s <= right_limit) {
+        if (draw_scene_icon_button(cmd, ui_element, dock_tab_id + 841u, scene_icon_fog, bx, by, s, g_sky.game_fog_on, "Game view: Fog", &hover_name)) {
+            g_sky.game_fog_on = !g_sky.game_fog_on;
+            prefs_save();
+            set_sceneview_status("Game view fog: %s.", g_sky.game_fog_on ? "on" : "off");
+        }
+        bx += s + 2;
+    }
     if (hover_name) {
         const int tw = (int)strlen(hover_name) * ui_font_w;
         const int tx = right_limit - tw;

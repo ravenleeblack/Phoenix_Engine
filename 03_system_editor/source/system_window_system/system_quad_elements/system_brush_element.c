@@ -128,7 +128,10 @@ bool brush_bar_button(brush_bar* b, const char* label, const char* name, bool on
     b->x += w + 2;
 
     const bool hovered = ui_element->input.mouse_x >= x && ui_element->input.mouse_x < x + w && ui_element->input.mouse_y >= y && ui_element->input.mouse_y < y + s;
-    if (hovered) b->hover_name = name;
+    if (hovered) {
+        b->hover_name = name;
+        set_tooltip_text(name);
+    }
 
     if (on) {
         draw_icon_element(b->cmd, x, y, w, s, color_with_alpha(system_theme.system_accent, 0.60f));
@@ -194,12 +197,16 @@ void brush_follow_modes(void)
 {
     static uint32_t s_last_frame = 0xFFFFFFFFu;
     static bool     s_prev_paint = false;
+    static bool     s_prev_sculpt = false;
     if (s_last_frame == g_ui_frame_index) return;       /* once per UI frame, whoever calls first */
     s_last_frame = g_ui_frame_index;
 
-    const bool paint = paint_mode_is_active();
-    if (paint && !s_prev_paint) brush_open_window();    /* Pt pressed: the paint brushes are in the Brushes window */
-    s_prev_paint = paint;
+    const bool paint  = paint_mode_is_active();
+    const bool sculpt = sculpt_mode_is_active();
+    if (paint && !s_prev_paint) brush_open_window();      /* Pt pressed: the paint brushes are in the Brushes window */
+    if (sculpt && !s_prev_sculpt) brush_open_window();    /* Sc pressed: the sculpt brushes are in the same window */
+    s_prev_paint  = paint;
+    s_prev_sculpt = sculpt;
 }
 
 /* ========================================================================= */

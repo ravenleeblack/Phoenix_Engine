@@ -193,6 +193,7 @@ void bind_light_gpu_set(VkCommandBuffer cmd, VkPipelineLayout pipeline_layout, c
         }
     }
     block[0] = (float)count;
+    fill_sky_fog_block(&block[12 + light_gpu_max_lights * 16], view);
 
     const uint32_t slot = g_light_gpu.next_slot % light_gpu_slot_count;
     g_light_gpu.next_slot++;

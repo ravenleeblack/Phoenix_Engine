@@ -35,6 +35,16 @@ system_element_context element_context = {0};
 system_render_context render_context = {0};
 system_engine_context engine_context = {0};
 manage_docking dock_workspace = {0};
+tooltip_state g_tooltip = {0};
+
+sky_state g_sky = {
+    .scene_sky_on = true, .scene_fog_on = false, .game_sky_on = true, .game_fog_on = false,
+    .sky_top = { 0.25f, 0.45f, 0.85f }, .sky_horizon = { 0.75f, 0.85f, 0.95f },
+    .fog_color = { 0.72f, 0.80f, 0.90f },
+    .fog_density = 0.008f, .fog_height_falloff = 0.015f, .fog_base_height = 0.0f, .fog_start = 0.0f,
+    .fog_max_opacity = 1.0f, .fog_sun_scatter = 0.6f, .fog_sun_exponent = 8.0f,
+};
+
 scene_view_state g_scene_view = {
     .show_grid = true, .grid_half_cells = 50, .show_origin = true, .show_cameras = true,
     .shading = scene_shading_textured,

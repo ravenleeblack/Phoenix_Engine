@@ -320,6 +320,8 @@ void draw_sceneview_gimbal_overlay(VkCommandBuffer cmd, system_element_context* 
 /* Icon primitives (system_icon_element.c): flat filled rect, and a 1px frame drawn inside the rect */
 void draw_icon_element(VkCommandBuffer cmd, int x, int y, int w, int h, system_color c);
 void draw_icon_border (VkCommandBuffer cmd, int x, int y, int w, int h, system_color c);
+void draw_icon_sphere (VkCommandBuffer cmd, float cx, float cy, float radius, const float rgb[3]);                                   /* lit sphere, like a skin */
+void draw_icon_brush (VkCommandBuffer cmd, float cx, float cy, float radius, const float rgb[3], int icon_glyph);   /* sphere with a icon_glyph: 0..8 sculpt brushes, 9..17 paint brushes */
 
 /* Scene view state: the sub menubar buttons in draw_system_sceneview.c. Defined in system_globals.c.
    Lit lives in g_light.enabled and AA in g_prefs.fxaa. */
@@ -344,6 +346,7 @@ typedef struct {
 
     float       wire_color[3];             /* Wireframe mode lines */
     float       wire_on_shaded_color[3];   /* Wireframe on Shaded lines */
+    bool        hide_selection;     /* off = the orange outline / brackets around the selected object are not drawn (handy while painting) */
 } scene_view_state;
 
 bool is_context_menu_open(void);     /* whoever defines the context menu (name was is_context_menu_open in the old code) */

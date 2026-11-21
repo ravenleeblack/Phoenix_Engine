@@ -276,6 +276,7 @@ void system_edit_mode_update(system_element_context* ui_element)
     /* ---------------- Object mode: outline the obj_vert_selected object ---------------- */
     if (ui_element->active_mode == mode_object) {
         s_have_mode = false;
+        if (g_scene_view.hide_selection) { s_state = ST_NONE; return; }   /* Selection Highlight button off: no outline / brackets */
         edit_mode_mesh* mesh = (obj->type == scene_object_mesh) ? em_registry_get_or_create(obj) : NULL;
         if (mesh && prepare(ui_element, obj, mesh, false)) { s_mesh = mesh; s_obj = obj; s_state = ST_OUTLINE; }
         else                                  { s_obj = obj; s_state = ST_BRACKET; }

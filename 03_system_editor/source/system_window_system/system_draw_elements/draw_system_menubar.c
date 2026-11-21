@@ -228,6 +228,11 @@ void run_menu_action(const struct_menu_item* item, system_element_context* ui_ct
         open_preferences_window();
         set_menubar_status("Preferences opened.");
         break;
+    case menu_action_save_scene:
+    case menu_action_save_project:
+    case menu_action_save_all:
+        save_all_editor_data();
+        break;
     case menu_action_import:
         import_asset_from_dialog();
         break;

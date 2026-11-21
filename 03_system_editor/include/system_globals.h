@@ -113,6 +113,8 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #include "system_brush_element.h"
 #include "system_skin_gpu.h"
 #include "system_light_gpu.h"
+#include "system_sky.h"
+#include "system_tooltip.h"
 
 
 
