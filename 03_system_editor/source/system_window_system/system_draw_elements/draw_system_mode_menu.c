@@ -232,7 +232,8 @@ void draw_mode_menu_window(system_element_context* ui_element, system_dock_node*
 
         const bool is_sculpt_entry = (e->id == id_work_sculpt);
         const bool is_paint_entry  = (e->id == id_work_paint);
-        const bool has_icon        = is_sculpt_entry || is_paint_entry;
+        const bool is_texture_entry = (e->id == id_spawn_texshop);
+        const bool has_icon        = is_sculpt_entry || is_paint_entry || is_texture_entry;
 
         if (ui_element->input.mouse_x >= bx && ui_element->input.mouse_x < bx + strip_button_w &&
             ui_element->input.mouse_y >= y && ui_element->input.mouse_y < y + strip_button_h) {
@@ -258,17 +259,27 @@ void draw_mode_menu_window(system_element_context* ui_element, system_dock_node*
         if (draw_button_element(cmd, ui_element, e->id, has_icon ? "" : e->label, bx, y, strip_button_w, strip_button_h, body))
             mode_menu_activate(ui_element, e->id);
 
+        /* Sculpt, Paint and Texture Shop: a lit sphere like a skin, with the letter S, P or T over it */
         if (has_icon) {
             const float icon_cx = (float)bx + (float)strip_button_w * 0.5f;
             const float icon_cy = (float)y + (float)strip_button_h * 0.5f;
-            const float icon_r  = (float)strip_button_h * 0.5f - 3.0f;
+            const float icon_r  = (float)strip_button_h * 0.5f - 2.0f;
+            const char* letter = "T";
+            float sphere_rgb[3] = { 0.35f, 0.60f, 0.85f };
             if (is_sculpt_entry) {
-                const float clay[3] = { 0.72f, 0.62f, 0.52f };
-                draw_icon_brush(cmd, icon_cx, icon_cy, icon_r, clay, 2);
-            } else {
-                const float red[3] = { 0.90f, 0.35f, 0.30f };
-                draw_icon_brush(cmd, icon_cx, icon_cy, icon_r, red, 9);
+                letter = "S";
+                sphere_rgb[0] = 0.72f; sphere_rgb[1] = 0.62f; sphere_rgb[2] = 0.52f;
+            } else if (is_paint_entry) {
+                letter = "P";
+                sphere_rgb[0] = 0.90f; sphere_rgb[1] = 0.35f; sphere_rgb[2] = 0.30f;
             }
+            draw_icon_sphere(cmd, icon_cx, icon_cy, icon_r, sphere_rgb);
+            const int letter_x = (int)(icon_cx + 0.5f) - ui_font_w / 2;
+            const int letter_y = (int)(icon_cy + 0.5f) - ui_font_h / 2;
+            const system_color letter_shadow = { 0.0f, 0.0f, 0.0f, 0.75f };
+            const system_color letter_color  = { 1.0f, 1.0f, 1.0f, 1.0f };
+            draw_text_element(cmd, ui_element, letter, letter_x + 1, letter_y + 1, letter_shadow);
+            draw_text_element(cmd, ui_element, letter, letter_x, letter_y, letter_color);
         }
 
         y += strip_button_h + strip_button_gap;

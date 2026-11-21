@@ -43,16 +43,16 @@ layout(set = 1, binding = 0, std140) uniform light_block {
     vec4        hemi_sky;    // rgb sky color, w = 1 when a hemisphere light is on
     vec4        hemi_ground;
     scene_light lights[8];
-    // sky and fog (system_sky.c), 15 vec4 after the lights
-    vec4        fog_a;       // rgb fog color (linear), w = 1 when fog is on in this view
+    // sky and fog (system_sky.c), 26 vec4 after the lights
+    vec4        fog_a;       // rgb fog color (linear, used when sky_a.z = 0), w = 1 when fog is on in this view
     vec4        fog_b;       // x density per meter, y height falloff per meter, z base height, w start distance
     vec4        fog_c;       // x camera world height, y max opacity, z sun glow strength, w sun glow exponent
-    vec4        sky_top;     // rgb sky color overhead
-    vec4        sky_horizon; // rgb sky color at the horizon
+    vec4        sky_a;       // x sky brightness, y haze, z = 1 when the fog takes the sky's horizon color, w time in seconds
     vec4        sun_dir;     // xyz view space direction toward the sun, w = 1 when a sun is on
     vec4        sun_color;   // rgb sun color * brightness
-    vec4        vol_center[4]; // fog volume spheres: xyz view space center, w radius (0 = unused)
-    vec4        vol_color[4];  // rgb color, w density per meter at the middle of the sphere
+    vec4        vol_color[4];  // fog volume: rgb color, w density per meter
+    vec4        vol_params[4]; // x = 1 when used, y type (0 cheap, 1 good), z edge softness, w noise cells across the box
+    vec4        vol_rows[12];  // per volume 3 rows (xyz, w): view space point -> the box's own space where the box is -1..1
 } scene_lights;
 
 vec3 blend_layer(vec3 base, vec3 src, float mode, float amount)
@@ -94,6 +94,81 @@ vec4 surface_color()
     return vec4(c, v_color.a);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Procedural sky (like Unreal's sky atmosphere, simplified): everything comes from the sun direction.
+// ---------------------------------------------------------------------------------------------------------------
+float sky_sun_height()                      // sine of the sun's elevation: 1 = overhead, 0 = on the horizon, < 0 = night
+{
+    if (scene_lights.sun_dir.w > 0.5) return dot(normalize(scene_lights.sun_dir.xyz), scene_lights.counts.yzw);
+    return 0.8;
+}
+
+vec3 sky_sun_light(float sun_h)             // sunlight after crossing the air: white high up, orange near the horizon
+{
+    float air = 1.0 / (max(sun_h, 0.0) + 0.08);
+    return exp(-vec3(0.045, 0.10, 0.24) * air);
+}
+
+// the sky without the sun itself: blue overhead, pale at the horizon, orange toward a low sun, dark at night
+vec3 sky_base(vec3 dir)
+{
+    float up    = dot(dir, scene_lights.counts.yzw);
+    float sun_h = sky_sun_height();
+    float day   = smoothstep(-0.12, 0.25, sun_h);
+    float haze  = scene_lights.sky_a.y;
+    vec3  sun_l = scene_lights.counts.yzw;
+    if (scene_lights.sun_dir.w > 0.5) sun_l = normalize(scene_lights.sun_dir.xyz);
+    float cos_sun = dot(dir, sun_l);
+
+    vec3 zenith  = vec3(0.10, 0.25, 0.65);
+    vec3 horizon = mix(vec3(0.62, 0.74, 0.92), vec3(0.82, 0.86, 0.92), haze);
+    vec3 sky     = mix(horizon, zenith, pow(clamp(up, 0.0, 1.0), 0.45)) * day;
+
+    float low_sun = (1.0 - smoothstep(0.0, 0.45, sun_h)) * smoothstep(-0.2, 0.05, sun_h);
+    float toward  = pow(max(cos_sun, 0.0), 2.0);
+    float band    = exp(-max(up, 0.0) * 4.0);
+    sky = mix(sky, sky_sun_light(sun_h) * vec3(1.1, 0.75, 0.5), clamp(low_sun * (0.25 + 0.75 * toward) * band, 0.0, 0.9));
+    sky += vec3(0.004, 0.007, 0.018) * (1.0 - day);
+
+    if (up < 0.0) sky = mix(sky, horizon * day * 0.5 + vec3(0.003, 0.005, 0.012) * (1.0 - day), clamp(-up * 5.0, 0.0, 1.0));
+    return sky * scene_lights.sky_a.x;
+}
+
+vec3 sky_color(vec3 dir)
+{
+    vec3  sky   = sky_base(dir);
+    float up    = dot(dir, scene_lights.counts.yzw);
+    float sun_h = sky_sun_height();
+    float day   = smoothstep(-0.12, 0.25, sun_h);
+
+    // stars at night
+    vec3  cell  = floor(dir * 220.0);
+    float star  = step(0.9965, fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453));
+    sky += vec3(star) * (1.0 - day) * smoothstep(0.05, 0.3, up) * 0.8 * scene_lights.sky_a.x;
+
+    if (scene_lights.sun_dir.w > 0.5) {
+        float cos_sun = max(dot(dir, normalize(scene_lights.sun_dir.xyz)), 0.0);
+        float haze    = scene_lights.sky_a.y;
+        vec3  sun_rgb = sky_sun_light(sun_h);
+        float above   = smoothstep(-0.15, 0.05, sun_h);
+        float mie     = pow(cos_sun, mix(24.0, 6.0, haze)) * mix(0.25, 0.6, haze);
+        sky += sun_rgb * mie * above * scene_lights.sky_a.x;
+        sky += sun_rgb * smoothstep(0.9993, 0.9997, cos_sun) * 5.0 * above * scene_lights.sky_a.x;
+    }
+    return sky;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Fog
+// ---------------------------------------------------------------------------------------------------------------
+vec3 fog_base_color(vec3 dir)
+{
+    if (scene_lights.sky_a.z < 0.5) return scene_lights.fog_a.rgb;
+    float up = dot(dir, scene_lights.counts.yzw);
+    vec3  flat_dir = normalize(dir - scene_lights.counts.yzw * up + scene_lights.counts.yzw * 0.03);
+    return sky_base(flat_dir);
+}
+
 // Glow toward the sun: fog and volumes catch the sun like Unreal's directional inscattering.
 vec3 fog_inscatter(vec3 fog_rgb, vec3 dir)
 {
@@ -105,8 +180,90 @@ vec3 fog_inscatter(vec3 fog_rgb, vec3 dir)
     return fog_rgb + scene_lights.sun_color.rgb * glow;
 }
 
+float hash13(vec3 p)
+{
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
+
+float value_noise(vec3 p)
+{
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash13(i),                    hash13(i + vec3(1.0, 0.0, 0.0)), f.x),
+                   mix(hash13(i + vec3(0.0, 1.0, 0.0)), hash13(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+               mix(mix(hash13(i + vec3(0.0, 0.0, 1.0)), hash13(i + vec3(1.0, 0.0, 1.0)), f.x),
+                   mix(hash13(i + vec3(0.0, 1.0, 1.0)), hash13(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+}
+
+float fog_noise(vec3 p)
+{
+    return value_noise(p) * 0.65 + value_noise(p * 2.07 + vec3(7.3, 1.7, 4.1)) * 0.35;
+}
+
+// Fog volumes: boxes (any size and rotation) filled with fog.
+//   cheap: one straight pass through the box, soft edge.
+//   good:  ray marched through the box with moving noise, thicker toward the bottom, lit by the sun, with a little self shadow.
+vec3 apply_volumes(vec3 color, vec3 dir, float dist)
+{
+    for (int i = 0; i < 4; ++i) {
+        vec4 params = scene_lights.vol_params[i];
+        if (params.x < 0.5) continue;
+
+        vec4 r0 = scene_lights.vol_rows[i * 3];
+        vec4 r1 = scene_lights.vol_rows[i * 3 + 1];
+        vec4 r2 = scene_lights.vol_rows[i * 3 + 2];
+        vec3 o  = vec3(r0.w, r1.w, r2.w);
+        vec3 d  = vec3(dot(r0.xyz, dir), dot(r1.xyz, dir), dot(r2.xyz, dir));
+
+        vec3 side = step(vec3(0.0), d) * 2.0 - 1.0;
+        vec3 inv  = 1.0 / (d + side * 1e-6);
+        vec3 t0   = (vec3(-1.0) - o) * inv;
+        vec3 t1   = (vec3(1.0) - o) * inv;
+        vec3 tn   = min(t0, t1);
+        vec3 tf   = max(t0, t1);
+        float enter = max(max(tn.x, tn.y), max(tn.z, 0.0));
+        float leave = min(min(tf.x, tf.y), min(tf.z, dist));
+        if (leave <= enter) continue;
+
+        vec3  vol_rgb = scene_lights.vol_color[i].rgb;
+        float density = scene_lights.vol_color[i].w;
+        float soft    = max(params.z, 0.02);
+        vec3  lit     = fog_inscatter(vol_rgb, dir);
+
+        if (params.y < 0.5) {
+            vec3  mid  = o + d * (0.5 * (enter + leave));
+            float edge = 1.0 - max(max(abs(mid.x), abs(mid.y)), abs(mid.z));
+            float tau  = density * smoothstep(0.0, soft, edge) * (leave - enter);
+            color = mix(color, lit, 1.0 - exp(-tau));
+        } else {
+            const int steps = 24;
+            float dt     = (leave - enter) / float(steps);
+            float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+            float trans  = 1.0;
+            vec3  scatter = vec3(0.0);
+            vec3  drift   = vec3(scene_lights.sky_a.w * 0.04, 0.0, scene_lights.sky_a.w * 0.025);
+            for (int s = 0; s < steps; ++s) {
+                vec3  p     = o + d * (enter + dt * (float(s) + jitter));
+                float edge  = 1.0 - max(max(abs(p.x), abs(p.y)), abs(p.z));
+                float fade  = smoothstep(0.0, soft, edge);
+                float low   = mix(1.0, 0.35, p.y * 0.5 + 0.5);
+                float n     = fog_noise(p * params.w + drift);
+                float here  = density * fade * low * (0.25 + 1.5 * n);
+                float a     = 1.0 - exp(-here * dt);
+                scatter    += trans * a * lit * mix(1.0, 0.65, clamp(here * dt * 4.0, 0.0, 1.0));
+                trans      *= 1.0 - a;
+            }
+            color = color * trans + scatter;
+        }
+    }
+    return color;
+}
+
 // Fog: exponential height fog (density falls off with height, integrated along the whole ray like Unreal's
-// Exponential Height Fog), then every fog volume: a sphere that is thickest in the middle and fades to nothing at its edge.
+// Exponential Height Fog), then the fog volumes.
 vec3 apply_fog(vec3 color, vec3 view_pos)
 {
     if (scene_lights.fog_a.w < 0.5) return color;
@@ -125,42 +282,9 @@ vec3 apply_fog(vec3 color, vec3 view_pos)
     }
     float tau     = scene_lights.fog_b.x * exp(low) * depth;
     float amount  = clamp((1.0 - exp(-tau)) * scene_lights.fog_c.y, 0.0, 1.0);
-    color = mix(color, fog_inscatter(scene_lights.fog_a.rgb, dir), amount);
+    color = mix(color, fog_inscatter(fog_base_color(dir), dir), amount);
 
-    for (int i = 0; i < 4; ++i) {
-        vec4 c = scene_lights.vol_center[i];
-        if (c.w <= 0.0) continue;
-        float b    = dot(c.xyz, dir);
-        float h2   = dot(c.xyz, c.xyz) - b * b;                            // squared distance of the ray from the center
-        float r2   = c.w * c.w;
-        if (h2 >= r2) continue;
-        float s  = sqrt(r2 - h2);
-        float t0 = max(b - s, 0.0);
-        float t1 = min(b + s, dist);
-        if (t1 <= t0) continue;
-        // density = d * (1 - distance_from_center^2 / radius^2), integrated exactly between t0 and t1
-        float a0 = t0 - b;
-        float a1 = t1 - b;
-        float inside = (1.0 - h2 / r2) * (t1 - t0) - (a1 * a1 * a1 - a0 * a0 * a0) / (3.0 * r2);
-        float a = 1.0 - exp(-scene_lights.vol_color[i].w * max(inside, 0.0));
-        color = mix(color, fog_inscatter(scene_lights.vol_color[i].rgb, dir), clamp(a, 0.0, 1.0));
-    }
-    return color;
-}
-
-// Sky dome color for a view direction: horizon to zenith gradient, darker below the horizon, a soft glow and a disc at the sun.
-vec3 sky_color(vec3 dir)
-{
-    float up      = dot(dir, scene_lights.counts.yzw);
-    vec3  horizon = mix(scene_lights.sky_horizon.rgb, scene_lights.fog_a.rgb, scene_lights.fog_a.w);
-    vec3  color   = mix(horizon, scene_lights.sky_top.rgb, pow(clamp(up, 0.0, 1.0), 0.5));
-    if (up < 0.0) color = horizon * mix(1.0, 0.6, clamp(-up * 3.0, 0.0, 1.0));
-    if (scene_lights.sun_dir.w > 0.5) {
-        float facing = max(dot(dir, normalize(scene_lights.sun_dir.xyz)), 0.0);
-        color += scene_lights.sun_color.rgb * (pow(facing, 4.0) * 0.10 + pow(facing, 48.0) * 0.30);
-        color += scene_lights.sun_color.rgb * smoothstep(0.9990, 0.9997, facing) * 4.0;
-    }
-    return color;
+    return apply_volumes(color, dir, dist);
 }
 
 void main()
@@ -170,7 +294,6 @@ void main()
         out_color = vec4(sky_color(normalize(v_view_pos)), 1.0);
         return;
     }
-
     // Flat colour override (wireframe lines): light.xyz = 0 and light.w < 0, colour comes in v_sun.rgb
     if (dot(v_light.xyz, v_light.xyz) < 1e-6 && v_light.w < 0.0) {
         // light.w < -1.5: terrain cell grid. The triangles are drawn FILLED and every fragment that is not on a

@@ -584,6 +584,65 @@ static bool create_camera_wire_mesh(void)
     return true;
 }
 
+/* ------------------------------------------------------------------ */
+/* Fog volume boxes: a wire box (12 edges of a unit cube) drawn with    */
+/* each volume's own position, rotation and size. Scene view only.      */
+/* ------------------------------------------------------------------ */
+static VkBuffer       g_fog_box_buffer = VK_NULL_HANDLE;
+static VkDeviceMemory g_fog_box_memory = VK_NULL_HANDLE;
+static bool           g_fog_box_failed = false;
+#define FOG_BOX_VERT_COUNT 24
+
+static bool create_fog_box_mesh(void)
+{
+    if (g_fog_box_buffer != VK_NULL_HANDLE) return true;
+    if (g_fog_box_failed) return false;
+
+    VkDevice         device          = render_context.logical_device;
+    VkPhysicalDevice physical_device = render_context.physical_device;
+    if (!device || !physical_device) return false;
+
+    const float h = 0.5f;
+    const float c[8][3] = {
+        {-h,-h,-h}, { h,-h,-h}, { h, h,-h}, {-h, h,-h},
+        {-h,-h, h}, { h,-h, h}, { h, h, h}, {-h, h, h}
+    };
+    const int edges[12][2] = { {0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7} };
+    const float color[4] = { 0.35f, 0.85f, 0.95f, 1.0f };
+
+    editor_vertex verts[FOG_BOX_VERT_COUNT];
+    uint32_t face_type = 0;
+    for (int e = 0; e < 12; e++) {
+        push_wire_line(verts, &face_type, c[edges[e][0]], c[edges[e][1]], color);
+    }
+    if (!create_buffer_with_data(device, physical_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                 verts, sizeof(editor_vertex) * face_type, &g_fog_box_buffer, &g_fog_box_memory)) {
+        g_fog_box_failed = true;
+        phoenix_error("SCENE3D", "Fog box wire mesh creation failed.");
+        return false;
+    }
+    return true;
+}
+
+static void draw_fog_volume_outlines(VkCommandBuffer cmd, const editor_mat4* view, const editor_mat4* proj)
+{
+    if (g_line_pipeline == VK_NULL_HANDLE) return;
+    prune_sky_volumes();
+    if (g_sky.volume_count == 0 || !create_fog_box_mesh()) return;
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_line_pipeline);
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &g_fog_box_buffer, &off);
+    for (int i = 0; i < g_sky.volume_count; i++) {
+        const system_scene_object* o = find_scene_object_by_id(g_sky.volume_object_ids[i]);
+        if (!o) continue;
+        editor_mat4 model = system_math_model_matrix(o->position, o->rotation, o->scale);
+        editor_mat4 mv    = system_math_mat4_multiply(*view, model);
+        push_mesh_pc(cmd, &mv, proj, k_unlit);
+        vkCmdDraw(cmd, FOG_BOX_VERT_COUNT, 1, 0, 0);
+    }
+}
+
 static void draw_camera_wire_outlines(VkCommandBuffer cmd, const editor_mat4* view, const editor_mat4* proj)
 {
     if (g_line_pipeline == VK_NULL_HANDLE) return;
@@ -1097,6 +1156,7 @@ void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* p
     g_sky.draw_sky_now = g_sky.scene_sky_on;
     g_sky.draw_fog_now = g_sky.scene_fog_on;
     g_sky.draw_far     = g_camera_prefs.far_clip;
+    g_sky.draw_time    = (float)(GetTickCount64() % 3600000ull) / 1000.0f;
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
 
@@ -1144,6 +1204,7 @@ void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* p
     draw_selection_bounding_box(cmd, &view, &proj);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
     /* Lines last so the outline sits on top of the camera glyph. */
+    draw_fog_volume_outlines(cmd, &view, &proj);
     if (g_scene_view.show_cameras) {
         draw_camera_wire_outlines(cmd, &view, &proj);
         draw_camera_cull_plane(cmd, &view, &proj);
@@ -1162,6 +1223,7 @@ void draw_game_scene_objects(VkCommandBuffer cmd, const float* view16, const flo
     g_sky.draw_sky_now = g_sky.game_sky_on;
     g_sky.draw_fog_now = g_sky.game_fog_on;
     g_sky.draw_far     = game_camera_far;
+    g_sky.draw_time    = (float)(GetTickCount64() % 3600000ull) / 1000.0f;
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
     draw_scene_mesh_list(cmd, &view, &proj, true, NULL, true);   /* the Game view always shows skins */

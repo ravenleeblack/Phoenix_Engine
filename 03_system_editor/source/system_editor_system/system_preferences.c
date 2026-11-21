@@ -116,11 +116,10 @@ void apply_prefs_from_db(bool allow_legacy_migration)
 
     {
         float sky_floats[8];
-        if (settings_db_get_floats("prefs.sky", sky_floats, 6)) {
-            for (int k = 0; k < 3; k++) {
-                g_sky.sky_top[k] = sky_floats[k];
-                g_sky.sky_horizon[k] = sky_floats[3 + k];
-            }
+        if (settings_db_get_floats("prefs.skyatm", sky_floats, 3)) {
+            g_sky.sky_brightness = sky_floats[0];
+            g_sky.sky_haze = sky_floats[1];
+            g_sky.fog_sky_color = (sky_floats[2] != 0.0f);
             found = true;
         }
         if (settings_db_get_floats("prefs.fog", sky_floats, 7)) {
@@ -188,11 +187,10 @@ void prefs_write(void)
 
     {
         float sky_floats[8];
-        for (int k = 0; k < 3; k++) {
-            sky_floats[k] = g_sky.sky_top[k];
-            sky_floats[3 + k] = g_sky.sky_horizon[k];
-        }
-        settings_db_set_floats("prefs.sky", sky_floats, 6);
+        sky_floats[0] = g_sky.sky_brightness;
+        sky_floats[1] = g_sky.sky_haze;
+        sky_floats[2] = g_sky.fog_sky_color ? 1.0f : 0.0f;
+        settings_db_set_floats("prefs.skyatm", sky_floats, 3);
         for (int k = 0; k < 3; k++) {
             sky_floats[k] = g_sky.fog_color[k];
         }
@@ -475,12 +473,22 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
 {
     if (!preferences_window_open || !ui_element) return;
 
-    const int W = 500, H = 620;
+    const int W = 500;
+    int H = 620;
+    if (preferences_tab == 5) {
+        H = 800;                                     /* the Sky / Fog tab has the most controls */
+    }
+    if (H > screen_h - 8) {
+        H = screen_h - 8;
+    }
     if (preferences_window_x < 0) {
         preferences_window_x = (screen_w - W) / 2;
     }
     if (preferences_window_y < 0) {
         preferences_window_y = (screen_h - H) / 2;
+    }
+    if (preferences_window_y + H > screen_h) {
+        preferences_window_y = screen_h - H;
     }
     const int X = preferences_window_x;
     int Y = preferences_window_y;
@@ -697,78 +705,59 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
     }
 
     if (preferences_tab == 5) {
-    /* ---- Sky / Fog: the octagon sky dome, the fog and the fog volumes. The Sky and Fog buttons in the Scene and Game tabs switch them on and off. ---- */
-    draw_text_element(cmd, ui_element, "SKY DOME", label_x, y, system_theme.menu_active_text);
+    /* ---- Sky / Fog: the procedural sky dome, the height fog and the fog volumes. The Sky and Fog buttons in the Scene and Game tabs switch them on and off. ---- */
+    draw_text_element(cmd, ui_element, "SKY (procedural: follows the directional light)", label_x, y, system_theme.menu_active_text);
     push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
     y += ui_font_h + 14;
 
     if (pref_button(cmd, ui_element, "Create Sky Dome", label_x, y, 150, row_h, false, true)) {
         create_system_sky_dome(render_context.logical_device, render_context.physical_device);
     }
-    draw_text_element(cmd, ui_element, "Also the Sky button on the toolbar.", label_x + 160, y + 3, get_theme_hint_color());
-    y += row_h + 10;
-
-    const int sky_col_w = (W - pad * 2 - 20) / 2;
-    const int sky_cx0 = label_x;
-    const int sky_cx1 = label_x + sky_col_w + 20;
-    draw_text_element(cmd, ui_element, "Top color",     sky_cx0, y, system_theme.system_text);
-    draw_text_element(cmd, ui_element, "Horizon color", sky_cx1, y, system_theme.system_text);
-    y += ui_font_h + 6;
-    for (int i = 0; i < 3; i++) {
-        const char* channel_name = "R";
-        if (i == 1) {
-            channel_name = "G";
-        }
-        if (i == 2) {
-            channel_name = "B";
-        }
-        pref_slider(cmd, ui_element, 20 + i, channel_name, 16, sky_cx0, y, sky_col_w, &g_sky.sky_top[i],     0.0f, 1.0f, 255.0f);
-        pref_slider(cmd, ui_element, 23 + i, channel_name, 16, sky_cx1, y, sky_col_w, &g_sky.sky_horizon[i], 0.0f, 1.0f, 255.0f);
-        y += 20;
-    }
-    y += 14;
+    draw_text_element(cmd, ui_element, "Turn the sun with the directional light.", label_x + 160, y + 3, get_theme_hint_color());
+    y += row_h + 8;
+    pref_slider(cmd, ui_element, 20, "Brightness", 90, label_x, y, W - pad * 2, &g_sky.sky_brightness, 0.0f, 2.0f, 100.0f);
+    y += 22;
+    pref_slider(cmd, ui_element, 21, "Haze",       90, label_x, y, W - pad * 2, &g_sky.sky_haze,       0.0f, 1.0f, 100.0f);
+    y += 28;
 
     draw_text_element(cmd, ui_element, "FOG", label_x, y, system_theme.menu_active_text);
     push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
     y += ui_font_h + 14;
 
-    draw_text_element(cmd, ui_element, "Fog color", sky_cx0, y, system_theme.system_text);
-    draw_text_element(cmd, ui_element, "Thickness",  sky_cx1, y, system_theme.system_text);
-    y += ui_font_h + 6;
-    for (int i = 0; i < 3; i++) {
-        const char* channel_name = "R";
-        if (i == 1) {
-            channel_name = "G";
-        }
-        if (i == 2) {
-            channel_name = "B";
-        }
-        pref_slider(cmd, ui_element, 26 + i, channel_name, 16, sky_cx0, y, sky_col_w, &g_sky.fog_color[i], 0.0f, 1.0f, 255.0f);
+    draw_text_element(cmd, ui_element, "Fog color", label_x, y + 3, system_theme.system_text);
+    if (pref_button(cmd, ui_element, "From sky", ctl_x, y, 80, row_h, g_sky.fog_sky_color, true)) { g_sky.fog_sky_color = true;  preferences_look_dirty = true; }
+    if (pref_button(cmd, ui_element, "My color", ctl_x + 86, y, 80, row_h, !g_sky.fog_sky_color, true)) { g_sky.fog_sky_color = false; preferences_look_dirty = true; }
+    y += row_h + 6;
+    if (!g_sky.fog_sky_color) {
+        pref_slider(cmd, ui_element, 26, "Red",   90, label_x, y, W - pad * 2, &g_sky.fog_color[0], 0.0f, 1.0f, 255.0f);
+        y += 20;
+        pref_slider(cmd, ui_element, 27, "Green", 90, label_x, y, W - pad * 2, &g_sky.fog_color[1], 0.0f, 1.0f, 255.0f);
+        y += 20;
+        pref_slider(cmd, ui_element, 28, "Blue",  90, label_x, y, W - pad * 2, &g_sky.fog_color[2], 0.0f, 1.0f, 255.0f);
         y += 20;
     }
-    {
-        const int fog_y = y - 60;
-        pref_slider(cmd, ui_element, 29, "Density", 56, sky_cx1, fog_y,      sky_col_w, &g_sky.fog_density,        0.0f, 0.1f,  1000.0f);
-        pref_slider(cmd, ui_element, 30, "Height",  56, sky_cx1, fog_y + 20, sky_col_w, &g_sky.fog_height_falloff, 0.0f, 0.2f,  1000.0f);
-        pref_slider(cmd, ui_element, 31, "Start",   56, sky_cx1, fog_y + 40, sky_col_w, &g_sky.fog_start,          0.0f, 500.0f, 1.0f);
-        pref_slider(cmd, ui_element, 36, "Opacity", 56, sky_cx1, fog_y + 60, sky_col_w, &g_sky.fog_max_opacity,    0.0f, 1.0f,  100.0f);
-        pref_slider(cmd, ui_element, 37, "Sun glow", 56, sky_cx1, fog_y + 80, sky_col_w, &g_sky.fog_sun_scatter,   0.0f, 2.0f,  100.0f);
-        pref_slider(cmd, ui_element, 38, "Sun size", 56, sky_cx1, fog_y + 100, sky_col_w, &g_sky.fog_sun_exponent, 1.0f, 64.0f, 1.0f);
-        y += 60;
-    }
-    y += 4;
-    draw_text_element(cmd, ui_element, "Height: how fast the fog thins going up. Sun glow: fog lights up toward the sun.", label_x, y, get_theme_hint_color());
-    y += ui_font_h + 14;
+    pref_slider(cmd, ui_element, 29, "Density",  90, label_x, y, W - pad * 2, &g_sky.fog_density,        0.0f, 0.1f,   1000.0f);
+    y += 20;
+    pref_slider(cmd, ui_element, 30, "Height",   90, label_x, y, W - pad * 2, &g_sky.fog_height_falloff, 0.0f, 0.2f,   1000.0f);
+    y += 20;
+    pref_slider(cmd, ui_element, 31, "Start",    90, label_x, y, W - pad * 2, &g_sky.fog_start,          0.0f, 500.0f, 1.0f);
+    y += 20;
+    pref_slider(cmd, ui_element, 36, "Opacity",  90, label_x, y, W - pad * 2, &g_sky.fog_max_opacity,    0.0f, 1.0f,   100.0f);
+    y += 20;
+    pref_slider(cmd, ui_element, 37, "Sun glow", 90, label_x, y, W - pad * 2, &g_sky.fog_sun_scatter,    0.0f, 2.0f,   100.0f);
+    y += 20;
+    pref_slider(cmd, ui_element, 38, "Sun size", 90, label_x, y, W - pad * 2, &g_sky.fog_sun_exponent,   1.0f, 64.0f,  1.0f);
+    y += 28;
 
-    draw_text_element(cmd, ui_element, "FOG VOLUMES", label_x, y, system_theme.menu_active_text);
+    draw_text_element(cmd, ui_element, "FOG VOLUMES (a box filled with fog)", label_x, y, system_theme.menu_active_text);
     push_quad_element(cmd, (float)label_x, (float)(y + ui_font_h + 4), (float)(W - pad * 2), 1.0f, sep_color);
     y += ui_font_h + 14;
 
     if (pref_button(cmd, ui_element, "Create Fog Volume", label_x, y, 170, row_h, false, true)) {
-        create_system_fog_volume((editor_vec3){ 0.0f, 10.0f, 0.0f });
+        create_system_fog_volume((editor_vec3){ 0.0f, 8.0f, 0.0f });
     }
-    draw_text_element(cmd, ui_element, "Position = center, scale = radius (m).", label_x + 180, y + 3, get_theme_hint_color());
-    y += row_h + 10;
+    draw_text_element(cmd, ui_element, "Resize the box with the Scale tool.", label_x + 180, y + 3, get_theme_hint_color());
+    y += row_h + 8;
 
     prune_sky_volumes();
     if (g_sky.volume_count > 0) {
@@ -778,22 +767,29 @@ void draw_preferences_window(VkCommandBuffer cmd, system_element_context* ui_ele
                 shown = i;
             }
         }
-        char volume_label[24];
-        snprintf(volume_label, sizeof(volume_label), "Volume %d", shown + 1);
-        pref_slider(cmd, ui_element, 32, volume_label, 80, label_x, y, W - pad * 2, &g_sky.volume_density[shown], 0.0f, 0.2f, 1000.0f);
-        y += 22;
-        pref_slider(cmd, ui_element, 33, "Volume R", 80, label_x, y, W - pad * 2, &g_sky.volume_color[shown][0], 0.0f, 1.0f, 255.0f);
+        char volume_label[40];
+        snprintf(volume_label, sizeof(volume_label), "Volume %d type", shown + 1);
+        draw_text_element(cmd, ui_element, volume_label, label_x, y + 3, system_theme.system_text);
+        if (pref_button(cmd, ui_element, "Cheap", ctl_x, y, 80, row_h, g_sky.volume_type[shown] == fog_volume_cheap, true)) { g_sky.volume_type[shown] = fog_volume_cheap; }
+        if (pref_button(cmd, ui_element, "Good",  ctl_x + 86, y, 80, row_h, g_sky.volume_type[shown] == fog_volume_good, true)) { g_sky.volume_type[shown] = fog_volume_good; }
+        y += row_h + 6;
+        pref_slider(cmd, ui_element, 32, "Density",  90, label_x, y, W - pad * 2, &g_sky.volume_density[shown],     0.0f, 0.3f, 1000.0f);
         y += 20;
-        pref_slider(cmd, ui_element, 34, "Volume G", 80, label_x, y, W - pad * 2, &g_sky.volume_color[shown][1], 0.0f, 1.0f, 255.0f);
+        pref_slider(cmd, ui_element, 33, "Edge soft", 90, label_x, y, W - pad * 2, &g_sky.volume_softness[shown],   0.02f, 1.0f, 100.0f);
         y += 20;
-        pref_slider(cmd, ui_element, 35, "Volume B", 80, label_x, y, W - pad * 2, &g_sky.volume_color[shown][2], 0.0f, 1.0f, 255.0f);
+        pref_slider(cmd, ui_element, 34, "Noise",    90, label_x, y, W - pad * 2, &g_sky.volume_noise_scale[shown], 0.5f, 12.0f, 10.0f);
         y += 20;
-        draw_text_element(cmd, ui_element, "Select a Fog Volume in the Hierarchy to edit that one.", label_x, y, get_theme_hint_color());
+        pref_slider(cmd, ui_element, 35, "Red",      90, label_x, y, W - pad * 2, &g_sky.volume_color[shown][0],    0.0f, 1.0f, 255.0f);
+        y += 20;
+        pref_slider(cmd, ui_element, 39, "Green",    90, label_x, y, W - pad * 2, &g_sky.volume_color[shown][1],    0.0f, 1.0f, 255.0f);
+        y += 20;
+        pref_slider(cmd, ui_element, 40, "Blue",     90, label_x, y, W - pad * 2, &g_sky.volume_color[shown][2],    0.0f, 1.0f, 255.0f);
+        y += 20;
+        draw_text_element(cmd, ui_element, "Cheap = one soft pass. Good = moving cloud noise, thicker low, lit by the sun.", label_x, y, get_theme_hint_color());
     } else {
         draw_text_element(cmd, ui_element, "No fog volume yet.", label_x, y, get_theme_hint_color());
     }
     }
-
     if (preferences_tab == 4) {
     /* ---- Build: a game folder without the editor, and its installer ---- */
     draw_text_element(cmd, ui_element, "GAME BUILD", label_x, y, system_theme.menu_active_text);

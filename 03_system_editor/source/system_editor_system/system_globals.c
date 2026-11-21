@@ -39,7 +39,7 @@ tooltip_state g_tooltip = {0};
 
 sky_state g_sky = {
     .scene_sky_on = true, .scene_fog_on = false, .game_sky_on = true, .game_fog_on = false,
-    .sky_top = { 0.25f, 0.45f, 0.85f }, .sky_horizon = { 0.75f, 0.85f, 0.95f },
+    .sky_brightness = 1.0f, .sky_haze = 0.35f, .fog_sky_color = true,
     .fog_color = { 0.72f, 0.80f, 0.90f },
     .fog_density = 0.008f, .fog_height_falloff = 0.015f, .fog_base_height = 0.0f, .fog_start = 0.0f,
     .fog_max_opacity = 1.0f, .fog_sun_scatter = 0.6f, .fog_sun_exponent = 8.0f,

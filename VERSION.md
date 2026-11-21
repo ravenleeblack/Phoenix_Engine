@@ -7,7 +7,7 @@
 ### Sculpt and Paint
 - Entering Sculpt mode opens the Brushes window in front (next to the Hierarchy) and the Sculpt window next to the Inspector, the same places Paint uses. Switching between Sculpt and Paint keeps the Brushes window open.
 - Each mode's own window is brought in front of the other tabs in its dock area when you enter the mode.
-- Brush icons are lit spheres like the skins in Texture Shop. Every sculpt and paint brush has its own color and its own glyph. A ring shows hover and the picked brush. The Sc and Pt buttons in the mode strip use the same icons.
+- Brush icons in the Brushes window are lit spheres like the skins in Texture Shop. Every sculpt and paint brush has its own color and its own glyph. A ring shows hover and the picked brush.
 - Brushes window: rounded section lines, circle hit areas.
 
 ### Scene view and Game view
@@ -16,12 +16,16 @@
 - Sky and Fog buttons on the Scene sub menu, and a Game sub menu with its own Sky and Fog buttons.
 
 ### Sky and fog
-- Sky dome: an octagon dome (8 sides, 4 rings) that follows the camera. Gradient from the horizon to the top color, darker below the horizon, glow and disc at the sun. The horizon takes the fog color when fog is on.
-- Fog: exponential height fog integrated along the view ray (density, height falloff, start distance, max opacity), with sun glow (directional inscattering).
-- Fog volumes: Empty objects. Position = center, largest scale = radius. Each is a soft sphere, thickest in the middle, with its own density and color.
-- Toolbar buttons create the sky dome and fog volumes. Preferences has a new Sky / Fog tab. All sky and fog settings are saved.
-- Fog is applied in the mesh shader (`mesh_frag.glsl`), also when Lit is off.
+- Procedural sky dome (like Unreal's sky atmosphere): an octagon dome (8 sides, 4 rings) that follows the camera. The color is computed from the sun, so moving the directional light changes it: blue day sky, pale horizon, orange sunset, dark night with stars, haze, a glow and a disc at the sun. Sliders: Brightness and Haze.
+- Height fog (Unreal's Exponential Height Fog): density falls off with height and is integrated along the whole view ray. Density, Height, Start, Opacity. The fog takes the sky's horizon color (or your own color) and glows toward the sun (Sun glow, Sun size).
+- Fog volumes are boxes: position = center, rotation = orientation, scale = size in meters. Resize them with the Scale tool. The box is drawn as a cyan wire box in the Scene view. Creating one fills it with fog. Each volume has a type:
+  - Cheap: one straight pass through the box with a soft edge. Fastest.
+  - Good: ray marched through the box with moving noise, thicker toward the bottom, lit by the sun with a little self shadow. Looks like cloud.
+  Per volume: density, edge softness, noise size, color.
+- Toolbar buttons create the sky dome and fog volumes. Preferences has a Sky / Fog tab. The Scene and Game views each have their own Sky and Fog switch. Fog is applied in the mesh shader (`mesh_frag.glsl`), also when Lit is off.
 
+### Mode strip icons
+- Sculpt, Paint and Texture Shop in the mode strip are lit spheres like skins with an S, P or T over them.
 ### File > Save All
 - Save Scene, Save Project and Save All now work: they save preferences and view state, every skin to `assets/skins`, and the paint map of every painted mesh. Scenes have no file format yet.
 
