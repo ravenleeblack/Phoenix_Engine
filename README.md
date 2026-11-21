@@ -82,3 +82,15 @@ See [Phoenix Engine Wiki](https://github.com/ravenleeblack/Phoenix_Engine/wiki) 
 What is new in 1.3: File > Import / Export for `.fbx` and `.png`, an export options window, object-mode Assign Skin from the File Archive, and editor window focus handling.
 
 Phoenix is under active development. Public APIs and editor workflows may change between releases.
+
+<img width="1376" height="878" alt="sceneview" src="https://github.com/user-attachments/assets/4308b6fa-4b7c-45c6-ad2f-3ea661129bde" />
+
+<img width="1254" height="951" alt="right_click_menu" src="https://github.com/user-attachments/assets/86e11b16-4b4a-4757-959d-e86c17cd86a9" />
+
+<img width="1353" height="849" alt="light_and_skin" src="https://github.com/user-attachments/assets/dfcff630-cfd7-402a-a964-b100546913af" />
+
+<img width="378" height="339" alt="shader_profile" src="https://github.com/user-attachments/assets/1bbecbce-515c-4bbc-b839-eab59534ba14" />
+
+
+
+
