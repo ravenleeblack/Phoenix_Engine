@@ -96,7 +96,7 @@ What is new in 1.5: Sculpt opens the Brushes window like Paint, brush icons are 
 
 Version 1.4 added the Edit mode tools (Create Edge, Create Face, Delete Edge, Bevel, Subdivide), more light kinds, skin maps, `.obj` import with unit profiles, and the build and installer tools.
 
-Phoenix is under active development. Public APIs and editor workflows may change between releases.
+Phoenix is under active development. Public APIs and editor workflows may change between releases. The Phoenix Engine does not using any third party api's or libs besides PURE WIN32 C API and VULKAN API everything is being designed from nothing. So no SDL, GLFW or anything like that involved nor any third party installers. 
 
 ## Screenshots
 
