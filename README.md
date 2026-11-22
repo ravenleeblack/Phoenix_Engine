@@ -86,7 +86,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 for other modes like object and edit mode because I hadn't made the terrain tool cursor stop yet once mode change so if you try to make a lake the lake preview will take over as mouse
 cursor and refuse to change back. Also even doe finalize says single object into terrain it doesn't embed properly yet. Will probably have to use a Boolean to merge properly at some point but for now Ill test as is until I get all the features for each tool right like mountains need options for duel and triple mountains with sharper peaks instead of smooth. Lake right now only has circular shape so need to make a way to create all kinds of different shapes and other stuff. Right now with the way we skin objects and keep track of terrian verts, we should be able to make over hangs and hole tools as well, just skinning the right side of vertex though as cubes but being a pain at the moment.
 - The toolbar Run button.
-- 
+- Need a good icon maker lmao to really upgrade.
 
 
 If window loses focus while tabbing press alt and move camera around then try again. Working on it. 
@@ -98,7 +98,7 @@ If window loses focus while tabbing press alt and move camera around then try ag
 
 What is new in 1.5: Sculpt opens the Brushes window like Paint, brush icons are lit spheres with their own glyphs, tooltips on buttons, a Selection Highlight toggle, a procedural octagon sky dome that follows the sun, Unreal-style height fog with sun glow, resizable box fog volumes (cheap and good), with Scene and Game view switches, File > Save All, terrain Edit / Sculpt / Paint (with a new Pinch brush and a cursor-following Grab), a Unity-style gizmo, directional-light driven sky and fog, skin maps with a Shader Profile node, and Terrain Tools (river, tunnel, mountain, lake, ramp, overhang, canyon). Full details in [VERSION.md](VERSION.md).
 
-Version 1.4 added the Edit mode tools (Create Edge, Create Face, Delete Edge, Bevel, Subdivide), more light kinds, skin maps, `.obj` import with unit profiles, and the build and installer tools.
+Version 1.4 added the Edit mode tools (Create Edge, Create Face, Delete Edge, Subdivide), more light kinds, skin maps, `.obj` import with unit profiles, and the build and installer tools.
 
 Phoenix is under active development. Public APIs and editor workflows may change between releases. The Phoenix Engine does not using any third party api's or libs besides PURE WIN32 C API and VULKAN API everything is being designed from nothing. So no SDL, GLFW or anything like that involved nor any third party installers. 
 
