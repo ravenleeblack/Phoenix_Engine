@@ -106,9 +106,10 @@ Phoenix is under active development. Public APIs and editor workflows may change
 
 <img width="378" height="339" alt="shader_profile" src="https://github.com/user-attachments/assets/8aaccb4b-b5b1-4c43-9e23-942202e4e45d" />
 
-<img width="1920" height="1050" alt="paint_sculpt" src="https://github.com/user-attachments/assets/6d7baad3-45f3-492a-aca6-55b93bca672a" />
-
 <img width="1920" height="1050" alt="paint_sculpt" src="https://github.com/user-attachments/assets/b9c5c421-9009-4d6a-b6e0-436143cef8cd" />
+
+<img width="1280" height="963" alt="paint_sculpt_00" src="https://github.com/user-attachments/assets/4decd771-5290-4954-bedc-cc019c6613c1" />
+
 
 
 
