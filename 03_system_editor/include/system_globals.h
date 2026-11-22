@@ -116,6 +116,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #include "system_sky.h"
 #include "system_tooltip.h"
 #include "system_terrain_tool.h"
+#include "system_terrain_tools.h"
 
 
 

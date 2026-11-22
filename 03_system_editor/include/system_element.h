@@ -146,7 +146,8 @@ typedef enum {
     view_type_texshop_node    = 17,     /* Texture Shop Nodes: tabbed next to the Tex Editor (UV editor) */
     view_type_paint = 18,
     view_type_file_archive = 19,     /* File Archive: folders and files of the asset folder */
-    view_type_texshop_skinmaker = 20
+    view_type_texshop_skinmaker = 20,
+    view_type_terrain_tools = 21     /* Terrain Tools: icons for river, tunnel, mountain, lake, ramp, overhang, canyon */
 } enum_view_type;
 
 /* UNIFIED DCC EDITOR INTERACTION CONTROL IDENTIFIERS */
@@ -165,6 +166,7 @@ typedef enum {
     id_work_anim       = 882011,
     id_spawn_texshop   = 882012,
     id_spawn_worldbld  = 882013,
+    id_work_terrain    = 882014,
 
     // Static uncollidable system frame button identifiers
     id_sys_minimize    = 991001,

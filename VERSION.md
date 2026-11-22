@@ -45,6 +45,26 @@
 - Paint workflow: the Paint window has Export / Import / Clear for the terrain paint map (`assets/textures/terrain_paint.png`, one pixel per column). The default Terrain skin is built in and already applied.
 - Skin Maker uses the same color picker and saved-color palette as Paint.
 
+### Terrain Tools (new mode button Tt, under Animation)
+- The **Tt** button in the mode menu (with a separator above it) opens the Terrain Tools window next to the File Archive, and the Modeler window. The window has 64 x 64 square icons with a title over each: River, Tunnel, Mountain, Lake, Ramp, Overhang and Canyon.
+- Picking an icon turns on Edit mode with edge select on the terrain and switches the Modeler window to that tool's five steps. The tool name is on top, the five step headers are listed under it in order, and the open step shows its controls. Every step draws a live **cyan wireframe** preview in the Scene view.
+  1. **Pick**: click an edge of the edit grid, or click **anywhere on the terrain, in any chunk or region** (the click snaps to the nearest cell edge): first the START, then the END (a mountain or lake: the middle). A cyan crosshair follows the mouse and, once the start is set, the whole piece follows the mouse until you click the end. Pick the region in the Scene Archive and press Ctrl+F to center on it. While a tool is open the 3 x 3 **regions** have a **blue** outline (the picked one brighter) and the **chunks** around the camera a **light yellow** outline. Chunk buttons and Follow camera move the edit grid.
+  2. **Segments**: the curve between the picks is a cubic **S shape** (or an Arc) with a Curve bend, cut into the segments you choose. The preview shows the left bank curve (start left to end left) and the right bank curve (start right to end right) and the start and end edges. Click a square vertex to select it (Shift adds, Select all vertices selects every one) and move it with the normal **translate gizmo** (X / Z); that also moves the end. Side pattern (Smooth / Steps / Zigzag) and Side offset shape the edge of the cut.
+  3. **Depth and shape**: width, depth (a mountain: height, a ramp: rise, a tunnel: radius and depth under the ground), bank slope and the bottom shape: Rounded, Square or Octagon. **Walls: Straight up and down or Sloped.** Straight walls drop at the edge (3D height map, no V shape); on a mountain they make a mesa.
+  4. **Ridges**: a rim along the top of the cut (height, width) and a **Lip** that reaches out over the cut, which makes an overhang.
+  5. **Finalize**: Accept and merge cuts the piece into the terrain heights and stitches the edge back with the bank slope. Keep it as **Single** (part of the terrain) or **Separate object** (also its own mesh). A height map cannot hang over a cut, so a Lip is always built as a mesh set into the cut. Overhangs are always their own object; tunnels become terrain tunnels.
+- The piece ends flush at the start and end edges (no cap or ridge around the ends).
+- These tools change the terrain separately from the terrain brushes (Edit, Sculpt and Paint), and they stop object picking and the brushes while a tool is open. The yellow grid on the selected chunk is hidden while a tool is open. There is no undo for a finalized piece yet.
+- The Scene view near and far clip planes now follow the zoom distance (they used to be fixed at 20 km, which cut the terrain off after Ctrl+F on a 14 km region).
+### Skins, maps and the Shader Profile node
+- Skins now carry six maps: Color, Height, Normal, Ambient, Occlusion and Specular. Normal maps are tangent space (own GPU binding); the occlusion map is the alpha of the packed aux image and darkens ambient light and highlights.
+- Skin Maker redesign: a Preview section (lit sphere, layer count, maps count), layer rows with a color swatch, and a Maps section of little boxes that show a picture of each map. Click a box to take the PNG picked in Files, x empties it.
+- The Terrain skin gets a tileable Height, Normal, Ambient and Occlusion map the first time (made into `assets/textures`). Terrain vertices now carry cell coordinates as uv, so skin maps tile across the terrain (every 8 cells) instead of reading one texel.
+- Texture Shop Nodes: new **Shader Profile** node. Its main text is the selected skin (`Skin: Terrain`), and its inputs (Color, Height, Normal, Ambient, Occlusion, Specular) show the map on the skin. Plug a Texture node (Set = PNG from Files) into an input to put that map on the skin; unplugging empties the slot. A new graph starts with one.
+
+### Sky and terrain horizon
+- With the Sky on, far surfaces blend into the sky's horizon color (aerial perspective), and the sky below the horizon fades slowly, so the end of the terrain no longer cuts a hard line against the sky.
+
 ### Gizmos
 - Unity style transform gizmo: solid arrow heads, cube scale handles, X red / Y green / Z blue, yellow on hover, a bigger grab area at the tip. Corner orientation widget like Unity's. The gizmo moves on all axes (no Y-only limit) so overhang work is possible.
 

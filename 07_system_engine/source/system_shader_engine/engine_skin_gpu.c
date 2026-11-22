@@ -33,6 +33,8 @@ typedef struct {
     bool            owns_texture;
     skin_texture    aux;              /* packed specular / height / ambient maps, when the skin has any */
     bool            owns_aux;
+    skin_texture    normal;           /* normal map, when the skin has one */
+    bool            owns_normal;
 } skin_gpu_block;
 
 typedef struct { uint32_t id; bool used; skin_gpu_block block; } skin_cache_entry;
@@ -198,6 +200,7 @@ static void skin_destroy_block(skin_gpu_block* b)
     if (b->memory != VK_NULL_HANDLE) vkFreeMemory(s_device, b->memory, NULL);
     if (b->owns_texture) skin_destroy_texture(&b->texture);
     if (b->owns_aux) skin_destroy_texture(&b->aux);
+    if (b->owns_normal) skin_destroy_texture(&b->normal);
     memset(b, 0, sizeof(*b));
 }
 
@@ -230,9 +233,13 @@ static void skin_pack(const skin_gpu_data* data, bool use_vertex_colour, bool ha
 }
 
 /* own_texture / own_aux: the skin's maps (copied into the block, which then frees them). NULL = the shared white texture. */
-static bool skin_build_block(const float* ubo, const skin_texture* own_texture, const skin_texture* own_aux, skin_gpu_block* out)
+static bool skin_build_block(const float* ubo, const skin_texture* own_texture, const skin_texture* own_aux, const skin_texture* own_normal, skin_gpu_block* out)
 {
     memset(out, 0, sizeof(*out));
+    if (own_normal) {
+        out->normal = *own_normal;
+        out->owns_normal = true;
+    }
     if (own_texture) {
         out->texture = *own_texture;
         out->owns_texture = true;
@@ -288,7 +295,12 @@ static bool skin_build_block(const float* ubo, const skin_texture* own_texture, 
         aux_bound = &out->aux;
     }
     VkDescriptorImageInfo aux_info = { s_sampler, aux_bound->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    VkWriteDescriptorSet writes[3];
+    const skin_texture* normal_bound = &s_white;
+    if (out->owns_normal) {
+        normal_bound = &out->normal;
+    }
+    VkDescriptorImageInfo normal_info = { s_sampler, normal_bound->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkWriteDescriptorSet writes[4];
     memset(writes, 0, sizeof(writes));
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = out->set;
@@ -308,7 +320,13 @@ static bool skin_build_block(const float* ubo, const skin_texture* own_texture, 
     writes[2].descriptorCount = 1;
     writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writes[2].pImageInfo = &aux_info;
-    vkUpdateDescriptorSets(s_device, 3, writes, 0, NULL);
+    writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[3].dstSet = out->set;
+    writes[3].dstBinding = 3;
+    writes[3].descriptorCount = 1;
+    writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[3].pImageInfo = &normal_info;
+    vkUpdateDescriptorSets(s_device, 4, writes, 0, NULL);
     return true;
 }
 
@@ -353,7 +371,7 @@ bool skin_gpu_create_layout(VkDevice device)
     if (s_layout != VK_NULL_HANDLE) skin_gpu_shutdown(s_device);   /* device changed (should not happen) */
     s_device = device;
 
-    VkDescriptorSetLayoutBinding bindings[3];
+    VkDescriptorSetLayoutBinding bindings[4];
     memset(bindings, 0, sizeof(bindings));
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -367,8 +385,12 @@ bool skin_gpu_create_layout(VkDevice device)
     bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     bindings[2].descriptorCount = 1;
     bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings[3].binding = 3;                                        /* normal map (mesh_frag.glsl skin_normal) */
+    bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[3].descriptorCount = 1;
+    bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     VkDescriptorSetLayoutCreateInfo li = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    li.bindingCount = 3;
+    li.bindingCount = 4;
     li.pBindings = bindings;
     if (vkCreateDescriptorSetLayout(device, &li, NULL, &s_layout) != VK_SUCCESS) {
         s_layout = VK_NULL_HANDLE; s_device = VK_NULL_HANDLE;
@@ -378,7 +400,7 @@ bool skin_gpu_create_layout(VkDevice device)
 
     VkDescriptorPoolSize sizes[2] = {
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, SKIN_POOL_SETS },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, SKIN_POOL_SETS * 2 }
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, SKIN_POOL_SETS * 3 }
     };
     VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;   /* sets are freed one by one when a skin is retired */
@@ -420,7 +442,7 @@ bool skin_gpu_create_layout(VkDevice device)
     grey.layers[0].channel_mask = 1u;
     float ubo[SKIN_UBO_FLOATS];
     skin_pack(&grey, true, false, ubo);
-    if (!skin_build_block(ubo, NULL, NULL, &s_empty)) {
+    if (!skin_build_block(ubo, NULL, NULL, NULL, &s_empty)) {
         phoenix_error("SKIN", "Failed to build the shared empty skin set.");
         skin_destroy_texture(&s_white);
         vkDestroySampler(device, s_sampler, NULL);
@@ -459,6 +481,7 @@ bool skin_gpu_set(uint32_t skin_id, const skin_gpu_data* data)
 
     const bool wants_map = data->map_pixels != NULL && data->map_width > 0 && data->map_height > 0;
     const bool wants_aux = data->aux_pixels != NULL && data->aux_width > 0 && data->aux_height > 0;
+    const bool wants_normal = data->normal_pixels != NULL && data->normal_width > 0 && data->normal_height > 0;
 
     skin_gpu_block fresh;
     bool built = false;
@@ -475,11 +498,17 @@ bool skin_gpu_set(uint32_t skin_id, const skin_gpu_data* data)
         memset(&aux, 0, sizeof(aux));
         const bool has_aux = wants_aux && skin_create_texture(data->aux_pixels, data->aux_width, data->aux_height, &aux);
 
+        skin_texture normal;
+        memset(&normal, 0, sizeof(normal));
+        const bool has_normal = wants_normal && skin_create_texture(data->normal_pixels, data->normal_width, data->normal_height, &normal);
+
         const skin_texture* own = NULL;
         if (has_map) own = &map;
         const skin_texture* own_aux = NULL;
         if (has_aux) own_aux = &aux;
-        built = skin_build_block(ubo, own, own_aux, &fresh); /* a failed build frees the textures it was given */
+        const skin_texture* own_normal = NULL;
+        if (has_normal) own_normal = &normal;
+        built = skin_build_block(ubo, own, own_aux, own_normal, &fresh); /* a failed build frees the textures it was given */
         if (!built) skin_gpu_flush();                         /* pool may be full of retired sets: free them and retry once */
     }
     if (!built) return false;

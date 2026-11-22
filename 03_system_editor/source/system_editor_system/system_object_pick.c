@@ -432,7 +432,7 @@ void update_system_object_picking(system_element_context* ui_ctx)
         return;
     }
     /* a gizmo handle (the Y arrow floats over empty space) or the number boxes own this click */
-    if (ui_ctx->active_id != 0 || ui_ctx->input.camera_manipulating || is_manip_overlay_using_mouse() || system_transform_gizmo_wants_mouse()) {
+    if (ui_ctx->active_id != 0 || ui_ctx->input.camera_manipulating || is_manip_overlay_using_mouse() || system_transform_gizmo_wants_mouse() || is_terrain_tools_wanting_mouse()) {
         return;
     }
     if (!check_window_focus() || (GetAsyncKeyState(VK_MENU) & 0x8000) != 0) {

@@ -1092,6 +1092,7 @@ static void draw_selection_bounding_box(VkCommandBuffer cmd, const editor_mat4* 
 static void draw_picked_terrain_chunk(VkCommandBuffer cmd, const editor_mat4* view, const editor_mat4* proj)
 {
     if (!g_terrain.exists || g_wiregrid_pipeline == VK_NULL_HANDLE) return;
+    if (g_terrain_tools.tool != tt_tool_none) return;     /* a Terrain Tool is open: no yellow chunk grid, the tool draws its own preview */
 
     /* Edit mode on the terrain (vertex / edge / face): the chunk being edited always shows its grid. otherwise the chunk that was clicked. */
     int pick_chunk_x = g_pick_chunk_x, pick_chunk_z = g_pick_chunk_z;

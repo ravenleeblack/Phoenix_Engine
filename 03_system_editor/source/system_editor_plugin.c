@@ -1,4 +1,5 @@
 #include "system_globals.h"
+void check_texshop_ready(void);   /* draw_system_textureshop.c */
 
 bool create_editor_scene_object_pipeline(VkPhysicalDevice physical_device, VkDevice device, VkRenderPass renderpass, bool enable_depth);
 #include "system_dock.h"
@@ -98,6 +99,7 @@ __declspec(dllexport) void editor_update(float delta_time)
     preferences_begin_frame(&element_context);
     export_begin_frame(&element_context);
     update_system_object_picking(&element_context);   /* click an object in the Scene view */
+    check_texshop_ready();                            /* loads the skins and makes the default Terrain maps the first time */
     update_terrain_streaming();                       /* rebuilds the terrain chunks that were edited, sculpted or painted, and loads / frees them around the camera */
     update_system_undo(&element_context);             /* Ctrl+Z / Ctrl+Y and Edit > Undo / Redo */
 }

@@ -654,7 +654,7 @@ static bool build_smooth_chunk(const system_terrain* t, int cx, int cz,
             editor_vertex* o = &vert_to_edge_array[vi++];
             o->x = ((float)gx - ox) * cs; o->y = y; o->z = ((float)gz - oz) * cs;
             o->r = col[0]; o->g = col[1]; o->b = col[2]; o->a = 1.0f;
-            set_vertex_attributes(o, (float)(gx % 2), (float)(gz % 2), n[0], n[1], n[2]);
+            set_vertex_attributes(o, (float)gx, (float)gz, n[0], n[1], n[2]);            /* whole numbers on cell borders (the grid wire needs that), and the skin maps tile by cell */
         }
     const uint32_t row = (uint32_t)(wc + 1);
     for (int j = 0; j < dc; j++)
@@ -856,7 +856,7 @@ static bool build_sandbox_chunk(const system_terrain* t, int cx, int cz,
             editor_vertex* o = &vert_to_edge_array[vi++];
             o->x = p[c][0]; o->y = p[c][1]; o->z = p[c][2];
             o->r = col[0]; o->g = col[1]; o->b = col[2]; o->a = 1.0f;
-            set_vertex_attributes(o, corner_u[c], corner_v[c], nrm[0], nrm[1], nrm[2]);
+            set_vertex_attributes(o, (float)(cx * t->dims.chunk_cells + q[k].lx) + corner_u[c], (float)(cz * t->dims.chunk_cells + q[k].lz) + corner_v[c], nrm[0], nrm[1], nrm[2]);
         }
         ix[ii++] = base;     ix[ii++] = base + 1; ix[ii++] = base + 2;
         ix[ii++] = base + 2; ix[ii++] = base + 3; ix[ii++] = base;

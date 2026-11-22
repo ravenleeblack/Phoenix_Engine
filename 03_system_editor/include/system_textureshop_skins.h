@@ -62,7 +62,9 @@ typedef struct {
     char          map_file[32];                         /* base color map: a PNG in assets/textures (file name only), "" = none */
     char          spec_file[32];                        /* specular map (red channel is read), "" = none */
     char          height_file[32];                      /* height map (red channel), drives bump shading, "" = none */
-    char          ambient_file[32];                     /* ambient occlusion map (red channel), "" = none */
+    char          ambient_file[32];                     /* ambient map (red channel): how much ambient light each spot gets, "" = none */
+    char          normal_file[32];                      /* normal map (rgb, tangent space), "" = none */
+    char          occlusion_file[32];                   /* occlusion map (red channel): darkens ambient light and highlights in the cracks, "" = none */
     float         specular;                             /* highlight strength 0..1 */
     float         gloss;                                /* highlight tightness 0..1 */
     float         height_scale;                         /* bump strength 0..1 */

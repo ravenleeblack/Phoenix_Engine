@@ -57,6 +57,8 @@ static uint32_t hash_texshop_skin(const texshop_skin* s)
     for (const char* c = s->spec_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
     for (const char* c = s->height_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
     for (const char* c = s->ambient_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
+    for (const char* c = s->normal_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
+    for (const char* c = s->occlusion_file; *c; c++) h = hash_texshop_u32(h, (uint32_t)(unsigned char)*c);
     h = hash_texshop_float(h, s->specular);
     h = hash_texshop_float(h, s->gloss);
     h = hash_texshop_float(h, s->height_scale);
@@ -217,7 +219,9 @@ static void skin_to_profile(const texshop_skin* s, shader_profile* p)
     snprintf(p->tex_input_name[1], sizeof(p->tex_input_name[1]), "%s", s->spec_file);
     snprintf(p->tex_input_name[2], sizeof(p->tex_input_name[2]), "%s", s->height_file);
     snprintf(p->tex_input_name[3], sizeof(p->tex_input_name[3]), "%s", s->ambient_file);
-    p->tex_input_count = 4;
+    snprintf(p->tex_input_name[4], sizeof(p->tex_input_name[4]), "%s", s->normal_file);
+    snprintf(p->tex_input_name[5], sizeof(p->tex_input_name[5]), "%s", s->occlusion_file);
+    p->tex_input_count = 6;
     const char* const param_names[4] = { "specular", "gloss", "height", "ambient" };
     const float param_values[4] = { s->specular, s->gloss, s->height_scale, s->ambient };
     for (int k = 0; k < 4; k++) {
@@ -240,6 +244,8 @@ static void profile_to_skin(const shader_profile* p, texshop_skin* s)
         snprintf(s->spec_file,    sizeof(s->spec_file),    "%s", p->tex_input_name[1]);
         snprintf(s->height_file,  sizeof(s->height_file),  "%s", p->tex_input_name[2]);
         snprintf(s->ambient_file, sizeof(s->ambient_file), "%s", p->tex_input_name[3]);
+        snprintf(s->normal_file,    sizeof(s->normal_file),    "%s", p->tex_input_name[4]);
+        snprintf(s->occlusion_file, sizeof(s->occlusion_file), "%s", p->tex_input_name[5]);
     }
 
     const skin_profile_data* d = &p->u.skin;
@@ -331,11 +337,192 @@ static void fill_builtin_terrain_skin(texshop_skin* s)
     s->layers[0].opacity = 1.0f;
 }
 
+/* ---- default terrain maps (tileable, 256 x 256), made once so the Terrain skin has something to test with ---- */
+enum { terrain_map_size = 256 };
+extern save_image_asset_ptr editor_save_image;
+
+static float get_terrain_map_hash(int x, int y, int seed)
+{
+    uint32_t h = (uint32_t)(x * 374761393) + (uint32_t)(y * 668265263) + (uint32_t)(seed * 2147483647u);
+    h = (h ^ (h >> 13)) * 1274126177u;
+    h ^= h >> 16;
+    return (float)(h & 0xFFFFu) / 65535.0f;
+}
+
+static float get_terrain_map_noise(float x, float y, int period, int seed)
+{
+    const float fx = x * (float)period;
+    const float fy = y * (float)period;
+    const int ix = (int)floorf(fx);
+    const int iy = (int)floorf(fy);
+    float tx = fx - (float)ix;
+    float ty = fy - (float)iy;
+    tx = tx * tx * (3.0f - 2.0f * tx);
+    ty = ty * ty * (3.0f - 2.0f * ty);
+    const int x0 = ((ix % period) + period) % period;
+    const int y0 = ((iy % period) + period) % period;
+    const int x1 = (x0 + 1) % period;
+    const int y1 = (y0 + 1) % period;
+    const float a = get_terrain_map_hash(x0, y0, seed);
+    const float b = get_terrain_map_hash(x1, y0, seed);
+    const float c = get_terrain_map_hash(x0, y1, seed);
+    const float d = get_terrain_map_hash(x1, y1, seed);
+    const float top = a + (b - a) * tx;
+    const float bottom = c + (d - c) * tx;
+    return top + (bottom - top) * ty;
+}
+
+static bool save_terrain_map_png(const char* name, const uint8_t* rgba)
+{
+    char path[260];
+    snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\%s", name);
+    loader_image_data image;
+    memset(&image, 0, sizeof(image));
+    image.pixels = (uint8_t*)rgba;
+    image.width = terrain_map_size;
+    image.height = terrain_map_size;
+    image.channels = 4;
+    return editor_save_image(path, &image);
+}
+
+static bool create_default_terrain_maps(void)
+{
+    const int count = terrain_map_size * terrain_map_size;
+    float* height = (float*)malloc(sizeof(float) * (size_t)count);
+    float* blurred = (float*)malloc(sizeof(float) * (size_t)count);
+    uint8_t* pixels = (uint8_t*)malloc((size_t)count * 4u);
+    if (!height || !blurred || !pixels) {
+        free(height);
+        free(blurred);
+        free(pixels);
+        return false;
+    }
+    for (int y = 0; y < terrain_map_size; y++) {
+        for (int x = 0; x < terrain_map_size; x++) {
+            const float u = (float)x / (float)terrain_map_size;
+            const float v = (float)y / (float)terrain_map_size;
+            float sum = 0.0f;
+            float amplitude = 0.5f;
+            int period = 4;
+            for (int octave = 0; octave < 5; octave++) {
+                sum += get_terrain_map_noise(u, v, period, octave + 1) * amplitude;
+                amplitude *= 0.5f;
+                period *= 2;
+            }
+            const float ridge = 1.0f - fabsf(get_terrain_map_noise(u, v, 16, 9) * 2.0f - 1.0f);
+            height[y * terrain_map_size + x] = sum * 0.8f + ridge * 0.2f;
+        }
+    }
+    for (int y = 0; y < terrain_map_size; y++) {
+        for (int x = 0; x < terrain_map_size; x++) {
+            float sum = 0.0f;
+            for (int oy = -3; oy <= 3; oy++) {
+                for (int ox = -3; ox <= 3; ox++) {
+                    sum += height[((y + oy + terrain_map_size) % terrain_map_size) * terrain_map_size + ((x + ox + terrain_map_size) % terrain_map_size)];
+                }
+            }
+            blurred[y * terrain_map_size + x] = sum / 49.0f;
+        }
+    }
+
+    bool ok = true;
+    /* height */
+    for (int i = 0; i < count; i++) {
+        float h = (height[i] - 0.2f) * 1.6f;
+        if (h < 0.0f) { h = 0.0f; }
+        if (h > 1.0f) { h = 1.0f; }
+        const uint8_t value = (uint8_t)(h * 255.0f);
+        pixels[i * 4 + 0] = value; pixels[i * 4 + 1] = value; pixels[i * 4 + 2] = value; pixels[i * 4 + 3] = 255;
+    }
+    ok = save_terrain_map_png("terrain_height.png", pixels) && ok;
+
+    /* normal (tangent space, green up) from the height */
+    for (int y = 0; y < terrain_map_size; y++) {
+        for (int x = 0; x < terrain_map_size; x++) {
+            const float left  = height[y * terrain_map_size + (x + terrain_map_size - 1) % terrain_map_size];
+            const float right = height[y * terrain_map_size + (x + 1) % terrain_map_size];
+            const float up    = height[((y + terrain_map_size - 1) % terrain_map_size) * terrain_map_size + x];
+            const float down  = height[((y + 1) % terrain_map_size) * terrain_map_size + x];
+            float nx = (left - right) * 6.0f;
+            float ny = (down - up) * 6.0f;
+            float nz = 1.0f;
+            const float length = sqrtf(nx * nx + ny * ny + nz * nz);
+            nx /= length; ny /= length; nz /= length;
+            uint8_t* p = &pixels[(y * terrain_map_size + x) * 4];
+            p[0] = (uint8_t)((nx * 0.5f + 0.5f) * 255.0f);
+            p[1] = (uint8_t)((ny * 0.5f + 0.5f) * 255.0f);
+            p[2] = (uint8_t)((nz * 0.5f + 0.5f) * 255.0f);
+            p[3] = 255;
+        }
+    }
+    ok = save_terrain_map_png("terrain_normal.png", pixels) && ok;
+
+    /* ambient: soft large patches of more and less ambient light */
+    for (int y = 0; y < terrain_map_size; y++) {
+        for (int x = 0; x < terrain_map_size; x++) {
+            const float u = (float)x / (float)terrain_map_size;
+            const float v = (float)y / (float)terrain_map_size;
+            float a = 0.72f + 0.28f * get_terrain_map_noise(u, v, 4, 21);
+            const uint8_t value = (uint8_t)(a * 255.0f);
+            uint8_t* p = &pixels[(y * terrain_map_size + x) * 4];
+            p[0] = value; p[1] = value; p[2] = value; p[3] = 255;
+        }
+    }
+    ok = save_terrain_map_png("terrain_ambient.png", pixels) && ok;
+
+    /* occlusion: dark where the height is lower than its surroundings (cracks and hollows) */
+    for (int i = 0; i < count; i++) {
+        float o = 0.75f + (height[i] - blurred[i]) * 4.0f;
+        if (o < 0.35f) { o = 0.35f; }
+        if (o > 1.0f) { o = 1.0f; }
+        const uint8_t value = (uint8_t)(o * 255.0f);
+        pixels[i * 4 + 0] = value; pixels[i * 4 + 1] = value; pixels[i * 4 + 2] = value; pixels[i * 4 + 3] = 255;
+    }
+    ok = save_terrain_map_png("terrain_occlusion.png", pixels) && ok;
+
+    free(height);
+    free(blurred);
+    free(pixels);
+    return ok;
+}
+
+/* the first time: make the four maps and put them on the Terrain skin (height, normal, ambient, occlusion) so the terrain has them by default.
+   after that the files are the user's: clearing a slot in the Skin Maker stays cleared. */
+static void seed_default_terrain_maps(texshop_skin* s)
+{
+    char path[260];
+    snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\terrain_height.png");
+    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES) {
+        return;
+    }
+    if (!check_loader_ready()) {
+        return;
+    }
+    CreateDirectoryA(FILE_ARCHIVE_ROOT_FOLDER, NULL);
+    CreateDirectoryA(FILE_ARCHIVE_ROOT_FOLDER "\\textures", NULL);
+    if (!create_default_terrain_maps()) {
+        return;
+    }
+    snprintf(s->height_file,    sizeof(s->height_file),    "terrain_height.png");
+    snprintf(s->normal_file,    sizeof(s->normal_file),    "terrain_normal.png");
+    snprintf(s->ambient_file,   sizeof(s->ambient_file),   "terrain_ambient.png");
+    snprintf(s->occlusion_file, sizeof(s->occlusion_file), "terrain_occlusion.png");
+    s->height_scale = 0.5f;
+}
+
 static void ensure_builtin_terrain_skin(void)
 {
     for (int i = 0; i < g_texshop.skin_count; i++) {
         texshop_skin* old = &g_texshop.skins[i];
         if (strcmp(old->name, TERRAIN_SKIN_NAME) == 0) {
+            const bool had_height = old->height_file[0] != '\0';
+            seed_default_terrain_maps(old);
+            if (!had_height && old->height_file[0] != '\0') {
+                const int previous = g_texshop.selected_skin;
+                g_texshop.selected_skin = i;
+                export_texshop_skin();
+                g_texshop.selected_skin = previous;
+            }
             if (old->layer_count != 1) {                  /* the first version had grass and rock layers: back to the plain tint */
                 fill_builtin_terrain_skin(old);
                 const int previous = g_texshop.selected_skin;
@@ -354,6 +541,7 @@ static void ensure_builtin_terrain_skin(void)
     fill_texshop_skin(s, TERRAIN_SKIN_NAME);
     s->id = g_texshop.next_skin_id++;
     fill_builtin_terrain_skin(s);
+    seed_default_terrain_maps(s);
 
     const int previous = g_texshop.selected_skin;
     g_texshop.selected_skin = g_texshop.skin_count;
@@ -766,18 +954,20 @@ extern load_image_asset_ptr   editor_load_image;           /* system_import_expo
 extern remove_image_asset_ptr editor_remove_image;
 bool check_loader_ready(void);
 
-/* packs the specular (r), height (g) and ambient (b) maps into one RGBA image the size of the biggest map. A missing map stays white.
-   returns malloc'd pixels (the caller frees them) or NULL when the skin has none of the three. */
+/* packs the specular (r), height (g), ambient (b) and occlusion (a) maps into one RGBA image the size of the biggest map. A missing map stays white.
+   flags: bit 0 specular, bit 1 height, bit 2 ambient, bit 5 occlusion (bit 3 is the terrain material, bit 4 the normal map).
+   returns malloc'd pixels (the caller frees them) or NULL when the skin has none of the four. */
 uint8_t* pack_skin_aux_maps(const texshop_skin* s, uint32_t* out_w, uint32_t* out_h, uint32_t* out_flags)
 {
-    const char* files[3] = { s->spec_file, s->height_file, s->ambient_file };
-    loader_image_data images[3];
-    bool loaded[3] = { false, false, false };
+    const char* files[4] = { s->spec_file, s->height_file, s->ambient_file, s->occlusion_file };
+    const uint32_t flag_bits[4] = { 1u, 2u, 4u, 32u };
+    loader_image_data images[4];
+    bool loaded[4] = { false, false, false, false };
     memset(images, 0, sizeof(images));
     *out_flags = 0;
 
     uint32_t width = 0, height = 0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         if (files[i][0] == '\0' || !check_loader_ready()) {
             continue;
         }
@@ -788,7 +978,7 @@ uint8_t* pack_skin_aux_maps(const texshop_skin* s, uint32_t* out_w, uint32_t* ou
             phoenix_warn("SKIN", "skin '%s': map '%s' could not be loaded.", s->name, path);
             continue;
         }
-        *out_flags |= 1u << i;
+        *out_flags |= flag_bits[i];
         if ((uint32_t)images[i].width > width)  width  = (uint32_t)images[i].width;
         if ((uint32_t)images[i].height > height) height = (uint32_t)images[i].height;
     }
@@ -799,7 +989,7 @@ uint8_t* pack_skin_aux_maps(const texshop_skin* s, uint32_t* out_w, uint32_t* ou
     }
     if (packed) {
         memset(packed, 255, (size_t)width * height * 4u);
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             if (!loaded[i]) {
                 continue;
             }
@@ -818,7 +1008,7 @@ uint8_t* pack_skin_aux_maps(const texshop_skin* s, uint32_t* out_w, uint32_t* ou
         *out_flags = 0;
     }
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         if (loaded[i]) {
             editor_remove_image(&images[i]);
         }
@@ -858,9 +1048,27 @@ void texshop_build_skin_gpu(uint32_t skin_id)
             phoenix_warn("SKIN", "skin '%s': map '%s' could not be loaded.", s->name, path);
         }
     }
+    /* the normal map: its own image, rgb read as a tangent space normal */
+    loader_image_data normal_image;
+    memset(&normal_image, 0, sizeof(normal_image));
+    bool normal_loaded = false;
+    if (s->normal_file[0] && check_loader_ready()) {
+        char path[260];
+        snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\%s", s->normal_file);
+        normal_loaded = editor_load_image(path, &normal_image);
+        if (normal_loaded) {
+            data.normal_pixels = normal_image.pixels;
+            data.normal_width  = (uint32_t)normal_image.width;
+            data.normal_height = (uint32_t)normal_image.height;
+            data.aux_flags |= 16u;
+        } else {
+            phoenix_warn("SKIN", "skin '%s': normal map '%s' could not be loaded.", s->name, path);
+        }
+    }
     if (strcmp(s->name, "Terrain") == 0) data.aux_flags |= 8u;   /* mesh_frag.glsl: smooth terrain material (grass / rock by slope) */
     if (skin_gpu_set(s->id, &data)) s->gpu_hash = hash_texshop_skin(s);
     if (map_loaded) editor_remove_image(&image);
+    if (normal_loaded) editor_remove_image(&normal_image);
     free(aux_pixels);
 }
 

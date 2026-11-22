@@ -9,7 +9,8 @@ enum {
     sm_button_h = 22, sm_gap = 4, sm_pad = 8, sm_header_h = 20, sm_text_h = 16,
     sm_status_h = 18, sm_bottom_h = 30,
     sm_sub_gap = 2, sm_sub_sep = 7,
-    sm_section_count = 5, sm_scroll_step = 60
+    sm_section_count = 6, sm_scroll_step = 60,
+    sm_slot_w = 76, sm_slot_h = 92, sm_thumb_px = 64, sm_thumb_cells = 16, sm_thumb_max = 24
 };
 
 typedef struct { int left, right, top, bottom, x, y, row_h; bool edge_to_face_array; } sm_cursor;
@@ -21,6 +22,16 @@ static struct {
     int  scroll;           /* pixels the body is scrolled down */
     int  content_h;        /* height of the body last frame, so scroll can be clamped */
 } g_sm;
+
+/* small pictures of the maps (16 x 16), made once per file so the slots can show what is in them */
+typedef struct { char name[32]; bool used; bool failed; uint8_t rgb[sm_thumb_cells * sm_thumb_cells * 3]; } sm_thumb;
+static sm_thumb g_thumbs[sm_thumb_max];
+static int      g_thumb_next = 0;
+
+extern load_image_asset_ptr   editor_load_image;
+extern remove_image_asset_ptr editor_remove_image;
+bool check_loader_ready(void);
+void set_tooltip_text(const char* text);
 
 /* ------------------------------------------------------------------------- */
 /* small drawing helpers                                                     */
@@ -150,8 +161,19 @@ static void draw_sm_layers_section(VkCommandBuffer cmd, system_element_context* 
         letters[n] = '\0';
 
         char label[80];
-        snprintf(label, sizeof(label), "%d  %-10s %s%s", i, l->name, letters, l->triplanar ? "  tri" : "");
-        if (draw_sm_button(cmd, ui_element, c, label, true, s->selected_layer == i, system_theme.system_edit_mode_active_face_hover)) s->selected_layer = i;
+        snprintf(label, sizeof(label), "%d  %-9.9s %s%s", i, l->name, letters, l->triplanar ? " tri" : "");
+        finish_sm_row(c);
+        const int row_y = c->y;
+        const int row_w = c->right - c->left;
+        if (row_visible(c, row_y, sm_button_h)) {
+            if (draw_sm_flat_button(cmd, ui_element, c->left, row_y, row_w - 30, sm_button_h, label, false, s->selected_layer == i,
+                                    system_theme.system_edit_mode_active_face_hover, c->edge_to_face_array)) {
+                s->selected_layer = i;
+            }
+            const system_color swatch = { .red = l->color[0], .green = l->color[1], .blue = l->color[2], .alpha = 1.0f };
+            push_rounded_quad(cmd, (float)(c->left + row_w - 26), (float)(row_y + 2), 26.0f, (float)(sm_button_h - 4), swatch, 5, corner_all);
+        }
+        c->y += sm_button_h + sm_gap;
     }
     if (draw_sm_button(cmd, ui_element, c, "+ Layer", false, false, system_theme.system_color_edit_mode_normal_color)) add_texshop_layer(s);
     if (draw_sm_button(cmd, ui_element, c, "- Layer", false, false, system_theme.toolbar_background)) remove_texshop_layer(s);
@@ -253,37 +275,176 @@ void set_skin_map_from_archive(char* map_file, size_t cap)
     set_texshop_status("Map set from the Files window.");
 }
 
+static const sm_thumb* get_sm_thumb(const char* file)
+{
+    for (int i = 0; i < sm_thumb_max; i++) {
+        if (g_thumbs[i].used && strcmp(g_thumbs[i].name, file) == 0) {
+            return &g_thumbs[i];
+        }
+    }
+    sm_thumb* t = &g_thumbs[g_thumb_next];
+    g_thumb_next = (g_thumb_next + 1) % sm_thumb_max;
+    memset(t, 0, sizeof(*t));
+    snprintf(t->name, sizeof(t->name), "%s", file);
+    t->used = true;
+    t->failed = true;
+    if (!check_loader_ready()) {
+        return t;
+    }
+    char path[260];
+    snprintf(path, sizeof(path), FILE_ARCHIVE_ROOT_FOLDER "\\textures\\%s", file);
+    loader_image_data image;
+    memset(&image, 0, sizeof(image));
+    if (!editor_load_image(path, &image) || !image.pixels || image.width <= 0 || image.height <= 0) {
+        return t;
+    }
+    for (int cy = 0; cy < sm_thumb_cells; cy++) {
+        for (int cx = 0; cx < sm_thumb_cells; cx++) {
+            const int sx = (cx * image.width + image.width / 2) / sm_thumb_cells;
+            const int sy = (cy * image.height + image.height / 2) / sm_thumb_cells;
+            const uint8_t* p = &image.pixels[((size_t)sy * (size_t)image.width + (size_t)sx) * 4u];
+            uint8_t* o = &t->rgb[(cy * sm_thumb_cells + cx) * 3];
+            o[0] = p[0]; o[1] = p[1]; o[2] = p[2];
+        }
+    }
+    t->failed = false;
+    editor_remove_image(&image);
+    return t;
+}
+
+/* one map slot: a little box with the picture, the name under it. click the box = take the PNG picked in the Files window, x = empty the slot */
+static void draw_sm_slot_box(VkCommandBuffer cmd, system_element_context* ui_element, int x, int y, const char* label, char* file, size_t cap, const char* tip, bool edge)
+{
+    const int mx = ui_element->input.mouse_x, my = ui_element->input.mouse_y;
+    const bool hovered = validate_rectangle_hit(mx, my, x, y, sm_slot_w, sm_slot_h);
+    const int bx = x + (sm_slot_w - sm_thumb_px) / 2;
+    const int by = y + 2;
+
+    system_color frame = system_theme.system_border;
+    if (hovered) {
+        frame = system_theme.system_text;
+    } else if (file[0]) {
+        frame = system_theme.system_edit_mode_active_face_hover;
+    }
+    push_rounded_quad(cmd, (float)(bx - 2), (float)(by - 2), (float)(sm_thumb_px + 4), (float)(sm_thumb_px + 4), frame, 6, corner_all);
+    const system_color back = { 0.12f, 0.12f, 0.13f, 1.0f };
+    push_rounded_quad(cmd, (float)bx, (float)by, (float)sm_thumb_px, (float)sm_thumb_px, back, 5, corner_all);
+
+    if (file[0]) {
+        const sm_thumb* t = get_sm_thumb(file);
+        if (!t->failed) {
+            const int cell = sm_thumb_px / sm_thumb_cells;
+            for (int cy = 0; cy < sm_thumb_cells; cy++) {
+                for (int cx = 0; cx < sm_thumb_cells; cx++) {
+                    const uint8_t* p = &t->rgb[(cy * sm_thumb_cells + cx) * 3];
+                    const system_color c = { (float)p[0] / 255.0f, (float)p[1] / 255.0f, (float)p[2] / 255.0f, 1.0f };
+                    push_quad_element(cmd, (float)(bx + cx * cell), (float)(by + cy * cell), (float)cell, (float)cell, c);
+                }
+            }
+        } else {
+            draw_sm_text_at(cmd, ui_element, "missing", bx + 6, by + sm_thumb_px / 2 - 4, sm_thumb_px - 8, system_theme.system_color_edit_mode_invalid_color);
+        }
+    } else {
+        draw_sm_text_at(cmd, ui_element, "empty", bx + 14, by + sm_thumb_px / 2 - 4, sm_thumb_px - 8, system_theme.system_text);
+    }
+
+    /* x: empty the slot */
+    bool clear_hover = false;
+    if (file[0]) {
+        const int cx0 = bx + sm_thumb_px - 14, cy0 = by + 2;
+        clear_hover = validate_rectangle_hit(mx, my, cx0, cy0, 12, 12);
+        push_circle_element(cmd, (float)(cx0 + 6), (float)(cy0 + 6), 7.0f, 7.0f, clear_hover ? system_theme.system_color_edit_mode_invalid_color : system_theme.toolbar_background);
+        draw_sm_text_at(cmd, ui_element, "x", cx0 + 2, cy0 + 2, 10, system_theme.system_text);
+    }
+
+    int tx = x + (sm_slot_w - (int)strlen(label) * ui_font_w) / 2;
+    if (tx < x) {
+        tx = x;
+    }
+    draw_sm_text_at(cmd, ui_element, label, tx, by + sm_thumb_px + 6, sm_slot_w, system_theme.system_text);
+
+    if (hovered) {
+        set_tooltip_text(tip);
+        if (edge) {
+            if (clear_hover) {
+                file[0] = '\0';
+                set_texshop_status("Map emptied.");
+            } else {
+                set_skin_map_from_archive(file, cap);
+            }
+        }
+    }
+}
+
+/* the skin as a lit sphere (what the Texture Shop window shows), with its layer color and the maps it carries */
+static void draw_sm_preview_section(VkCommandBuffer cmd, system_element_context* ui_element, sm_cursor* c, texshop_skin* s)
+{
+    finish_sm_row(c);
+    const int box_h = 112;
+    if (row_visible(c, c->y, box_h)) {
+        const system_color back = { 0.10f, 0.10f, 0.11f, 1.0f };
+        push_rounded_quad(cmd, (float)c->left, (float)c->y, (float)(c->right - c->left), (float)box_h, back, 8, corner_all);
+        float rgb[3];
+        texshop_get_preview_color(s, rgb);
+        const float cx = (float)c->left + 60.0f;
+        const float cy = (float)c->y + (float)box_h * 0.5f;
+        draw_icon_sphere(cmd, cx, cy, 46.0f, rgb);
+        int maps = 0;
+        maps += s->map_file[0] != '\0';
+        maps += s->height_file[0] != '\0';
+        maps += s->normal_file[0] != '\0';
+        maps += s->ambient_file[0] != '\0';
+        maps += s->occlusion_file[0] != '\0';
+        maps += s->spec_file[0] != '\0';
+        char line[48];
+        const int tx = c->left + 120;
+        const int tw = c->right - tx - 4;
+        draw_sm_text_at(cmd, ui_element, s->name, tx, c->y + 14, tw, system_theme.system_text);
+        snprintf(line, sizeof(line), "%d layer(s)", s->layer_count);
+        draw_sm_text_at(cmd, ui_element, line, tx, c->y + 34, tw, system_theme.system_color_edit_mode_normal_color);
+        snprintf(line, sizeof(line), "%d of 6 maps", maps);
+        draw_sm_text_at(cmd, ui_element, line, tx, c->y + 52, tw, system_theme.system_color_edit_mode_normal_color);
+        snprintf(line, sizeof(line), "spec %.2f gloss %.2f", s->specular, s->gloss);
+        draw_sm_text_at(cmd, ui_element, line, tx, c->y + 70, tw, system_theme.system_text);
+    }
+    c->y += box_h + sm_gap;
+}
+
 static void draw_sm_surface_section(VkCommandBuffer cmd, system_element_context* ui_element, sm_cursor* c, texshop_skin* s)
 {
-    draw_sm_text(cmd, ui_element, c, "Shader profile: specular, height, ambient", system_theme.system_text);
+    draw_sm_text(cmd, ui_element, c, "Maps: click a box to take the PNG picked in Files", system_theme.system_text);
+
+    /* the boxes, as many per row as fit */
+    finish_sm_row(c);
+    const char* const labels[6] = { "Color", "Height", "Normal", "Ambient", "Occlusion", "Specular" };
+    char* const files[6] = { s->map_file, s->height_file, s->normal_file, s->ambient_file, s->occlusion_file, s->spec_file };
+    const char* const tips[6] = {
+        "Color map: the picture of the surface",
+        "Height map: bumps (grey, white = high)",
+        "Normal map: fine surface detail (tangent space)",
+        "Ambient map: how much ambient light each spot gets",
+        "Occlusion map: darkens ambient light and highlights in cracks",
+        "Specular map: where the surface shines"
+    };
+    int per_row = (c->right - c->left + sm_gap) / (sm_slot_w + sm_gap);
+    if (per_row < 1) {
+        per_row = 1;
+    }
+    for (int i = 0; i < 6; i++) {
+        const int sx = c->left + (i % per_row) * (sm_slot_w + sm_gap);
+        const int sy = c->y + (i / per_row) * (sm_slot_h + sm_gap);
+        if (row_visible(c, sy, sm_slot_h)) {
+            draw_sm_slot_box(cmd, ui_element, sx, sy, labels[i], files[i], 32, tips[i], c->edge_to_face_array);
+        }
+    }
+    c->y += ((6 + per_row - 1) / per_row) * (sm_slot_h + sm_gap);
+
+    draw_sm_text(cmd, ui_element, c, "Surface values", system_theme.system_text);
     draw_sm_value_row(cmd, ui_element, c, "Specular", &s->specular, 0.0f, 1.0f);
     draw_sm_value_row(cmd, ui_element, c, "Gloss", &s->gloss, 0.0f, 1.0f);
     draw_sm_value_row(cmd, ui_element, c, "Height", &s->height_scale, 0.0f, 1.0f);
     draw_sm_value_row(cmd, ui_element, c, "Ambient", &s->ambient, 0.0f, 2.0f);
-
-    draw_sm_text(cmd, ui_element, c, "Maps (pick a PNG in Files, then press)", system_theme.system_text);
-    char text[64];
-    snprintf(text, sizeof(text), "Spec map: %.20s", s->spec_file[0] ? s->spec_file : "none");
-    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
-    if (draw_sm_button(cmd, ui_element, c, "Set spec", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->spec_file, sizeof(s->spec_file));
-    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->spec_file[0] = '\0';
-
-    snprintf(text, sizeof(text), "Height map: %.18s", s->height_file[0] ? s->height_file : "none");
-    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
-    if (draw_sm_button(cmd, ui_element, c, "Set height", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->height_file, sizeof(s->height_file));
-    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->height_file[0] = '\0';
-
-    snprintf(text, sizeof(text), "Ambient map: %.16s", s->ambient_file[0] ? s->ambient_file : "none");
-    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
-    if (draw_sm_button(cmd, ui_element, c, "Set ambient", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->ambient_file, sizeof(s->ambient_file));
-    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->ambient_file[0] = '\0';
-
-    snprintf(text, sizeof(text), "Color map: %.20s", s->map_file[0] ? s->map_file : "none");
-    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
-    if (draw_sm_button(cmd, ui_element, c, "Set color", false, false, system_theme.system_edit_mode_active_face_hover)) set_skin_map_from_archive(s->map_file, sizeof(s->map_file));
-    if (draw_sm_button(cmd, ui_element, c, "x", false, false, system_theme.toolbar_background)) s->map_file[0] = '\0';
 }
-
 static void draw_sm_masks_section(VkCommandBuffer cmd, system_element_context* ui_element, sm_cursor* c, texshop_skin* s)
 {
     texshop_layer* l = get_texshop_layer(s);
@@ -433,9 +594,10 @@ void draw_textureshop_skinmaker_window(system_element_context* ui_ctx, system_do
 
     texshop_skin* skin = get_texshop_skin();
     if (skin) {
+        if (draw_sm_section(cmd, ui_ctx, &c, "Preview", &open[5]))        draw_sm_preview_section(cmd, ui_ctx, &c, skin);
         if (draw_sm_section(cmd, ui_ctx, &c, "Layer Stack", &open[1]))    draw_sm_layers_section(cmd, ui_ctx, &c, skin);
         if (draw_sm_section(cmd, ui_ctx, &c, "Selected Layer", &open[2])) draw_sm_layer_section(cmd, ui_ctx, &c, skin);
-        if (draw_sm_section(cmd, ui_ctx, &c, "Surface", &open[4]))        draw_sm_surface_section(cmd, ui_ctx, &c, skin);
+        if (draw_sm_section(cmd, ui_ctx, &c, "Maps and Surface", &open[4]))        draw_sm_surface_section(cmd, ui_ctx, &c, skin);
         if (draw_sm_section(cmd, ui_ctx, &c, "Masks", &open[3]))          draw_sm_masks_section(cmd, ui_ctx, &c, skin);
     }
     finish_sm_row(&c);

@@ -46,7 +46,10 @@ typedef struct {
     const uint8_t* aux_pixels;                     /* packed extra maps, RGBA8: r = specular, g = height, b = ambient occlusion. NULL = none */
     uint32_t       aux_width;
     uint32_t       aux_height;
-    uint32_t       aux_flags;                      /* bit 0 = specular map, bit 1 = height map, bit 2 = ambient map */
+    uint32_t       aux_flags;                      /* bit 0 = specular map, bit 1 = height map, bit 2 = ambient map, bit 3 = terrain material, bit 4 = normal map, bit 5 = occlusion map (alpha of the aux image) */
+    const uint8_t* normal_pixels;                  /* normal map: RGBA8, rgb = tangent space normal. NULL = none. only read during skin_gpu_set */
+    uint32_t       normal_width;
+    uint32_t       normal_height;
     float          specular;                       /* specular strength 0..1 */
     float          gloss;                          /* highlight tightness 0..1 */
     float          height_scale;                   /* bump strength 0..1 */

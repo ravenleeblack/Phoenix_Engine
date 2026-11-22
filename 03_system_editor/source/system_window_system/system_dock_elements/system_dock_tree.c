@@ -30,6 +30,7 @@ static const char* view_title(enum_view_type vert_to_edge_array)
     case view_type_texshop_node:      return "Tex Nodes";
     case view_type_texshop_skinmaker: return "Skin Maker";
     case view_type_file_archive:      return "Files";
+    case view_type_terrain_tools:     return "Terrain Tools";
     default:                          return "?";
     }
 }
@@ -75,6 +76,7 @@ static void draw_window_content(system_element_context* ui_element, system_dock_
     case view_type_light:             draw_system_light_window(ui_element, node, content_y, content_h, cmd);         break;
     case view_type_texshop_node:      draw_textureshop_node_window(ui_element, node, content_y, content_h, cmd);    break;
     case view_type_file_archive:      draw_file_archive_window(ui_element, node, content_y, content_h, cmd);         break;
+    case view_type_terrain_tools:     draw_terrain_tools_window(ui_element, node, content_y, content_h, cmd);        break;
     default: break;
     }
 }
@@ -171,6 +173,7 @@ static void draw_leaf(system_element_context* ui_element, system_dock_node* node
 
     /* the transform gizmo (move / rotate / scale) goes on top of the Scene view image. update + draw in one pass. */
     if (active == view_type_scene) system_transform_gizmo_update_and_draw(cmd, ui_element);
+    if (active == view_type_scene) update_and_draw_terrain_tools(cmd, ui_element);
 }
 
 static void draw_splitters(system_dock_node* n, VkCommandBuffer cmd)

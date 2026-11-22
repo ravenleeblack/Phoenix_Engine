@@ -406,6 +406,10 @@ void update_terrain_brush(system_element_context* ui_ctx)
     g_terrain_brush_drag_dy = (float)(g_terrain_brush_prev_my - ui_ctx->input.mouse_y);
     g_terrain_brush_prev_my = ui_ctx->input.mouse_y;
 
+    if (g_terrain_tools.tool != tt_tool_none) {
+        g_terrain_brush_stroke = false;                        /* the Terrain Tools own the clicks on the ground */
+        return;
+    }
     const system_scene_object* selected = find_scene_object_by_id(g_scene_registry.selected_object_id);
     const bool terrain_selected = selected != NULL && is_terrain_object(selected);
 

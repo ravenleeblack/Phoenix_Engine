@@ -22,6 +22,7 @@ static const mode_menu_entry k_entries[] = {
     { "Pt", id_work_paint,      3 },
     { "Tx", id_spawn_texshop,   4 },  { "Bd", id_spawn_board,  4 }, { "Cd", id_spawn_card, 4 },
     { "An", id_work_anim,       5 },
+    { "Tt", id_work_terrain,    6 },
 };
 
 static bool entry_selected(const system_element_context* ui_element, uint32_t id)
@@ -37,6 +38,7 @@ static bool entry_selected(const system_element_context* ui_element, uint32_t id
     case id_work_sculpt:     return mode_state_is_sculpt();
     case id_work_paint:      return mode_state_is_paint();
     case id_work_anim:       return g_mode_state.context == mode_context_animation;
+    case id_work_terrain:    return dock_find_leaf_with_view(dock_workspace.root, view_type_terrain_tools) != NULL;
 
     case id_spawn_texshop:   return mode_state_is_textureshop();
     case id_spawn_board:     return dock_find_leaf_with_view(dock_workspace.root, view_type_board_builder)  != NULL;
@@ -89,6 +91,14 @@ static void show_view_front(enum_view_type beside, enum_view_type fallback, enum
     dock_spawn_background = false;
     spawn_dock_view_beside(&dock_workspace, beside, fallback, view);
     dock_spawn_background = was_background;
+}
+
+/* Terrain Tools: the icon window next to the File Archive, and the Modeler window (the steps of the picked tool are in it) */
+void mode_menu_open_terrain_windows(system_element_context* ui_element)
+{
+    (void)ui_element;
+    show_view_front(view_type_file_archive, view_type_hierarchy, view_type_terrain_tools);
+    show_view_front(view_type_inspector, view_type_hierarchy, view_type_modeler);
 }
 
 /* prev_ctx = the context whose windows are open right now (-1 = none laid out yet) */
@@ -196,6 +206,7 @@ void mode_menu_activate(system_element_context* ui_element, uint32_t id)
         spawn_dock_view_beside(dock, view_type_scene, view_type_game, view_type_scene);
         break;
 
+    case id_work_terrain:    mode_menu_open_terrain_windows(ui_element); break;
     case id_spawn_texshop:   mode_menu_enter_mode(ui_element, mode_context_textureshop, true); break;   /* Texture Shop mode + its three windows */
     case id_spawn_board:     mode_menu_open_board_builder(ui_element);     break;
     case id_spawn_card:      mode_menu_open_card_builder(ui_element);      break;
@@ -251,6 +262,7 @@ void draw_mode_menu_window(system_element_context* ui_element, system_dock_node*
             case id_spawn_board:     tip = "Board Builder: build boards from tiles.";         break;
             case id_spawn_card:      tip = "Card Builder: build cards.";                      break;
             case id_work_anim:       tip = "Animation: open the timeline.";                   break;
+            case id_work_terrain:    tip = "Terrain Tools: river, tunnel, mountain, lake, ramp, overhang, canyon."; break;
             default: break;
             }
             set_tooltip_text(tip);

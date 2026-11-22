@@ -25,6 +25,7 @@ layout(set = 0, binding = 0, std140) uniform skin_block {
 } skin;
 
 layout(set = 0, binding = 1) uniform sampler2D skin_map;   // base color map. head.z = 1 when the skin has one, otherwise a 1x1 white texture is bound
+layout(set = 0, binding = 3) uniform sampler2D skin_normal; // tangent space normal map (flag bit 4)
 layout(set = 0, binding = 2) uniform sampler2D skin_aux;   // r = specular, g = height, b = ambient occlusion (white when absent)
 
 // scene lights (system_light_gpu.c): one block per draw call, set 1
@@ -154,7 +155,7 @@ vec3 sky_radiance(vec3 dir, bool with_sun)
 
     vec3 sky     = sky_scatter(up, mu, sunlight, haze);
     vec3 horizon = sky_scatter(0.0, mu, sunlight, haze);
-    if (up < 0.0) sky = mix(sky, horizon * 0.45, clamp(-up * 5.0, 0.0, 1.0));
+    if (up < 0.0) sky = mix(sky, horizon * 0.7, clamp(-up * 1.5, 0.0, 1.0));      // below the horizon the haze fades slowly, so the far ground meets the sky without a dark band
 
     if (with_sun) {
         sky += sunlight * pow(max(mu, 0.0), mix(24.0, 6.0, haze)) * mix(0.25, 0.6, haze);          // the glow around the sun
@@ -284,9 +285,26 @@ vec3 apply_volumes(vec3 color, vec3 dir, float dist)
 // Fog: exponential height fog (density falls off with height, integrated along the whole ray like Unreal's
 // Exponential Height Fog), then the fog volumes.
 // extinction: how much of the scene is hidden. in-scattering: the sun and sky light the fog reflects toward the camera.
+// Aerial perspective: with the sky on, far surfaces take on the color of the sky at the horizon, so the end of the ground melts into the sky
+// instead of cutting a hard line. It grows with distance and is strongest looking along the ground.
+vec3 apply_horizon(vec3 color, vec3 view_pos)
+{
+    float dist = length(view_pos);
+    vec3  dir  = view_pos / max(dist, 1e-4);
+    float up   = dot(dir, scene_lights.counts.yzw);
+    vec3  flat_dir = normalize(dir - scene_lights.counts.yzw * up + scene_lights.counts.yzw * 0.02);
+    vec3  haze = sky_radiance(flat_dir, false);
+    float amount = 1.0 - exp(-pow(dist * 0.0011, 1.6));
+    amount *= 1.0 - smoothstep(0.15, 0.75, abs(up));                 // looking down at the ground right below: no haze
+    return mix(color, haze, clamp(amount, 0.0, 0.92));
+}
+
 vec3 apply_fog(vec3 color, vec3 view_pos)
 {
-    if (scene_lights.fog_a.w < 0.5) return color;
+    if (scene_lights.fog_a.w >= 1.5) {
+        color = apply_horizon(color, view_pos);
+    }
+    if (mod(scene_lights.fog_a.w, 2.0) < 0.5) return color;
 
     float dist = length(view_pos);
     vec3  dir  = view_pos / max(dist, 1e-4);
@@ -371,9 +389,35 @@ void main()
         }
         base = vec4(v_color.rgb * skin.layers[0].color.rgb, v_color.a);
     }
+    // terrain vertices carry the cell coordinate as uv (one unit per cell): the maps repeat every 8 cells (32 m)
+    vec2 tex_uv = v_uv;
+    if (terrain_material) {
+        tex_uv = v_uv * 0.125;
+        if (skin.head.z != 0u) {
+            base.rgb *= texture(skin_map, tex_uv).rgb * 1.6;       // the picture tints the painted ground (mid grey = unchanged)
+        }
+    }
+    vec4  aux4     = vec4(1.0);
     vec3  aux      = vec3(1.0);
-    if (has_skin && (flags & 7u) != 0u) {
-        aux = texture(skin_aux, v_uv).rgb;
+    if (has_skin && (flags & 39u) != 0u) {
+        aux4 = texture(skin_aux, tex_uv);
+        aux  = aux4.rgb;
+    }
+
+    // normal map: a tangent frame from the screen space derivatives of the position and the uv (no tangents in the mesh)
+    if (has_skin && (flags & 16u) != 0u) {
+        vec3 tn  = texture(skin_normal, tex_uv).xyz * 2.0 - 1.0;
+        tn.xy   *= max(skin.surface.z * 2.0, 0.25);                // Height value is also the normal map strength
+        vec3 dp1 = dFdx(v_view_pos);
+        vec3 dp2 = dFdy(v_view_pos);
+        vec2 du1 = dFdx(tex_uv);
+        vec2 du2 = dFdy(tex_uv);
+        vec3 dp2perp = cross(dp2, n);
+        vec3 dp1perp = cross(n, dp1);
+        vec3 tangent   = dp2perp * du1.x + dp1perp * du2.x;
+        vec3 bitangent = dp2perp * du1.y + dp1perp * du2.y;
+        float inv = inversesqrt(max(max(dot(tangent, tangent), dot(bitangent, bitangent)), 1e-12));
+        n = normalize(tangent * (tn.x * inv) + bitangent * (-tn.y * inv) + n * tn.z);
     }
 
     // height map -> bump: perturb the normal with the screen space gradient of the height (no tangents needed)
@@ -398,6 +442,10 @@ void main()
         shininess = exp2(skin.surface.y * 7.0 + 1.0);
         ambient_k = skin.surface.w;
         if ((flags & 4u) != 0u) ao = aux.b;
+        if ((flags & 32u) != 0u) {
+            ao *= aux4.a;                                         // the occlusion map darkens ambient light ...
+            spec_strength *= mix(0.4, 1.0, aux4.a);               // ... and the highlights in the cracks
+        }
     }
 
     // ambient (grey fill) + hemisphere light, scaled by the skin's ambient value and ambient map

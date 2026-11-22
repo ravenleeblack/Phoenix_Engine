@@ -1,5 +1,6 @@
 #include "system_theme.h"
 #include "system_globals.h"
+#include "system_textureshop_skins.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +30,7 @@ typedef enum {
     texnode_kind_curvature,     /* baked curvature of the mesh */
     texnode_kind_levels,
     texnode_kind_blend,
+    texnode_kind_profile,       /* the Shader Profile: IS the selected skin. Texture nodes plug into its map inputs */
     texnode_kind_count
 } enum_texnode_kind;
 
@@ -36,7 +38,7 @@ typedef struct {
     const char* title;
     int         inputs;
     int         outputs;
-    const char* in_name[2];
+    const char* in_name[8];
     const char* out_name;
 } texnode_def;
 
@@ -49,13 +51,17 @@ static const texnode_def k_def[texnode_kind_count] = {
     { "Paint Map", 0, 1, { NULL, NULL },    "RGBA" },
     { "Curvature", 0, 1, { NULL, NULL },    "Mask" },
     { "Levels",    1, 1, { "In", NULL },    "Out"  },
-    { "Blend",     2, 1, { "A", "B" },      "Out"  }
+    { "Blend",     2, 1, { "A", "B" },      "Out"  },
+    { "Shader Profile", 6, 0, { "Color", "Height", "Normal", "Ambient", "Occlusion", "Specular", NULL, NULL }, NULL }
 };
 
-typedef struct { bool used; int kind; float x, y; } texnode;
+/* Shader Profile input -> the skin map it fills (same order as the input names above) */
+enum { texnode_profile_inputs = 6 };
+
+typedef struct { bool used; int kind; float x, y; char file[32]; } texnode;   /* file: the PNG of a Texture node (assets/textures) */
 typedef struct { bool used; int from_node; int to_node; int to_port; } texlink;   /* every node has at most one output */
 typedef struct { int x, y, w, h; } texnode_rect;
-typedef struct { float x, y, w, h, head, row; } texnode_box;
+typedef struct { float x, y, w, h, head, row, top; } texnode_box;   /* top: rows above the ports (the file name / skin name line) */
 
 typedef struct {
     bool    ready;
@@ -85,6 +91,78 @@ static const system_color k_port    = { 0.85f, 0.85f, 0.85f, 1.0f };
 
 static void set_status(const char* text) { snprintf(g_nodes.status, sizeof(g_nodes.status), "%s", text); }
 
+void set_skin_map_from_archive(char* map_file, size_t cap);   /* draw_system_textureshop_skinmaker.c */
+
+/* ------------------------------------------------------------------------- */
+/* Shader Profile node <-> the selected skin                                  */
+/* ------------------------------------------------------------------------- */
+typedef struct { const char* files[8]; } texskin_slot_view;
+
+/* the map file of every Shader Profile input on the selected skin (same order as the node's inputs) */
+static char* get_profile_slot_file(texshop_skin* skin, int slot)
+{
+    switch (slot) {
+    case 0:  return skin->map_file;
+    case 1:  return skin->height_file;
+    case 2:  return skin->normal_file;
+    case 3:  return skin->ambient_file;
+    case 4:  return skin->occlusion_file;
+    default: return skin->spec_file;
+    }
+}
+
+static texskin_slot_view get_profile_slot_names(void)
+{
+    texskin_slot_view view;
+    memset(&view, 0, sizeof(view));
+    texshop_skin* skin = get_texshop_skin();
+    if (skin) {
+        for (int i = 0; i < texnode_profile_inputs; i++) {
+            view.files[i] = get_profile_slot_file(skin, i);
+        }
+    }
+    return view;
+}
+
+/* a Texture node plugged into a Shader Profile input puts its PNG on that map of the skin */
+static void sync_profile_links(void)
+{
+    texshop_skin* skin = get_texshop_skin();
+    if (!skin) {
+        return;
+    }
+    for (int i = 0; i < texnode_max_links; i++) {
+        const texlink* l = &g_nodes.links[i];
+        if (!l->used || !g_nodes.nodes[l->to_node].used || !g_nodes.nodes[l->from_node].used) {
+            continue;
+        }
+        if (g_nodes.nodes[l->to_node].kind != texnode_kind_profile || g_nodes.nodes[l->from_node].kind != texnode_kind_texture) {
+            continue;
+        }
+        const char* file = g_nodes.nodes[l->from_node].file;
+        if (file[0] == '\0' || l->to_port < 0 || l->to_port >= texnode_profile_inputs) {
+            continue;
+        }
+        char* slot = get_profile_slot_file(skin, l->to_port);
+        if (strcmp(slot, file) != 0) {
+            snprintf(slot, 32, "%s", file);
+            set_texshop_status("Map set from a node link.");
+        }
+    }
+}
+
+/* unplugging a Shader Profile input empties that map slot of the skin */
+static void clear_profile_slot(int to_node, int slot)
+{
+    if (g_nodes.nodes[to_node].kind != texnode_kind_profile || slot < 0 || slot >= texnode_profile_inputs) {
+        return;
+    }
+    texshop_skin* skin = get_texshop_skin();
+    if (skin) {
+        get_profile_slot_file(skin, slot)[0] = '\0';
+    }
+}
+
 /* ------------------------------------------------------------------------- */
 /* graph <-> screen                                                          */
 /* ------------------------------------------------------------------------- */
@@ -98,10 +176,20 @@ static texnode_box box_of(const texnode_rect* vp, const texnode* n)
     const texnode_def* d = &k_def[n->kind];
     int rows = d->inputs > d->outputs ? d->inputs : d->outputs;
     if (rows < 1) rows = 1;
+    int top_rows = 0;
+    float width = 140.0f;
+    if (n->kind == texnode_kind_texture) {
+        top_rows = 1;
+    } else if (n->kind == texnode_kind_profile) {
+        top_rows = 1;
+        width = 210.0f;
+    }
+    rows += top_rows;
     texnode_box b;
+    b.top  = (float)top_rows;
     b.x    = to_sx(vp, n->x);
     b.y    = to_sy(vp, n->y);
-    b.w    = 140.0f * g_nodes.zoom;
+    b.w    = width * g_nodes.zoom;
     b.head = 18.0f  * g_nodes.zoom;
     b.row  = 16.0f  * g_nodes.zoom;
     b.h    = b.head + (float)rows * b.row + 6.0f * g_nodes.zoom;
@@ -111,7 +199,7 @@ static texnode_box box_of(const texnode_rect* vp, const texnode* n)
 static void port_pos(const texnode_box* b, bool is_output, int port, float* px, float* py)
 {
     *px = is_output ? b->x + b->w : b->x;
-    *py = b->y + b->head + b->row * ((float)port + 0.5f);
+    *py = b->y + b->head + b->row * ((float)port + b->top + 0.5f);
 }
 
 static bool near_point(int mx, int my, float px, float py)
@@ -171,6 +259,7 @@ static system_color header_color(int kind)
     case texnode_kind_paint:     return system_theme.system_color_edit_mode_face_selection_color;
     case texnode_kind_curvature: return system_theme.system_color_edit_mode_extrude_face_color;
     case texnode_kind_levels:    return system_theme.system_color_edit_mode_hover_color;
+    case texnode_kind_profile:   return system_theme.system_edit_mode_active_face_hover;
     default:                     return system_theme.system_border;
     }
 }
@@ -198,9 +287,23 @@ static void add_node_at_view_center(int kind)
 
 static void remove_links_of(int node_index)
 {
-    for (int i = 0; i < texnode_max_links; i++)
-        if (g_nodes.links[i].used && (g_nodes.links[i].from_node == node_index || g_nodes.links[i].to_node == node_index))
+    for (int i = 0; i < texnode_max_links; i++) {
+        if (g_nodes.links[i].used && (g_nodes.links[i].from_node == node_index || g_nodes.links[i].to_node == node_index)) {
+            clear_profile_slot(g_nodes.links[i].to_node, g_nodes.links[i].to_port);
             g_nodes.links[i].used = false;
+        }
+    }
+}
+
+static void set_selected_texture_file(void)
+{
+    const int s = g_nodes.obj_vert_selected;
+    if (s < 0 || !g_nodes.nodes[s].used || g_nodes.nodes[s].kind != texnode_kind_texture) {
+        set_status("Click a Texture node first, then pick a PNG in the Files window and press Set.");
+        return;
+    }
+    set_skin_map_from_archive(g_nodes.nodes[s].file, sizeof(g_nodes.nodes[s].file));
+    set_status(g_texshop.status);
 }
 
 static void delete_selected(void)
@@ -219,7 +322,7 @@ static void clear_graph(void)
     memset(g_nodes.nodes, 0, sizeof(g_nodes.nodes));
     memset(g_nodes.links, 0, sizeof(g_nodes.links));
     g_nodes.obj_vert_selected = -1; g_nodes.drag_node = -1; g_nodes.link_from = -1;
-    add_node(texnode_kind_output, 200.0f, 0.0f);
+    add_node(texnode_kind_profile, 160.0f, -60.0f);
     g_nodes.obj_vert_selected = -1;
     set_status("Graph cleared.");
 }
@@ -294,6 +397,7 @@ static void click_canvas(const texnode_rect* vp, int mx, int my)
                     if (g_nodes.links[l].used && g_nodes.links[l].to_node == i && g_nodes.links[l].to_port == p) {
                         g_nodes.link_from = g_nodes.links[l].from_node;
                         g_nodes.links[l].used = false;
+                        clear_profile_slot(i, p);
                         set_status("Link picked up. Click an input port to drop it.");
                         break;
                     }
@@ -347,11 +451,29 @@ static void draw_node(VkCommandBuffer cmd, system_element_context* ui_element, c
 
     if (g_nodes.zoom >= 0.8f) {
         text_clipped(cmd, ui_element, vp, d->title, (int)b.x + 6, (int)(b.y + (b.head - (float)ui_font_h) * 0.5f), system_theme.system_text);
-        for (int p = 0; p < d->inputs; p++)
-            if (d->in_name[p]) text_clipped(cmd, ui_element, vp, d->in_name[p], (int)b.x + 10, (int)(b.y + b.head + b.row * (float)p + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_text);
+        const texskin_slot_view slot_view = get_profile_slot_names();
+        for (int p = 0; p < d->inputs; p++) {
+            if (!d->in_name[p]) continue;
+            char line[40];
+            snprintf(line, sizeof(line), "%s", d->in_name[p]);
+            if (n->kind == texnode_kind_profile && slot_view.files[p] && slot_view.files[p][0]) {
+                snprintf(line, sizeof(line), "%-9.9s %.12s", d->in_name[p], slot_view.files[p]);      /* the map that is on the skin right now */
+            }
+            text_clipped(cmd, ui_element, vp, line, (int)b.x + 10, (int)(b.y + b.head + b.row * ((float)p + b.top) + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_text);
+        }
+        if (n->kind == texnode_kind_texture) {
+            const char* shown = n->file[0] ? n->file : "(no file: Set)";
+            text_clipped(cmd, ui_element, vp, shown, (int)b.x + 6, (int)(b.y + b.head + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_color_edit_mode_preview_color);
+        }
+        if (n->kind == texnode_kind_profile) {
+            char skin_line[48];
+            const texshop_skin* skin = get_texshop_skin();
+            snprintf(skin_line, sizeof(skin_line), "Skin: %s", skin ? skin->name : "(none)");
+            text_clipped(cmd, ui_element, vp, skin_line, (int)b.x + 6, (int)(b.y + b.head + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_color_edit_mode_preview_color);
+        }
         if (d->outputs > 0 && d->out_name) {
             const int tw = (int)strlen(d->out_name) * ui_font_w;
-            text_clipped(cmd, ui_element, vp, d->out_name, (int)(b.x + b.w) - tw - 10, (int)(b.y + b.head + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_text);
+            text_clipped(cmd, ui_element, vp, d->out_name, (int)(b.x + b.w) - tw - 10, (int)(b.y + b.head + b.row * b.top + (b.row - (float)ui_font_h) * 0.5f), system_theme.system_text);
         }
     }
 
@@ -433,6 +555,8 @@ static void draw_node_sub_menu(VkCommandBuffer cmd, system_element_context* ui_e
                  draw_icon_element(cmd, bx + texnode_sub_sep / 2, by + 2, 1, s - 4, system_theme.tab_sub_menubar_divider); \
                  bx += texnode_sub_sep; } } while (0)
 
+    NODE_BUTTON("Prf", "Add Shader Profile node (the selected skin)", add_node_at_view_center(texnode_kind_profile));
+    NODE_BUTTON("Set", "Set the selected Texture node's PNG from the Files window", set_selected_texture_file());
     NODE_BUTTON("Out", "Add Output node",    add_node_at_view_center(texnode_kind_output));
     NODE_BUTTON("Col", "Add Color node",     add_node_at_view_center(texnode_kind_color));
     NODE_BUTTON("Noi", "Add Noise node",     add_node_at_view_center(texnode_kind_noise));
@@ -516,6 +640,7 @@ void draw_textureshop_node_window(system_element_context* ui_ctx, system_dock_no
         }
     }
 
+    sync_profile_links();
     draw_graph(cmd, ui_ctx, &vp);
 
     /* right click menu (Skin: new / duplicate / delete), drawn on top later by draw_context_menu */

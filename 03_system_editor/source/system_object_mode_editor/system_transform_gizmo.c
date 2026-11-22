@@ -16,6 +16,7 @@ static const editor_vec3 AXES[3] = { {1,0,0}, {0,1,0}, {0,0,1} };
 static struct {
     bool  dragging;
     bool  edit;                 /* true: dragging mesh components, false: dragging the whole object */
+    bool  tt;                   /* true: dragging the vertices of a Terrain Tools piece (system_terrain_tools.c) */
     int   axis;
     int   hover;
     enum_dcc_tool tool;
@@ -251,6 +252,15 @@ static void commit_object(system_scene_object* o)
    Edit mode:   pivot = world-space centroid of the obj_vert_selected vertices (no selection => no gizmo). */
 static bool resolve_target(system_element_context* ui_element, system_scene_object** out_o, edit_mode_mesh** out_em, editor_vec3* out_pivot)
 {
+    if (g_terrain_tools.tool != tt_tool_none) {
+        /* Terrain Tools: step 1 picks edges (no gizmo), after that the gizmo moves the vertices of the piece */
+        editor_vec3 world_pivot;
+        system_scene_object* terrain_object = find_scene_object_by_id(g_terrain.scene_object_id);
+        if (!terrain_object || !get_terrain_tools_gizmo_pivot(&world_pivot)) return false;
+        *out_o = terrain_object; *out_em = NULL; *out_pivot = world_pivot;
+        return true;
+    }
+
     system_scene_object* o = find_scene_object_by_id(g_scene_registry.selected_object_id);
     if (!o || o->id == SCENE_ROOT_ID) return false;
 
@@ -343,6 +353,8 @@ static void begin_drag(const gizmo_cam* c, system_scene_object* o, edit_mode_mes
     if (em && !snapshot_edit(em, o)) return;
 
     g.dragging = true; g.edit = (em != NULL);
+    g.tt = (g_terrain_tools.tool != tt_tool_none);
+    if (g.tt) { begin_terrain_tools_gizmo_drag(); }
     g.axis = axis; g.tool = tool; g.id = o->id; g.L = L;
     g.p0 = pivot; g.r0 = o->rotation; g.s0 = o->scale;
     g.mx0 = mx; g.my0 = my;
@@ -425,6 +437,7 @@ static void update_drag(system_scene_object* o, float mx, float my)
         float t = ((mx - g.sx) * g.dx + (my - g.sy) * g.dy) / g.len2 - g.t_grab;
         float dist = t * g.L;
         if (os->snap_enabled) dist = snap_to(dist, os->snap_translate_m);
+        if (g.tt) { move_terrain_tools_gizmo_nodes(g.axis, dist); return; }
         if (g.edit) { edit_apply(o, dist); return; }
         o->position = g.p0;
         *comp(&o->position, g.axis) = *comp(&g.p0, g.axis) + dist;
@@ -491,7 +504,7 @@ static void run_gizmo(VkCommandBuffer cmd, system_element_context* ui_element, b
     edit_mode_mesh* em = NULL;
     editor_vec3 pivot = { 0, 0, 0 };
 
-    bool usable = (tool != tool_select) && resolve_target(ui_element, &o, &em, &pivot);
+    bool usable = (tool != tool_select) && !(g_terrain_tools.tool != tt_tool_none && tool != tool_translate) && resolve_target(ui_element, &o, &em, &pivot);
     if (!usable || (g.dragging && (o->id != g.id || g.edit != (em != NULL)))) { cancel_drag(); return; }
 
     /* Let the fly camera / orbit have the mouse */
@@ -526,6 +539,7 @@ static void run_gizmo(VkCommandBuffer cmd, system_element_context* ui_element, b
 
     /* ---- draw (re-resolve so the handle sits on the possibly just-moved selection) ---- */
     if (!resolve_target(ui_element, &o, &em, &pivot)) return;
+    if (g_terrain_tools.tool != tt_tool_none && tool != tool_translate) return;
 
     float ox, oy;
     if (!project(&c, pivot, &ox, &oy)) return;

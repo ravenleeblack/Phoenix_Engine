@@ -138,9 +138,13 @@ float get_zoom_reference_distance(void)
 /* Fixed clip planes: nearest practical near, very far far. Culling is handled separately later. */
 void sync_clip_planes(world_camera* cam, float dist)
 {
-    const float near_m = 0.05f;
-    const float far_m  = 20000.0f;
-    (void)dist;
+    /* the planes follow the zoom distance: close up the near plane stays tiny, high above a 14 km region the far plane reaches past the whole terrain */
+    float near_m = dist * 0.0008f;
+    if (near_m < 0.05f) { near_m = 0.05f; }
+    if (near_m > 40.0f) { near_m = 40.0f; }
+    float far_m = dist * 12.0f;
+    if (far_m < 20000.0f) { far_m = 20000.0f; }
+    if (far_m > 400000.0f) { far_m = 400000.0f; }
     cam->near_clip = near_m;
     cam->far_clip  = far_m;
 }

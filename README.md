@@ -90,7 +90,7 @@ If window loses focus while tabbing press alt and move camera around then try ag
 - **Version:** 1.5
 - **Tag:** [v1.5](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.5)
 
-What is new in 1.5: Sculpt opens the Brushes window like Paint, brush icons are lit spheres with their own glyphs, tooltips on buttons, a Selection Highlight toggle, a procedural octagon sky dome that follows the sun, Unreal-style height fog with sun glow, resizable box fog volumes (cheap and good), with Scene and Game view switches, File > Save All, terrain Edit / Sculpt / Paint (with a new Pinch brush and a cursor-following Grab), a Unity-style gizmo, and directional-light driven sky and fog. Full details in [VERSION.md](VERSION.md).
+What is new in 1.5: Sculpt opens the Brushes window like Paint, brush icons are lit spheres with their own glyphs, tooltips on buttons, a Selection Highlight toggle, a procedural octagon sky dome that follows the sun, Unreal-style height fog with sun glow, resizable box fog volumes (cheap and good), with Scene and Game view switches, File > Save All, terrain Edit / Sculpt / Paint (with a new Pinch brush and a cursor-following Grab), a Unity-style gizmo, directional-light driven sky and fog, skin maps with a Shader Profile node, and Terrain Tools (river, tunnel, mountain, lake, ramp, overhang, canyon). Full details in [VERSION.md](VERSION.md).
 
 Version 1.4 added the Edit mode tools (Create Edge, Create Face, Delete Edge, Bevel, Subdivide), more light kinds, skin maps, `.obj` import with unit profiles, and the build and installer tools.
 

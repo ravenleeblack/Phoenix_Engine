@@ -232,7 +232,13 @@ void fill_sky_fog_block(float* block, const editor_mat4* view)
     fog[0] = get_sky_linear_color(g_sky.fog_color[0]);
     fog[1] = get_sky_linear_color(g_sky.fog_color[1]);
     fog[2] = get_sky_linear_color(g_sky.fog_color[2]);
-    fog[3] = g_sky.draw_fog_now ? 1.0f : 0.0f;
+    fog[3] = 0.0f;
+    if (g_sky.draw_fog_now) {
+        fog[3] += 1.0f;
+    }
+    if (g_sky.draw_sky_now) {
+        fog[3] += 2.0f;                               /* the shader also blends far surfaces into the sky's horizon when the sky is on */
+    }
     fog[4] = g_sky.fog_density;
     fog[5] = g_sky.fog_height_falloff;
     fog[6] = g_sky.fog_base_height;

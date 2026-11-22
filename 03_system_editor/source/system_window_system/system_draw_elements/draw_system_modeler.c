@@ -384,6 +384,208 @@ static void tools_animation(VkCommandBuffer cmd, system_element_context* ui_elem
     flow_todo(cmd, ui_element, f, "Stop");
 }
 
+/* ---------------------------------------------------------------- Terrain Tools: the steps of the picked tool */
+static void flow_choice(VkCommandBuffer cmd, system_element_context* ui_element, flow_layout* f, const char* label, int* value, int this_value)
+{
+    system_color color = system_theme.tab_sub_menubar_button;
+    if (*value == this_value) {
+        color = system_theme.tab_sub_menubar_button_active;
+    }
+    if (flow_button(cmd, ui_element, f, label, color)) {
+        *value = this_value;
+    }
+}
+
+/* the body of one step (only the open step shows its body; every step has its header, in order, top to bottom) */
+static void draw_terrain_step_body(VkCommandBuffer cmd, system_element_context* ui_element, flow_layout* f, terrain_tools_state* s, int step)
+{
+    const bool radial = is_terrain_tools_radial(s->tool);
+    const char* width_label = "Half width (m)";
+    const char* depth_label = "Depth (m)";
+    if (radial) { width_label = "Radius (m)"; }
+    if (s->tool == tt_tool_mountain) { depth_label = "Height (m)"; }
+    if (s->tool == tt_tool_ramp) { depth_label = "Rise (m)"; }
+    if (s->tool == tt_tool_tunnel) { width_label = "Radius (m)"; depth_label = "Under the ground (m)"; }
+    if (s->tool == tt_tool_overhang) { depth_label = "Height over ground (m)"; }
+
+    switch (step) {
+    case 1:
+        flow_text(cmd, ui_element, f, "Edit mode, edge select is on.", system_theme.system_text);
+        if (radial) {
+            flow_text(cmd, ui_element, f, "Click an edge of the grid for the middle.", system_theme.system_text);
+        } else if (s->picks == 0) {
+            flow_text(cmd, ui_element, f, "Click an edge for the START.", system_theme.system_text);
+        } else if (s->picks == 1) {
+            flow_text(cmd, ui_element, f, "Start set. Pan to the END, click its edge.", system_theme.system_text);
+        } else {
+            flow_text(cmd, ui_element, f, "Both edges picked.", system_theme.system_text);
+        }
+        flow_text(cmd, ui_element, f, "Pick the region in the Scene Archive, Ctrl+F centers it.", get_theme_hint_color());
+        flow_text(cmd, ui_element, f, "Click anywhere on the ground, any chunk. Blue = regions,", get_theme_hint_color());
+        flow_text(cmd, ui_element, f, "light yellow = chunks. The cyan preview follows the mouse.", get_theme_hint_color());
+        flow_newline(f);
+        if (flow_button(cmd, ui_element, f, "Follow camera", system_theme.tab_sub_menubar_button)) {
+            g_terrain.edit_follow = true;
+        }
+        if (flow_button(cmd, ui_element, f, "Chunk -X", system_theme.tab_sub_menubar_button)) {
+            set_terrain_edit_chunk(g_terrain.edit_cx - 1, g_terrain.edit_cz);
+        }
+        if (flow_button(cmd, ui_element, f, "Chunk +X", system_theme.tab_sub_menubar_button)) {
+            set_terrain_edit_chunk(g_terrain.edit_cx + 1, g_terrain.edit_cz);
+        }
+        if (flow_button(cmd, ui_element, f, "Chunk -Z", system_theme.tab_sub_menubar_button)) {
+            set_terrain_edit_chunk(g_terrain.edit_cx, g_terrain.edit_cz - 1);
+        }
+        if (flow_button(cmd, ui_element, f, "Chunk +Z", system_theme.tab_sub_menubar_button)) {
+            set_terrain_edit_chunk(g_terrain.edit_cx, g_terrain.edit_cz + 1);
+        }
+        flow_newline(f);
+        if (flow_button(cmd, ui_element, f, "Reset picks", system_theme.tab_sub_menubar_button)) {
+            edit_mode_mesh* mesh = terrain_edit_mesh_current();
+            if (mesh) {
+                em_clear_selection(mesh);
+            }
+            reset_terrain_tool_picks();
+        }
+        break;
+
+    case 2: {
+        const int old_segments = s->segments;
+        const float old_bend = s->bend;
+        const int old_curve = s->curve;
+        const char* segment_label = "Segments";
+        if (radial) {
+            segment_label = "Outline parts";
+        }
+        flow_stepper_i(cmd, ui_element, f, segment_label, &s->segments, 1, 2, tt_max_segments);
+        if (!radial) {
+            flow_text(cmd, ui_element, f, "Curve", system_theme.system_text);
+            flow_choice(cmd, ui_element, f, "S shape", &s->curve, tt_curve_s);
+            flow_choice(cmd, ui_element, f, "Arc", &s->curve, tt_curve_arc);
+            flow_newline(f);
+            flow_stepper_f(cmd, ui_element, f, "Curve bend", &s->bend, 0.05f, -1.0f, 1.0f);
+        }
+        if (s->segments != old_segments || s->bend != old_bend || s->curve != old_curve) {
+            if (!radial) {
+                if (s->nodes_edited) {
+                    set_modeler_status("Segments / bend changed: the moved vertices were reset.");
+                }
+                build_terrain_tool_nodes();
+            }
+        }
+        flow_text(cmd, ui_element, f, "Click a square to select it (Shift adds).", get_theme_hint_color());
+        flow_text(cmd, ui_element, f, "Move them with the translate gizmo.", get_theme_hint_color());
+        if (flow_button(cmd, ui_element, f, "Select all vertices", system_theme.tab_sub_menubar_button)) {
+            select_all_terrain_tool_nodes();
+        }
+        flow_newline(f);
+        flow_text(cmd, ui_element, f, "Side pattern (the edge of the cut)", system_theme.system_text);
+        flow_choice(cmd, ui_element, f, "Smooth", &s->pattern, tt_pattern_smooth);
+        flow_choice(cmd, ui_element, f, "Steps", &s->pattern, tt_pattern_steps);
+        flow_choice(cmd, ui_element, f, "Zigzag", &s->pattern, tt_pattern_zigzag);
+        flow_newline(f);
+        flow_stepper_f(cmd, ui_element, f, "Side offset", &s->pattern_offset, 0.05f, 0.0f, 0.8f);
+        break;
+    }
+
+    case 3:
+        flow_stepper_f(cmd, ui_element, f, width_label, &s->width, 1.0f, 1.0f, 200.0f);
+        flow_stepper_f(cmd, ui_element, f, depth_label, &s->depth, 1.0f, 0.0f, 200.0f);
+        if (s->tool != tt_tool_tunnel) {
+            flow_stepper_f(cmd, ui_element, f, "Bank slope (m)", &s->bank, 1.0f, 0.0f, 100.0f);
+        }
+        if (s->tool == tt_tool_river || s->tool == tt_tool_canyon || s->tool == tt_tool_lake || s->tool == tt_tool_mountain) {
+            flow_text(cmd, ui_element, f, "Walls (this is a 3D height map)", system_theme.system_text);
+            flow_choice(cmd, ui_element, f, "Straight up and down", &s->walls, tt_walls_vertical);
+            flow_choice(cmd, ui_element, f, "Sloped", &s->walls, tt_walls_sloped);
+            flow_newline(f);
+        }
+        if (s->tool != tt_tool_ramp && s->tool != tt_tool_tunnel) {
+            flow_text(cmd, ui_element, f, "Bottom shape", system_theme.system_text);
+            for (int i = 0; i < tt_shape_count; i++) {
+                flow_choice(cmd, ui_element, f, get_terrain_tools_shape_name(i), &s->shape, i);
+            }
+            flow_newline(f);
+        }
+        break;
+
+    case 4:
+        if (s->tool == tt_tool_tunnel) {
+            flow_text(cmd, ui_element, f, "A tunnel has no ridges.", system_theme.system_text);
+            break;
+        }
+        flow_text(cmd, ui_element, f, "The rim along the top of the cut.", system_theme.system_text);
+        flow_stepper_f(cmd, ui_element, f, "Ridge height (m)", &s->ridge_height, 0.5f, 0.0f, 60.0f);
+        flow_stepper_f(cmd, ui_element, f, "Ridge width (m)", &s->ridge_width, 1.0f, 0.0f, 80.0f);
+        flow_stepper_f(cmd, ui_element, f, "Lip over the cut (m)", &s->lip, 0.5f, 0.0f, 40.0f);
+        flow_text(cmd, ui_element, f, "A lip hangs over the cut: it shows in the preview", get_theme_hint_color());
+        flow_text(cmd, ui_element, f, "and is built as a separate object.", get_theme_hint_color());
+        break;
+
+    default:
+        if (s->tool == tt_tool_tunnel) {
+            flow_text(cmd, ui_element, f, "Tunnels become part of the terrain.", get_theme_hint_color());
+        } else if (s->tool == tt_tool_overhang) {
+            flow_text(cmd, ui_element, f, "An overhang is always its own object.", get_theme_hint_color());
+        } else {
+            flow_text(cmd, ui_element, f, "Keep it as", system_theme.system_text);
+            int separate = 0;
+            if (s->separate) { separate = 1; }
+            flow_choice(cmd, ui_element, f, "Single (terrain)", &separate, 0);
+            flow_choice(cmd, ui_element, f, "Separate object", &separate, 1);
+            s->separate = (separate == 1);
+            flow_newline(f);
+        }
+        f->y += 6;
+        if (flow_button(cmd, ui_element, f, "Accept and merge", system_theme.tab_sub_menubar_button_active)) {
+            accept_terrain_tool();
+        }
+        flow_newline(f);
+        break;
+    }
+}
+
+/* the tool name on top, then the five steps one under the other: a header for each, the open one shows its controls.
+   every step draws its live preview in the Scene view. */
+static void tools_terrain_steps(VkCommandBuffer cmd, system_element_context* ui_element, flow_layout* f)
+{
+    terrain_tools_state* s = &g_terrain_tools;
+    flow_text(cmd, ui_element, f, get_terrain_tools_name(s->tool), system_theme.menu_active_text);
+    f->y -= 4;
+
+    for (int step = 1; step <= tt_step_count; step++) {
+        char label[96];
+        snprintf(label, sizeof(label), "%d  %s", step, get_terrain_tools_step_name(s->tool, step));
+        system_color color = system_theme.tab_sub_menubar_button;
+        if (s->step == step) {
+            color = system_theme.tab_sub_menubar_button_active;
+        }
+        flow_newline(f);
+        const int header_w = f->max_x - f->start_x;
+        if (ui_button(cmd, ui_element, label, f->start_x, f->y, header_w, f->row_h + 2, color)) {
+            set_terrain_tool_step(step);
+        }
+        f->x = f->start_x;
+        f->y += f->row_h + 6;
+        if (s->step == step) {
+            draw_terrain_step_body(cmd, ui_element, f, s, step);
+            flow_newline(f);
+            f->y += 4;
+        }
+    }
+
+    flow_newline(f);
+    f->y += 4;
+    if (flow_button(cmd, ui_element, f, "Back", system_theme.tab_sub_menubar_button)) {
+        set_terrain_tool_step(s->step - 1);
+    }
+    if (flow_button(cmd, ui_element, f, "Next", system_theme.tab_sub_menubar_button)) {
+        set_terrain_tool_step(s->step + 1);
+    }
+    if (flow_button(cmd, ui_element, f, "Close tool", system_theme.tab_sub_menubar_button)) {
+        close_terrain_tool();
+    }
+}
 /* ---------------------------------------------------------------- window */
 
 void draw_modeler_window(system_element_context* ui_ctx, system_dock_node* node, int content_y, int content_h, VkCommandBuffer cmd)
@@ -397,6 +599,17 @@ void draw_modeler_window(system_element_context* ui_ctx, system_dock_node* node,
     }
 
     draw_window_element(cmd, ui_ctx, "Modeler", node->x, content_y, node->w, content_h, system_theme.tab_content_window_modeler);
+
+    if (g_terrain_tools.tool != tt_tool_none) {
+        flow_layout tf;
+        tf.start_x = node->x + 15;
+        tf.x       = tf.start_x;
+        tf.y       = content_y + 12;
+        tf.max_x   = node->x + node->w - 15;
+        tf.row_h   = 22;
+        tools_terrain_steps(cmd, ui_ctx, &tf);
+        return;
+    }
 
     system_mode_context ctx = g_mode_state.context;
 

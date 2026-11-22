@@ -325,7 +325,7 @@ void system_edit_mode_update(system_element_context* ui_element)
 
     /* click = select the hovered vert / edge / face. shift or ctrl + click = add it to the selection (or remove it if it is already in).
        Not while a modeling tool owns the mouse (Target Weld, Insert Loop), over the manipulator overlay, or while something else holds the mouse. */
-    if (press && s_hover != EM_NONE && ui_element->active_id == 0 && !is_edit_ops_using_mouse() && !is_manip_overlay_using_mouse() && !system_transform_gizmo_wants_mouse()) {
+    if (press && s_hover != EM_NONE && ui_element->active_id == 0 && !is_edit_ops_using_mouse() && !is_manip_overlay_using_mouse() && !system_transform_gizmo_wants_mouse() && !is_terrain_tools_blocking_edit_picks()) {
         const bool additive = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
         em_select_element(mesh, ui_element->active_select_type, s_hover, additive);
     }
