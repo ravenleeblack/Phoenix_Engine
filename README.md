@@ -10,14 +10,15 @@ Phoenix is a pure-C, Vulkan-powered game engine and 3D content-authoring environ
 
 ## Editor first
 
-Most engines start with the runtime and add an editor later. Phoenix went the other way: the editor's UI handling came first, before the engine was built around it.
+Most engines start with a singular window and the game engine then add an editor later. Phoenix went the other way: the editor's UI handling came first, before the engine was built around it. 
 
-The result is that Phoenix has real working views from the start:
+The result is that Phoenix has real working viewportss from the start:
 
 - **Scene view**: a real viewport you build and edit in, with its own editor camera, gizmos, and edit-mode overlays.
 - **Game view**: a real viewport that renders through the game camera, so you see how the game will actually look while you work.
 
-Modeling, sculpting, painting, terrain, lighting, and skins all happen inside these views, not in separate tools.
+With real windows to work:
+Modeling, sculpting, painting, terrain, lighting, and skins all happen inside the docking system's tabbed windows, not in separate tools.
 
 ## Documentation
 
@@ -57,6 +58,9 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 - Wireframe and textured shading modes.
 - Some anti-aliasing (MSAA and FXAA).
 - 60-step undo / redo.
+- skybox - ugly right now but in progress
+- volume and fog decent
+- Many light types directional, area, spot or point, need to make the user interface blend better. preference window, lighting window has options scattered.
 
 **Importing**
 
