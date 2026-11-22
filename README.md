@@ -35,6 +35,9 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 
 ## What Has Been Done
 
+**Job Stystem**
+- multiple job system to allows process to handle ui for one, vulkan backend for another, etc
+
 **Interface**
 
 - Menu bar with dropdown menus that work as buttons, and a dynamic menu that changes with the current mode.
