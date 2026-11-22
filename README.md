@@ -98,13 +98,22 @@ Phoenix is under active development. Public APIs and editor workflows may change
 
 ## Screenshots
 
-<img width="1376" height="878" alt="sceneview" src="https://github.com/user-attachments/assets/cf55da02-cffe-4e2e-928d-d34a328fd91a" />
+<img width="1386" height="960" alt="edit_mode" src="https://github.com/user-attachments/assets/0f99a75f-c4f1-4bee-9bed-46d54f2be516" />
 
-<img width="1254" height="951" alt="right_click_menu" src="https://github.com/user-attachments/assets/397589ab-dcd9-447c-9acc-623bf6806535" />
+<img width="1376" height="962" alt="object_mode_assign" src="https://github.com/user-attachments/assets/dcde501b-1c68-44d5-beb4-4b22bf174c51" />
 
-<img width="1353" height="849" alt="light_and_skin" src="https://github.com/user-attachments/assets/8dc70c3a-6231-42ca-93f4-34b4bd6d58c9" />
+<img width="1353" height="849" alt="light_and_skin" src="https://github.com/user-attachments/assets/554eff26-6526-4cd4-9191-f6c5c957e927" />
 
-<img width="378" height="339" alt="shader_profile" src="https://github.com/user-attachments/assets/30d71d96-45dd-491e-8216-f8ad3508c1bf" />
+<img width="378" height="339" alt="shader_profile" src="https://github.com/user-attachments/assets/8aaccb4b-b5b1-4c43-9e23-942202e4e45d" />
 
-<img width="1920" height="1050" alt="paint_sculpt" src="https://github.com/user-attachments/assets/91e8852c-89ee-48ee-ac01-8a2f5cdb0259" />
+<img width="1920" height="1050" alt="paint_sculpt" src="https://github.com/user-attachments/assets/6d7baad3-45f3-492a-aca6-55b93bca672a" />
+
+<img width="1920" height="1050" alt="paint_sculpt" src="https://github.com/user-attachments/assets/b9c5c421-9009-4d6a-b6e0-436143cef8cd" />
+
+
+
+
+
+
+
 
