@@ -74,7 +74,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 **Modeling**
 
 - Edit mode: extrude, multicut, target weld, multiple select, and the 1.4 tools (create edge, create face, delete edge, bevel, subdivide).
-- Sculpt and paint work on a subdivided mesh and on terrain (Edit mode keeps Vertex / Edge / Face, with terrain tools in the Modeler window). Sculpt brushes include Pinch.
+- Sculpt and paint work on a subdivided mesh and on the terrain (Edit mode keeps Vertex / Edge / Face, with terrain tools in the Modeler window). Sculpt brushes include Pinch. Paint will actually save colors into swatch. right context menu has some pre-colors but need to make it use saved swatch or color profile instead to be more productive. Both sculpt and paint use same window for brush picks and will switch modes when choosing different brushes. Brush start out small and low strength so if you see no effect then resize and play with settings. 
 
 **Skins and textures**
 
@@ -98,7 +98,7 @@ cursor and refuse to change back. Also even doe finalize says single object into
 - audio system
 
 
-If window loses focus while tabbing press alt and move camera around then try again. Working on it. 
+If window loses focus while tabbing press alt and move camera around then try again. Working on it. Some windows hide on right side so move dock slider over and it will appear need to figure out out to make it not extend past length of window.
 
 ## Current Release
 
