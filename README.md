@@ -48,6 +48,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 - Tab sub-menu options. Each tabbed window in docking should have one if its important to make things easier to access.
 - Preferences window, with universal theme settings that apply everywhere and can be saved. Decent and easy to create colored themes.
 - Docking system: dynamic tabbed windows that can be moved into different areas. Drag-to-reorder tabs. Dock slider to resize.
+- hover tool tip infomation
 
 **Right-click menus**
 
@@ -84,6 +85,8 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 ## Future Progress
 
 - Installer module and a working build for it.
+- grid snapping
+- point to point snapping
 - Texture Shop: finishing getting UV map collection object database then start making tab sub menu buttons work for uv mapping.
 - A possible node system on top of the shader profile. Textureshop should be our go to place: for uving, skinning objects, and texturing a substance like program. Meaning when we want to texture we click uv, then create a skin, then use shader profile profile to adjust skin aka mat, the node should be a main node that also is a shader profile that we could use then add extra nodes n order to manipulate, different way then skin maker. Idk we will see.
 - Terrain overhangs, tunnels and holes (the terrain is still one height per column). See wiki. version 1.5 has these added but not quite right it will break gimbal
@@ -91,6 +94,8 @@ for other modes like object and edit mode because I hadn't made the terrain tool
 cursor and refuse to change back. Also even doe finalize says single object into terrain it doesn't embed properly yet. Will probably have to use a Boolean to merge properly at some point but for now Ill test as is until I get all the features for each tool right like mountains need options for duel and triple mountains with sharper peaks instead of smooth. Lake right now only has circular shape so need to make a way to create all kinds of different shapes and other stuff. Right now with the way we skin objects and keep track of terrian verts, we should be able to make over hangs and hole tools as well, just skinning the right side of vertex though as cubes but being a pain at the moment.
 - The toolbar Run button.
 - Need a good icon maker lmao to really upgrade.
+- phyics system
+- audio system
 
 
 If window loses focus while tabbing press alt and move camera around then try again. Working on it. 
