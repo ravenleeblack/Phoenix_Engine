@@ -12,7 +12,7 @@ Phoenix is a pure-C, Vulkan-powered game engine and 3D content-authoring environ
 
 Most engines start with a singular window and the game engine then add an editor later. Phoenix went the other way: the editor's UI handling came first, before the engine was built around it. 
 
-The result is that Phoenix has real working viewportss from the start:
+The result is that Phoenix has real working viewports from the start:
 
 - **Scene view**: a real viewport you build and edit in, with its own editor camera, gizmos, and edit-mode overlays.
 - **Game view**: a real viewport that renders through the game camera, so you see how the game will actually look while you work.
