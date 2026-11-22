@@ -123,14 +123,14 @@ void draw_system_brush_window(system_element_context* ui_ctx, system_dock_node* 
         if (tx + br_tile > node->x + node->w) continue;
 
         const bool obj_vert_selected = (sculpt_get_brush() == brush);
-        const float sculpt_colors[9][3] = {
+        const float sculpt_colors[10][3] = {
             { 0.80f, 0.55f, 0.40f }, { 0.55f, 0.72f, 0.75f }, { 0.72f, 0.62f, 0.52f },
             { 0.62f, 0.45f, 0.70f }, { 0.85f, 0.70f, 0.35f }, { 0.55f, 0.65f, 0.85f },
-            { 0.85f, 0.50f, 0.55f }, { 0.50f, 0.78f, 0.55f }, { 0.65f, 0.65f, 0.70f }
+            { 0.85f, 0.50f, 0.55f }, { 0.50f, 0.78f, 0.55f }, { 0.65f, 0.65f, 0.70f }, { 0.90f, 0.60f, 0.75f }
         };
         const system_color clay = { .red = sculpt_colors[slot][0], .green = sculpt_colors[slot][1], .blue = sculpt_colors[slot][2], .alpha = 1.0f };
         if (brush_tile(cmd, ui_ctx, edge_to_face_array, tx, ty, sculpt_brush_name(brush), obj_vert_selected,
-                       system_theme.system_accent, clay, slot)) {
+                       system_theme.system_accent, clay, (brush == sculpt_brush_pinch) ? 18 : slot)) {
             sculpt_set_brush(brush);
             if (!sculpt_mode_is_active()) mode_menu_enter_mode(ui_ctx, mode_context_sculpt, false);   /* a brush needs Sculpt mode */
         }

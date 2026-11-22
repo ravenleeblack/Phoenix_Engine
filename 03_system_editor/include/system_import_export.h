@@ -70,6 +70,11 @@ extern int  export_source;
 
 bool check_path_extension(const char* path, const char* extension);
 
+/* ---- terrain paint <-> picture. the paint is stored per cube column inside the terrain; these make it a PNG you can edit anywhere,
+   or load a PNG as the paint. file: assets/textures/terrain_paint.png (one pixel per column, transparent = not painted) ---- */
+bool export_terrain_paint_png(void);
+bool import_terrain_paint_png(void);
+
 /* ---- File > Save All: preferences and view state, every skin (assets/skins), every painted mesh's paint map (assets/textures) ---- */
 int save_all_editor_data(void);                      /* returns how many files were written, and reports to the status bar */
 

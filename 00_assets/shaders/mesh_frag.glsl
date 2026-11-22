@@ -43,13 +43,14 @@ layout(set = 1, binding = 0, std140) uniform light_block {
     vec4        hemi_sky;    // rgb sky color, w = 1 when a hemisphere light is on
     vec4        hemi_ground;
     scene_light lights[8];
-    // sky and fog (system_sky.c), 26 vec4 after the lights
+    // sky and fog (system_sky.c), 27 vec4 after the lights
     vec4        fog_a;       // rgb fog color (linear, used when sky_a.z = 0), w = 1 when fog is on in this view
     vec4        fog_b;       // x density per meter, y height falloff per meter, z base height, w start distance
     vec4        fog_c;       // x camera world height, y max opacity, z sun glow strength, w sun glow exponent
     vec4        sky_a;       // x sky brightness, y haze, z = 1 when the fog takes the sky's horizon color, w time in seconds
     vec4        sun_dir;     // xyz view space direction toward the sun, w = 1 when a sun is on
-    vec4        sun_color;   // rgb sun color * brightness
+    vec4        sun_color;   // rgb sun color * brightness * (1 - ambient), w = the scene ambient
+    vec4        sun_tint;    // rgb the sun color with its warm / cool tint, w = the sun intensity (no ambient split)
     vec4        vol_color[4];  // fog volume: rgb color, w density per meter
     vec4        vol_params[4]; // x = 1 when used, y type (0 cheap, 1 good), z edge softness, w noise cells across the box
     vec4        vol_rows[12];  // per volume 3 rows (xyz, w): view space point -> the box's own space where the box is -1..1
@@ -95,7 +96,11 @@ vec4 surface_color()
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Procedural sky (like Unreal's sky atmosphere, simplified): everything comes from the sun direction.
+// The directional light is the source. Everything below is made FROM its color, intensity and direction:
+//   sky   the sun's light scattered by the air (blue overhead, pale and orange toward the horizon, dark at night)
+//   fog   a medium that takes light OUT of the view (extinction) and reflects the sun and the sky light BACK toward the
+//         camera (in-scattering, with a forward-scattering phase function). fog color is only its albedo.
+// Nothing here dims or tints the scene: surfaces are lit by the lights, the fog only adds what it reflects.
 // ---------------------------------------------------------------------------------------------------------------
 float sky_sun_height()                      // sine of the sun's elevation: 1 = overhead, 0 = on the horizon, < 0 = night
 {
@@ -103,81 +108,95 @@ float sky_sun_height()                      // sine of the sun's elevation: 1 = 
     return 0.8;
 }
 
-vec3 sky_sun_light(float sun_h)             // sunlight after crossing the air: white high up, orange near the horizon
+vec3 sky_sun_dir()
 {
-    float air = 1.0 / (max(sun_h, 0.0) + 0.08);
-    return exp(-vec3(0.045, 0.10, 0.24) * air);
+    if (scene_lights.sun_dir.w > 0.5) return normalize(scene_lights.sun_dir.xyz);
+    return scene_lights.counts.yzw;
 }
 
-// the sky without the sun itself: blue overhead, pale at the horizon, orange toward a low sun, dark at night
-vec3 sky_base(vec3 dir)
+// the sun's own color (with its warm / cool tint) times its intensity
+vec3 sun_full_color()
+{
+    return scene_lights.sun_tint.rgb * scene_lights.sun_tint.w;
+}
+
+// the sunlight that reaches the air and the ground: reddened and dimmed by the long path through the atmosphere when the sun is low, gone at night
+vec3 sun_light_at_ground()
+{
+    float sun_h = sky_sun_height();
+    float air   = 1.0 / (max(sun_h, 0.0) + 0.08);
+    vec3  atmosphere = exp(-vec3(0.045, 0.10, 0.24) * air);
+    float rise  = smoothstep(-0.08, 0.12, sun_h);
+    if (scene_lights.sun_dir.w < 0.5) rise = 1.0;
+    return sun_full_color() * atmosphere * rise;
+}
+
+// Rayleigh scattering: short (blue) wavelengths scatter most. the longer the path through the air (toward the horizon) the paler it gets.
+vec3 sky_scatter(float up, float mu, vec3 sunlight, float haze)
+{
+    float airmass = 1.0 / (max(up, 0.0) + 0.10);
+    vec3  beta    = vec3(0.20, 0.45, 1.00);
+    vec3  scatter = (vec3(1.0) - exp(-beta * airmass)) * 1.25;
+    float rayleigh_phase = 0.75 * (1.0 + mu * mu);
+    vec3  sky = sunlight * scatter * rayleigh_phase;
+    sky += sunlight * haze * 0.30 * exp(-max(up, 0.0) * 2.5);          // haze: a whiter, brighter horizon
+    return sky;
+}
+
+// the light of the sky in a direction. with_sun = false leaves out the glow around the sun (used as the fog's ambient light)
+vec3 sky_radiance(vec3 dir, bool with_sun)
 {
     float up    = dot(dir, scene_lights.counts.yzw);
     float sun_h = sky_sun_height();
-    float day   = smoothstep(-0.12, 0.25, sun_h);
+    float mu    = dot(dir, sky_sun_dir());
     float haze  = scene_lights.sky_a.y;
-    vec3  sun_l = scene_lights.counts.yzw;
-    if (scene_lights.sun_dir.w > 0.5) sun_l = normalize(scene_lights.sun_dir.xyz);
-    float cos_sun = dot(dir, sun_l);
+    vec3  sunlight = sun_light_at_ground();
 
-    vec3 zenith  = vec3(0.10, 0.25, 0.65);
-    vec3 horizon = mix(vec3(0.62, 0.74, 0.92), vec3(0.82, 0.86, 0.92), haze);
-    vec3 sky     = mix(horizon, zenith, pow(clamp(up, 0.0, 1.0), 0.45)) * day;
+    vec3 sky     = sky_scatter(up, mu, sunlight, haze);
+    vec3 horizon = sky_scatter(0.0, mu, sunlight, haze);
+    if (up < 0.0) sky = mix(sky, horizon * 0.45, clamp(-up * 5.0, 0.0, 1.0));
 
-    float low_sun = (1.0 - smoothstep(0.0, 0.45, sun_h)) * smoothstep(-0.2, 0.05, sun_h);
-    float toward  = pow(max(cos_sun, 0.0), 2.0);
-    float band    = exp(-max(up, 0.0) * 4.0);
-    sky = mix(sky, sky_sun_light(sun_h) * vec3(1.1, 0.75, 0.5), clamp(low_sun * (0.25 + 0.75 * toward) * band, 0.0, 0.9));
-    sky += vec3(0.004, 0.007, 0.018) * (1.0 - day);
-
-    if (up < 0.0) sky = mix(sky, horizon * day * 0.5 + vec3(0.003, 0.005, 0.012) * (1.0 - day), clamp(-up * 5.0, 0.0, 1.0));
+    if (with_sun) {
+        sky += sunlight * pow(max(mu, 0.0), mix(24.0, 6.0, haze)) * mix(0.25, 0.6, haze);          // the glow around the sun
+        if (scene_lights.sun_dir.w > 0.5) sky += sunlight * smoothstep(0.9993, 0.9997, mu) * 5.0;  // the sun itself
+    }
+    float night = 1.0 - smoothstep(-0.12, 0.25, sun_h);
+    sky += vec3(0.004, 0.007, 0.018) * night;                                                      // faint starlight
     return sky * scene_lights.sky_a.x;
 }
 
 vec3 sky_color(vec3 dir)
 {
-    vec3  sky   = sky_base(dir);
-    float up    = dot(dir, scene_lights.counts.yzw);
-    float sun_h = sky_sun_height();
-    float day   = smoothstep(-0.12, 0.25, sun_h);
+    vec3 sky = sky_radiance(dir, true);
 
     // stars at night
+    float up    = dot(dir, scene_lights.counts.yzw);
+    float night = 1.0 - smoothstep(-0.12, 0.25, sky_sun_height());
     vec3  cell  = floor(dir * 220.0);
     float star  = step(0.9965, fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453));
-    sky += vec3(star) * (1.0 - day) * smoothstep(0.05, 0.3, up) * 0.8 * scene_lights.sky_a.x;
-
-    if (scene_lights.sun_dir.w > 0.5) {
-        float cos_sun = max(dot(dir, normalize(scene_lights.sun_dir.xyz)), 0.0);
-        float haze    = scene_lights.sky_a.y;
-        vec3  sun_rgb = sky_sun_light(sun_h);
-        float above   = smoothstep(-0.15, 0.05, sun_h);
-        float mie     = pow(cos_sun, mix(24.0, 6.0, haze)) * mix(0.25, 0.6, haze);
-        sky += sun_rgb * mie * above * scene_lights.sky_a.x;
-        sky += sun_rgb * smoothstep(0.9993, 0.9997, cos_sun) * 5.0 * above * scene_lights.sky_a.x;
-    }
+    sky += vec3(star) * night * smoothstep(0.05, 0.3, up) * 0.8 * scene_lights.sky_a.x;
     return sky;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Fog
 // ---------------------------------------------------------------------------------------------------------------
-vec3 fog_base_color(vec3 dir)
+// the light that falls on fog and gets reflected toward the camera: the sky's light, plus the sun scattered with a forward-biased
+// phase function (fog glows when you look toward the sun, and is much dimmer looking away from it)
+vec3 fog_lighting(vec3 dir)
 {
-    if (scene_lights.sky_a.z < 0.5) return scene_lights.fog_a.rgb;
-    float up = dot(dir, scene_lights.counts.yzw);
+    float up       = dot(dir, scene_lights.counts.yzw);
     vec3  flat_dir = normalize(dir - scene_lights.counts.yzw * up + scene_lights.counts.yzw * 0.03);
-    return sky_base(flat_dir);
-}
+    vec3  ambient  = sky_radiance(flat_dir, false);
 
-// Glow toward the sun: fog and volumes catch the sun like Unreal's directional inscattering.
-vec3 fog_inscatter(vec3 fog_rgb, vec3 dir)
-{
-    float glow = 0.0;
+    vec3 sun = vec3(0.0);
     if (scene_lights.sun_dir.w > 0.5) {
-        float facing = max(dot(dir, normalize(scene_lights.sun_dir.xyz)), 0.0);
-        glow = pow(facing, max(scene_lights.fog_c.w, 1.0)) * scene_lights.fog_c.z;
+        float g  = clamp(scene_lights.fog_c.w, 0.0, 0.95);
+        float mu = dot(dir, sky_sun_dir());
+        float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * mu, 1.5);       // average 1 over the sphere
+        sun = sun_light_at_ground() * mix(1.0, hg, 0.7) * scene_lights.fog_c.z;
     }
-    return fog_rgb + scene_lights.sun_color.rgb * glow;
+    return ambient + sun;
 }
 
 float hash13(vec3 p)
@@ -203,11 +222,12 @@ float fog_noise(vec3 p)
     return value_noise(p) * 0.65 + value_noise(p * 2.07 + vec3(7.3, 1.7, 4.1)) * 0.35;
 }
 
-// Fog volumes: boxes (any size and rotation) filled with fog.
+// Fog volumes: boxes (any size and rotation) filled with fog. The fog takes light out of the view and reflects light back.
 //   cheap: one straight pass through the box, soft edge.
-//   good:  ray marched through the box with moving noise, thicker toward the bottom, lit by the sun, with a little self shadow.
+//   good:  ray marched through the box with moving noise, thicker toward the bottom, with a little self shadow.
 vec3 apply_volumes(vec3 color, vec3 dir, float dist)
 {
+    vec3 lighting = fog_lighting(dir);
     for (int i = 0; i < 4; ++i) {
         vec4 params = scene_lights.vol_params[i];
         if (params.x < 0.5) continue;
@@ -228,16 +248,15 @@ vec3 apply_volumes(vec3 color, vec3 dir, float dist)
         float leave = min(min(tf.x, tf.y), min(tf.z, dist));
         if (leave <= enter) continue;
 
-        vec3  vol_rgb = scene_lights.vol_color[i].rgb;
-        float density = scene_lights.vol_color[i].w;
-        float soft    = max(params.z, 0.02);
-        vec3  lit     = fog_inscatter(vol_rgb, dir);
+        vec3  reflected = scene_lights.vol_color[i].rgb * lighting;        // albedo * the light that falls on it
+        float density   = scene_lights.vol_color[i].w;
+        float soft      = max(params.z, 0.02);
 
         if (params.y < 0.5) {
             vec3  mid  = o + d * (0.5 * (enter + leave));
             float edge = 1.0 - max(max(abs(mid.x), abs(mid.y)), abs(mid.z));
             float tau  = density * smoothstep(0.0, soft, edge) * (leave - enter);
-            color = mix(color, lit, 1.0 - exp(-tau));
+            color = mix(color, reflected, 1.0 - exp(-tau));
         } else {
             const int steps = 24;
             float dt     = (leave - enter) / float(steps);
@@ -253,7 +272,7 @@ vec3 apply_volumes(vec3 color, vec3 dir, float dist)
                 float n     = fog_noise(p * params.w + drift);
                 float here  = density * fade * low * (0.25 + 1.5 * n);
                 float a     = 1.0 - exp(-here * dt);
-                scatter    += trans * a * lit * mix(1.0, 0.65, clamp(here * dt * 4.0, 0.0, 1.0));
+                scatter    += trans * a * reflected * mix(1.0, 0.65, clamp(here * dt * 4.0, 0.0, 1.0));
                 trans      *= 1.0 - a;
             }
             color = color * trans + scatter;
@@ -264,6 +283,7 @@ vec3 apply_volumes(vec3 color, vec3 dir, float dist)
 
 // Fog: exponential height fog (density falls off with height, integrated along the whole ray like Unreal's
 // Exponential Height Fog), then the fog volumes.
+// extinction: how much of the scene is hidden. in-scattering: the sun and sky light the fog reflects toward the camera.
 vec3 apply_fog(vec3 color, vec3 view_pos)
 {
     if (scene_lights.fog_a.w < 0.5) return color;
@@ -280,13 +300,13 @@ vec3 apply_fog(vec3 color, vec3 view_pos)
     if (abs(climb) > 1e-3) {
         depth = (1.0 - exp(clamp(-climb, -20.0, 20.0))) / (falloff * dir_y);
     }
-    float tau     = scene_lights.fog_b.x * exp(low) * depth;
-    float amount  = clamp((1.0 - exp(-tau)) * scene_lights.fog_c.y, 0.0, 1.0);
-    color = mix(color, fog_inscatter(fog_base_color(dir), dir), amount);
+    float tau          = scene_lights.fog_b.x * exp(low) * depth;
+    float amount       = clamp((1.0 - exp(-tau)) * scene_lights.fog_c.y, 0.0, 1.0);
+    vec3  reflected    = scene_lights.fog_a.rgb * fog_lighting(dir);        // albedo * the light that falls on the fog
+    color = color * (1.0 - amount) + reflected * amount;
 
     return apply_volumes(color, dir, dist);
 }
-
 void main()
 {
     // Sky dome: light.xyz = 0 and light.w < -2.5.

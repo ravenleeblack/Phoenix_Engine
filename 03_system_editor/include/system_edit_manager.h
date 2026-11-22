@@ -82,6 +82,7 @@ bool edit_target_weld_dragging(void);
 bool edit_insert_loop_dragging(void);
 bool edit_multicut_dragging(void);
 bool edit_op_extrude(edit_mode_mesh* mesh, const char** err);
+bool edit_op_terrain_extrude(edit_mode_mesh* mesh, const char** err);   /* terrain: pull the selected control grid vertices / faces up by the extrude distance */
 bool edit_op_bridge(edit_mode_mesh* mesh, const char** err);
 bool edit_op_merge_selected(edit_mode_mesh* mesh, const char** err);
 bool edit_op_delete_faces(edit_mode_mesh* mesh, const char** err);

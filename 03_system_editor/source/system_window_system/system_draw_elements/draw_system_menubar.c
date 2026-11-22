@@ -396,7 +396,7 @@ void draw_dynamic_zone(VkCommandBuffer cmd, system_element_context* ui_ctx, int 
         snprintf(readout, sizeof(readout), "Radius %.2f", brush->radius);     draw_dynamic_zone_readout(cmd, ui_ctx, readout, &x, x1);
         snprintf(readout, sizeof(readout), "Strength %.2f", brush->strength); draw_dynamic_zone_readout(cmd, ui_ctx, readout, &x, x1);
         if (draw_dynamic_zone_button(cmd, ui_ctx, "Symmetry X", &x, x1, g_mode_state.sculpt.symmetry_x)) { g_mode_state.sculpt.symmetry_x = !g_mode_state.sculpt.symmetry_x; set_menubar_status("Sculpt symmetry X: %s.", g_mode_state.sculpt.symmetry_x ? "on" : "off"); }
-        if (draw_dynamic_zone_button(cmd, ui_ctx, "Invert",     &x, x1, g_mode_state.sculpt.invert))     { g_mode_state.sculpt.invert = !g_mode_state.sculpt.invert; set_menubar_status("Sculpt invert: %s.", g_mode_state.sculpt.invert ? "on" : "off"); }
+        if (draw_dynamic_zone_button(cmd, ui_ctx, "Invert",     &x, x1, g_sculpt.invert))     { g_sculpt.invert = !g_sculpt.invert; set_menubar_status("Sculpt invert: %s.", g_sculpt.invert ? "on" : "off"); }
         break;
     }
 

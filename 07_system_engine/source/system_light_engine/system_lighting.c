@@ -7,8 +7,8 @@
 /* warm = low sun / sunset orange, cool = overcast / moonlight blue */
 void apply_light_warmth(float rgb[3], float warmth)
 {
-    const float warm[3] = { 1.00f, 0.78f, 0.50f };
-    const float cool[3] = { 0.70f, 0.85f, 1.00f };
+    const float warm[3] = { 1.00f, 0.72f, 0.42f };
+    const float cool[3] = { 0.60f, 0.78f, 1.00f };
 
     float w = warmth;
     if (w < -1.0f) w = -1.0f;
@@ -21,6 +21,32 @@ void apply_light_warmth(float rgb[3], float warmth)
         t = -w;
     }
     for (int i = 0; i < 3; i++) rgb[i] *= 1.0f + (target[i] - 1.0f) * t;
+}
+
+/* the sun's color before the ambient split: its own color with the warm / cool tint, and the intensity in out[3].
+   the sky and the fog use this so they follow the directional light's color, warmth and intensity. */
+void get_light_sun_tint(float out[4])
+{
+    float rgb[3] = { 1.0f, 1.0f, 1.0f };
+    float inten  = g_light.sun_intensity;
+    float warmth = g_light.sun_warmth;
+    float limit  = 3.0f;
+
+    if (g_light.sun_driven) {
+        rgb[0] = g_light.sun_driver_color[0];
+        rgb[1] = g_light.sun_driver_color[1];
+        rgb[2] = g_light.sun_driver_color[2];
+        inten  = g_light.sun_driver_intensity;
+        warmth = g_light.sun_driver_warmth;
+        limit  = 4.0f;
+    }
+    if (inten < 0.0f) inten = 0.0f;
+    if (inten > limit) inten = limit;
+    apply_light_warmth(rgb, warmth);
+    out[0] = rgb[0];
+    out[1] = rgb[1];
+    out[2] = rgb[2];
+    out[3] = inten;
 }
 
 /* the sun colour the mesh shader gets. a directional light object (sun_driven) supplies its own colour, intensity and warmth,

@@ -256,14 +256,19 @@ void fill_sky_fog_block(float* block, const editor_mat4* view)
         fog[16] = sun_light[0]; fog[17] = sun_light[1]; fog[18] = sun_light[2];
         fog[19] = sun_on ? 1.0f : 0.0f;
         fog[20] = sun_color[0]; fog[21] = sun_color[1]; fog[22] = sun_color[2];
-        fog[23] = 0.0f;
+        fog[23] = sun_light[3];                      /* the scene's ambient: the fog is lit by it too */
+
+        float sun_tint[4];
+        get_light_sun_tint(sun_tint);
+        fog[24] = sun_tint[0]; fog[25] = sun_tint[1]; fog[26] = sun_tint[2];
+        fog[27] = sun_tint[3];                       /* intensity */
     }
 
     prune_sky_volumes();
     for (int i = 0; i < sky_max_volumes; i++) {
-        float* color = &fog[24 + i * 4];
-        float* params = &fog[40 + i * 4];
-        float* rows = &fog[56 + i * 12];
+        float* color = &fog[28 + i * 4];
+        float* params = &fog[44 + i * 4];
+        float* rows = &fog[60 + i * 12];
         for (int k = 0; k < 4; k++) {
             color[k] = 0.0f;
             params[k] = 0.0f;

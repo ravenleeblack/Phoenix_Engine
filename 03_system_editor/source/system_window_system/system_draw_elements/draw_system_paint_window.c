@@ -72,9 +72,14 @@ void draw_system_paint_window(system_element_context* ui_ctx, system_dock_node* 
         }
 
         brush_bar_separator(&bar);
-        if (brush_bar_button(&bar, "Ex", "Export PNG", false)) {
-            if (terrain_sel) {
-                snprintf(status_bar_text_buffer, sizeof(status_bar_text_buffer), "Terrain paint is stored per cube column in the terrain regions, not as a PNG.");
+        const bool terrain_target = g_terrain.exists && (!sel || sel == &g_scene_registry.objects[0] || terrain_sel);   /* nothing or the terrain selected: the terrain is what gets painted */
+        const char* export_tip = "Export PNG";
+        if (terrain_target) {
+            export_tip = "Export the terrain paint as assets/textures/terrain_paint.png (one pixel per cube column)";
+        }
+        if (brush_bar_button(&bar, "Ex", export_tip, false)) {
+            if (terrain_target) {
+                export_terrain_paint_png();
             } else if (mesh_sel) {
                 char file[96];
                 if (paint_texture_export_for_object(sel->id, sel->name, file, sizeof(file)))
@@ -83,6 +88,15 @@ void draw_system_paint_window(system_element_context* ui_ctx, system_dock_node* 
                     snprintf(status_bar_text_buffer, sizeof(status_bar_text_buffer), "Nothing painted on '%s' yet.", sel->name);
             } else {
                 snprintf(status_bar_text_buffer, sizeof(status_bar_text_buffer), "Select a mesh object to export its paint map.");
+            }
+        }
+        if (terrain_target) {
+            if (brush_bar_button(&bar, "Im", "Load assets/textures/terrain_paint.png as the terrain paint", false)) {
+                import_terrain_paint_png();
+            }
+            if (brush_bar_button(&bar, "Cl", "Erase all the terrain paint", false)) {
+                terrain_clear_paint();
+                set_paint_window_status("Terrain paint erased.");
             }
         }
 

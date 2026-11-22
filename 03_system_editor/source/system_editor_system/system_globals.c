@@ -37,12 +37,14 @@ system_engine_context engine_context = {0};
 manage_docking dock_workspace = {0};
 tooltip_state g_tooltip = {0};
 
+terrain_tool_state g_terrain_tool = { terrain_tool_off, 6.0f, 0.5f, 0.35f, 8.0f };
+
 sky_state g_sky = {
     .scene_sky_on = true, .scene_fog_on = false, .game_sky_on = true, .game_fog_on = false,
     .sky_brightness = 1.0f, .sky_haze = 0.35f, .fog_sky_color = true,
-    .fog_color = { 0.72f, 0.80f, 0.90f },
+    .fog_color = { 0.95f, 0.96f, 0.98f },
     .fog_density = 0.008f, .fog_height_falloff = 0.015f, .fog_base_height = 0.0f, .fog_start = 0.0f,
-    .fog_max_opacity = 1.0f, .fog_sun_scatter = 0.6f, .fog_sun_exponent = 8.0f,
+    .fog_max_opacity = 1.0f, .fog_sun_scatter = 0.7f, .fog_sun_exponent = 0.55f,
 };
 
 scene_view_state g_scene_view = {

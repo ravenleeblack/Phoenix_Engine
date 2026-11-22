@@ -390,6 +390,10 @@ bool get_terrain_focus_target(uint32_t selected_object_id, editor_vec3* out_targ
     }
 
     if (selected_object_id == g_terrain.scene_object_id) {
+        if (g_pick_chunk_x >= 0) {
+            get_terrain_chunk_block(g_pick_chunk_x, g_pick_chunk_z, g_pick_chunk_x, g_pick_chunk_z, out_target, out_radius);   /* the chunk that was clicked */
+            return true;
+        }
         get_terrain_chunk_block(0, 0, g_terrain.dims.chunks_x - 1, g_terrain.dims.chunks_z - 1, out_target, out_radius);
         return true;
     }
@@ -457,7 +461,8 @@ void update_system_object_picking(system_element_context* ui_ctx)
     if (pick_terrain_chunk(ui_ctx, mx, my, &terrain_depth, &chunk_x, &chunk_z)) {
         if (hit_depth < 0.0f || terrain_depth < hit_depth) {
             const int region = get_terrain_region_of_chunk(chunk_x, chunk_z);
-            hit_id = g_terrain.region_ids[region];
+            g_pick_chunk_region_object_id = g_terrain.region_ids[region];     /* the chunk lives in this region... */
+            hit_id = g_terrain.scene_object_id;                               /* ...but you select the Terrain itself: sculpt, paint and edit work on all of it */
             hit_depth = terrain_depth;
         } else {
             chunk_x = -1;
@@ -469,7 +474,6 @@ void update_system_object_picking(system_element_context* ui_ctx)
         if (chunk_x >= 0) {
             g_pick_chunk_x = chunk_x;
             g_pick_chunk_z = chunk_z;
-            g_pick_chunk_region_object_id = hit_id;
             set_statusbar_message("Selected terrain chunk %d, %d (Ctrl+F frames it).", chunk_x, chunk_z);
         } else {
             const system_scene_object* hit = find_scene_object_by_id(hit_id);

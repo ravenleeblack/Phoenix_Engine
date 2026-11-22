@@ -25,7 +25,8 @@ IF SOMETHING IS BREAKING THESE RULES CHANGE IT THEN WE CHANGE EVERYTHING CONNECT
 THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 */
 
-/* Procedural sky and fog.
+/* Procedural sky and fog. The directional light is the source of all of it: the sky is its light scattered by the air, the fog
+   takes light out of the view and reflects the sun and the sky light back (nothing dims or tints the rest of the scene).
    sky dome     an octagon dome mesh (8 sides, 4 rings) that follows the camera. The color is computed in mesh_frag.glsl from the
                 sun: blue day sky, orange sunset, dark night, haze and a glow and disc at the sun (like Unreal's sky atmosphere).
                 No colors to paint: move the directional light and the sky follows.
@@ -39,7 +40,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 
 enum {
     sky_max_volumes = 4,
-    sky_block_floats = 104,         /* 8 vec4 of sky / fog / sun data, then per volume: color, params, 3 matrix rows (26 vec4 in all) */
+    sky_block_floats = 108,         /* 7 vec4 of sky / fog / sun data, then per volume: color, params, 3 matrix rows (27 vec4 in all) */
     fog_volume_cheap = 0,
     fog_volume_good  = 1
 };
@@ -52,15 +53,15 @@ typedef struct {
 
     float sky_brightness;           /* multiplies the whole sky (1 = normal) */
     float sky_haze;                 /* 0 = clear air, 1 = hazy: a bigger whiter glow around the sun and a paler horizon */
-    bool  fog_sky_color;            /* true: the fog takes the sky's horizon color. false: fog_color below */
-    float fog_color[3];
+    bool  fog_sky_color;            /* not used any more: fog is a medium that reflects the light, fog_color is only its albedo */
+    float fog_color[3];                 /* the albedo of the fog: the fraction of the light it reflects (white = reflects all of it) */
     float fog_density;              /* per meter */
     float fog_height_falloff;       /* per meter of height: higher = fog hugs the ground */
     float fog_base_height;          /* fog is at full thickness at and below this height (meters) */
     float fog_start;                /* no fog closer than this (meters) */
     float fog_max_opacity;          /* the fog never gets thicker than this (0..1) */
-    float fog_sun_scatter;          /* how much the fog glows toward the sun, like Unreal's directional inscattering (0..2) */
-    float fog_sun_exponent;         /* how tight that glow is: higher = a smaller hot spot around the sun */
+    float fog_sun_scatter;          /* how much of the directional light the fog scatters toward the camera (0..2) */
+    float fog_sun_exponent;         /* forward scattering of that light (0 = every direction the same, 0.9 = a bright halo around the sun) */
 
     uint32_t dome_object_id;        /* 0 = no dome yet */
     int      volume_count;
@@ -71,6 +72,7 @@ typedef struct {
     float    volume_noise_scale[sky_max_volumes];  /* good fog: how many noise cells fit across the box */
     float    volume_color[sky_max_volumes][3];
 
+    bool  drawing_game_view;        /* true while the Game view is drawn: editor helpers (light and camera glyphs) are left out */
     bool  draw_sky_now;             /* set by the scene draw before each view: is the sky on in the view being drawn */
     bool  draw_fog_now;
     float draw_far;                 /* far clip of the view being drawn (the dome is 90% of it) */

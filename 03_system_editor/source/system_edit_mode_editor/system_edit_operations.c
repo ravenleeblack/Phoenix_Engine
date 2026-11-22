@@ -138,7 +138,13 @@ static bool run_instant(const char* name, op_fn fn)
 {
     system_scene_object* obj = NULL; edit_mode_mesh* mesh = NULL;
     if (!get_edit_target(&obj, &mesh)) { edit_msg("%s: switch to Edit mode with an object selected", name); return false; }
-    if (is_terrain_object(obj))         { edit_msg("%s: not on terrain (fixed height grid). Select / move vertices with the gizmo instead", name); return false; }
+    if (is_terrain_object(obj)) {
+        if (fn != edit_op_extrude) {
+            edit_msg("%s: the terrain is one height per column, so only Extrude (pull the selection up) works on it. Move vertices with the gizmo instead", name);
+            return false;
+        }
+        fn = edit_op_terrain_extrude;                      /* extrude on the terrain pulls the selected ground up */
+    }
     const char* err = NULL;
     if (!fn(mesh, &err))                { edit_msg("%s: %s", name, err ? err : "failed"); return false; }
     if (!em_commit_to_gpu(mesh, obj))   { edit_msg("%s: GPU upload failed", name); return false; }

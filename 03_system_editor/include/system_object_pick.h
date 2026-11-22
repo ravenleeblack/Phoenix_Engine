@@ -31,6 +31,7 @@ bool get_terrain_ray_hit(const system_element_context* ui_ctx, float mx, float m
 /* Sculpt and Paint mode on the terrain: a ring on the ground, drag to raise / lower / smooth / flatten or paint (system_terrain_brush.c).
    once per frame. every other mesh keeps the normal sculpt / paint input. */
 void update_terrain_brush(system_element_context* ui_ctx);
+int  get_terrain_region_of_chunk(int cx, int cz);          /* system_object_pick.c: which of the 9 regions a chunk is in */
 
 /* where an object really is in the world: the middle and the radius of its mesh bounds (a model whose geometry is not around its origin
    still frames correctly). false when it has no mesh data. Ctrl+F uses it. */

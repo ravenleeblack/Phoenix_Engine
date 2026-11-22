@@ -62,6 +62,8 @@ bool brush_slider_int(VkCommandBuffer cmd, system_element_context* ui_element, u
 
 /* ---- colour picker (Paint window). HSV square + hue bar + preview + Save / Del buttons.
         rgb is sRGB 0..1 (g_paint.color). h_avail = height you can spend. Returns the height it used (0 = no room). ---- */
+int  brush_color_picker_height(void);                                          /* the height brush_color_picker uses when it is given enough room */
+int  brush_color_palette_height(int w);                                      /* the height brush_color_palette uses for this width */
 int  brush_color_picker (VkCommandBuffer cmd, system_element_context* ui_element, int x, int y, int w, int h_avail, float rgb[3]);
 /* saved colours (click = use, Del button then click = remove) + a 60 colour preset palette. Returns height used. */
 int  brush_color_palette(VkCommandBuffer cmd, system_element_context* ui_element, int x, int y, int w, int h_avail, float rgb[3]);

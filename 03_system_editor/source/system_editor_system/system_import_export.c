@@ -146,6 +146,71 @@ bool check_path_extension(const char* path, const char* extension)
     return _stricmp(path + (path_length - extension_length), extension) == 0;
 }
 
+/* ---- terrain paint <-> PNG ---- */
+bool export_terrain_paint_png(void)
+{
+    if (!g_terrain.exists) {
+        set_statusbar_message("%s", "Terrain paint: there is no terrain.");
+        return false;
+    }
+    if (!check_loader_ready()) {
+        return false;
+    }
+    const int width = g_terrain.dims.cells_x;
+    const int height = g_terrain.dims.cells_z;
+    uint8_t* pixels = (uint8_t*)calloc((size_t)width * (size_t)height, 4u);
+    if (!pixels) {
+        set_statusbar_message("%s", "Terrain paint: out of memory.");
+        return false;
+    }
+    if (!terrain_copy_paint_to_pixels(pixels, width, height)) {
+        free(pixels);
+        set_statusbar_message("%s", "Terrain paint: nothing is painted yet. Paint the terrain in Paint mode first.");
+        return false;
+    }
+    CreateDirectoryA("assets", NULL);
+    CreateDirectoryA("assets\\textures", NULL);
+    loader_image_data image;
+    memset(&image, 0, sizeof(image));
+    image.pixels = pixels;
+    image.width = width;
+    image.height = height;
+    image.channels = 4;
+    const bool ok = editor_save_image("assets\\textures\\terrain_paint.png", &image);
+    free(pixels);
+    if (ok) {
+        file_archive_refresh();
+        set_statusbar_message("Terrain paint saved: assets\\textures\\terrain_paint.png (%d x %d, one pixel per cube column).", width, height);
+    } else {
+        set_statusbar_message("%s", "Terrain paint: the PNG could not be written.");
+    }
+    return ok;
+}
+
+bool import_terrain_paint_png(void)
+{
+    if (!g_terrain.exists) {
+        set_statusbar_message("%s", "Terrain paint: there is no terrain.");
+        return false;
+    }
+    if (!check_loader_ready()) {
+        return false;
+    }
+    loader_image_data image;
+    memset(&image, 0, sizeof(image));
+    if (!editor_load_image("assets\\textures\\terrain_paint.png", &image)) {
+        set_statusbar_message("%s", "Terrain paint: assets\\textures\\terrain_paint.png was not found (or is an interlaced PNG).");
+        return false;
+    }
+    const bool ok = terrain_set_paint_from_pixels(image.pixels, image.width, image.height);
+    const int width = image.width;
+    const int height = image.height;
+    editor_remove_image(&image);
+    if (ok) {
+        set_statusbar_message("Terrain paint loaded from terrain_paint.png (%d x %d).", width, height);
+    }
+    return ok;
+}
 /* File > Save All. The scene itself has no file format yet, so this saves everything that does:
    preferences + view state + sky and fog (phoenix_editor.pdb), every skin as a .sprof, and the paint map of every painted mesh. */
 int save_all_editor_data(void)

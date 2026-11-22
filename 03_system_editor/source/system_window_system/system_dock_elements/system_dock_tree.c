@@ -231,7 +231,6 @@ void traverse_dock_tree(system_element_context* ui_element, system_dock_node* no
         mode_menu_follow_state(ui_element);     /* whatever changed the mode, the flags and the Modeler / Sculpt / Paint windows follow it */
         sculpt_input_update(ui_element);        /* once per UI frame: sculpt strokes + mode_state mirror (system_sculpt_input.c) */
         paint_input_update(ui_element);         /* once per UI frame: paint strokes (was never called) */
-        update_terrain_brush(ui_element);       /* once per UI frame: sculpt / paint strokes on the terrain (a ring on the ground) */
     }
 
     if (node->node_type == dock_node_leaf) {

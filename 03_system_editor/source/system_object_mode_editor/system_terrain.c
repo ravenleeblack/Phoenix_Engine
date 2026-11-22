@@ -456,6 +456,83 @@ bool terrain_paint_dab(editor_vec3 c, float radius, const float color[3], float 
 /* ------------------------------------------------------------------------- */
 /* Tunnels: holes in the surface + a tube                                    */
 /* ------------------------------------------------------------------------- */
+/* the paint layer as a picture: one pixel per cube column, x = column x, y = column z, RGBA (alpha 0 = not painted). false when the terrain has no paint */
+bool terrain_copy_paint_to_pixels(uint8_t* rgba, int width, int height)
+{
+    system_terrain* t = &g_terrain;
+    if (!t->exists || !rgba || width < t->dims.cells_x || height < t->dims.cells_z) return false;
+    refresh_height_cache(t);
+    const int rc = t->dims.region_cells;
+    bool any = false;
+    for (int gz = 0; gz < height; gz++) {
+        for (int gx = 0; gx < width; gx++) {
+            uint8_t* out = rgba + ((size_t)gz * (size_t)width + (size_t)gx) * 4u;
+            out[0] = out[1] = out[2] = out[3] = 0;
+            if (gx >= t->dims.cells_x || gz >= t->dims.cells_z) continue;
+            const int rx = terrain_editor_imin(gx / rc, terrain_region_grid - 1), rz = terrain_editor_imin(gz / rc, terrain_region_grid - 1);
+            const uint8_t* blk = s_c[rz * terrain_region_grid + rx];
+            if (!blk) continue;
+            const uint8_t* p = blk + ((size_t)(gz - rz * rc) * (size_t)rc + (size_t)(gx - rx * rc)) * 4u;
+            if (p[3] == 0) continue;
+            memcpy(out, p, 4);
+            any = true;
+        }
+    }
+    return any;
+}
+
+/* the paint layer from a picture (any size: sampled to the columns). pixels with alpha 0 stay unpainted. rebuilds every chunk */
+bool terrain_set_paint_from_pixels(const uint8_t* rgba, int width, int height)
+{
+    system_terrain* t = &g_terrain;
+    if (!t->exists || !rgba || width < 1 || height < 1) return false;
+    const int rc = t->dims.region_cells;
+    refresh_height_cache(t);
+
+    for (int r = 0; r < terrain_region_count; r++) {
+        if (!t->region_ids[r]) continue;
+        const uint32_t bytes = (uint32_t)rc * (uint32_t)rc * 4u;
+        if (!s_c[r]) {
+            if (!object_db_set(t->region_ids[r], object_data_terrain_color, NULL, bytes)) continue;
+            refresh_height_cache(t);
+            if (!s_c[r]) continue;
+        }
+        memset(s_c[r], 0, bytes);
+    }
+
+    for (int gz = 0; gz < t->dims.cells_z; gz++) {
+        const int py = terrain_editor_imin((int)((long long)gz * height / t->dims.cells_z), height - 1);
+        for (int gx = 0; gx < t->dims.cells_x; gx++) {
+            const int px = terrain_editor_imin((int)((long long)gx * width / t->dims.cells_x), width - 1);
+            const uint8_t* in = rgba + ((size_t)py * (size_t)width + (size_t)px) * 4u;
+            if (in[3] == 0) continue;
+            const int rx = terrain_editor_imin(gx / rc, terrain_region_grid - 1), rz = terrain_editor_imin(gz / rc, terrain_region_grid - 1);
+            uint8_t* blk = s_c[rz * terrain_region_grid + rx];
+            if (!blk) continue;
+            memcpy(blk + ((size_t)(gz - rz * rc) * (size_t)rc + (size_t)(gx - rx * rc)) * 4u, in, 4);
+        }
+    }
+    terrain_mark_dirty_rect(0, 0, t->dims.cells_x, t->dims.cells_z);
+    t->edited = true;
+    t->edit_revision++;
+    return true;
+}
+
+/* erases all the terrain paint */
+void terrain_clear_paint(void)
+{
+    system_terrain* t = &g_terrain;
+    if (!t->exists) return;
+    refresh_height_cache(t);
+    const uint32_t bytes = (uint32_t)t->dims.region_cells * (uint32_t)t->dims.region_cells * 4u;
+    for (int r = 0; r < terrain_region_count; r++) {
+        if (s_c[r]) memset(s_c[r], 0, bytes);
+    }
+    terrain_mark_dirty_rect(0, 0, t->dims.cells_x, t->dims.cells_z);
+    t->edited = true;
+    t->edit_revision++;
+}
+
 static bool cell_is_hole(const system_terrain* t, float wx, float wz)
 {
     for (int i = 0; i < t->tunnel_count; i++) {
@@ -1370,6 +1447,7 @@ bool terrain_add_tunnel(const terrain_tunnel* k)
 /* commit.                                                                   */
 /* ------------------------------------------------------------------------- */
 static int      s_ecx, s_ecz, s_estride;
+static int      s_ex0, s_ez0;       /* first cell of the edit grid (x and z) */
 static uint32_t s_erev;
 static float*   s_ebase = NULL;
 static uint32_t s_ebase_cap = 0;
@@ -1379,16 +1457,26 @@ static int edit_stride_ok(int st) { (void)st; return 1; }
 
 /* Edit Mode works on one REGION: 3 x 3 chunks = 300 x 300 cells, one vertex per cell column. s_ecx / s_ecz = its first chunk. */
 /* edit mode works on ONE chunk (100 x 100 cells) at a time: the chunk you picked, or the one the camera is over. (It used to be 3 x 3 chunks, snapped to a grid.) */
+/* Edit mode works on ONE chunk (100 x 100 cells = 10201 control vertices), the one you clicked. Its grid is drawn on the ground (the yellow cell grid),
+   every vertex is a dot you can pick. Pick another chunk by clicking it in the Scene view (or in the Scene Archive). */
 static int edit_span_cells(const system_terrain* t) { return t->dims.chunk_cells; }
+
+/* where the chunk starts, in cells */
+static void edit_window_origin(const system_terrain* t, int tcx, int tcz, int* x0, int* z0)
+{
+    const int span = edit_span_cells(t), cc = t->dims.chunk_cells;
+    *x0 = terrain_editor_clampi(tcx * cc, 0, t->dims.cells_x - span);
+    *z0 = terrain_editor_clampi(tcz * cc, 0, t->dims.cells_z - span);
+}
 
 static void edit_sync_positions(const system_terrain* t)
 {
-    const int cc = t->dims.chunk_cells, ec = edit_span_cells(t), st = s_estride, n = ec / st;
+    const int ec = edit_span_cells(t), st = s_estride, n = ec / st;
     const float cs = t->settings.cell_size_m, ox = (float)t->dims.origin_x, oz = (float)t->dims.origin_z;
     for (int j = 0; j <= n; j++)
         for (int i = 0; i <= n; i++) {
             uint32_t idx = (uint32_t)(j * (n + 1) + i);
-            int gx = s_ecx * cc + i * st, gz = s_ecz * cc + j * st;
+            int gx = s_ex0 + i * st, gz = s_ez0 + j * st;
             float y = corner_h(t, gx, gz);
             if (t->settings.mode == terrain_mode_sandbox) y = terrain_editor_sandbox_snap(y, cs);   /* the cube top drawn for this column is snapped: the overlay must sit on it, not on the raw height */
             s_edit.verts[idx].obj_vert_pos.x = ((float)gx - ox) * cs;
@@ -1427,7 +1515,7 @@ edit_mode_mesh* terrain_edit_mesh_acquire(system_scene_object* obj)
         else { tcx = s_ecx; tcz = s_ecz; }
     }
     /* a chunk picked in the Scene view or the Scene Archive is the one to edit (only while its region is the selected object) */
-    if (g_pick_chunk_x >= 0 && g_pick_chunk_z >= 0 && g_scene_registry.selected_object_id == g_pick_chunk_region_object_id) {
+    if (g_pick_chunk_x >= 0 && g_pick_chunk_z >= 0 && (g_scene_registry.selected_object_id == g_pick_chunk_region_object_id || g_scene_registry.selected_object_id == t->scene_object_id)) {
         uint32_t picked_vertices = 0;
         if (s_edit_have) em_selection_counts(&s_edit, &picked_vertices, NULL, NULL);
         if (!s_edit_have || picked_vertices == 0) {              /* never swap the grid out from under a selection */
@@ -1439,7 +1527,9 @@ edit_mode_mesh* terrain_edit_mesh_acquire(system_scene_object* obj)
     t->edit_cx = tcx; t->edit_cz = tcz;
     const int st = edit_stride_ok(t->settings.edit_stride);
 
-    if (!s_edit_have || tcx != s_ecx || tcz != s_ecz || st != s_estride || t->edit_revision != s_erev) {
+    int wx0 = 0, wz0 = 0;
+    edit_window_origin(t, tcx, tcz, &wx0, &wz0);
+    if (!s_edit_have || tcx != s_ecx || tcz != s_ecz || wx0 != s_ex0 || wz0 != s_ez0 || st != s_estride || t->edit_revision != s_erev) {
         const int n = edit_span_cells(t) / st;
         em_make_grid(&s_edit, (uint32_t)n, (uint32_t)n);
         const uint32_t vc = (uint32_t)(n + 1) * (uint32_t)(n + 1);
@@ -1448,7 +1538,7 @@ edit_mode_mesh* terrain_edit_mesh_acquire(system_scene_object* obj)
             if (!nb) return NULL;
             s_ebase = nb; s_ebase_cap = vc;
         }
-        s_ecx = tcx; s_ecz = tcz; s_estride = st; s_erev = t->edit_revision;
+        s_ecx = tcx; s_ecz = tcz; s_ex0 = wx0; s_ez0 = wz0; s_estride = st; s_erev = t->edit_revision;
         edit_sync_positions(t);
         s_edit_have = true;
         phoenix_info("Terrain", "edit grid (re)built for chunk %d,%d: %d x %d cells, revision %u", s_ecx, s_ecz, n, n, (unsigned)s_erev);
@@ -1468,14 +1558,15 @@ bool terrain_commit_edit_mesh(edit_mode_mesh* mesh, system_scene_object* obj)
     if (!t->exists || !s_edit_have || mesh != &s_edit) return false;
     refresh_height_cache(t);
 
-    const int cc = t->dims.chunk_cells, ec = edit_span_cells(t), st = s_estride, n = ec / st;
+    const int ec = edit_span_cells(t), st = s_estride, n = ec / st;
     float maxd = 0.0f;
     for (uint32_t i = 0; i < mesh->vert_count; i++) maxd = fmaxf(maxd, fabsf(mesh->verts[i].obj_vert_pos.y - s_ebase[i]));
 
     phoenix_info("Terrain", "commit edit mesh: chunk %d,%d max height change %.4f mesh -> %s", s_ecx, s_ecz, maxd, maxd > 1e-4f ? "writing heights" : "nothing to write");
     if (maxd > 1e-4f) {
-        const int x0 = s_ecx * cc, z0 = s_ecz * cc;
+        const int x0 = s_ex0, z0 = s_ez0;
         float* base = s_ebase;
+        int min_x = ec, min_z = ec, max_x = 0, max_z = 0;          /* the part of the window that really changed: only those chunks are rebuilt */
         for (int gz = 0; gz <= ec; gz++) {
             float fz = (float)gz / (float)st; int j = terrain_editor_imin((int)fz, n - 1); float tz = fz - (float)j;
             for (int gx = 0; gx <= ec; gx++) {
@@ -1484,10 +1575,18 @@ bool terrain_commit_edit_mesh(edit_mode_mesh* mesh, system_scene_object* obj)
                 float d = terrain_editor_lerpf(terrain_editor_lerpf(DELTA(i, j),     DELTA(i + 1, j),     tx),
                                 terrain_editor_lerpf(DELTA(i, j + 1), DELTA(i + 1, j + 1), tx), tz);
                 #undef DELTA
-                if (fabsf(d) > 1e-6f) terrain_set_corner_height(x0 + gx, z0 + gz, corner_h(t, x0 + gx, z0 + gz) + d);
+                if (fabsf(d) > 1e-6f) {
+                    terrain_set_corner_height(x0 + gx, z0 + gz, corner_h(t, x0 + gx, z0 + gz) + d);
+                    if (gx < min_x) min_x = gx;
+                    if (gx > max_x) max_x = gx;
+                    if (gz < min_z) min_z = gz;
+                    if (gz > max_z) max_z = gz;
+                }
             }
         }
-        terrain_mark_dirty_rect(x0, z0, x0 + ec, z0 + ec);
+        if (max_x >= min_x && max_z >= min_z) {
+            terrain_mark_dirty_rect(x0 + min_x, z0 + min_z, x0 + max_x, z0 + max_z);
+        }
         t->edited = true;
         rebuild_terrain_mesh();
     }

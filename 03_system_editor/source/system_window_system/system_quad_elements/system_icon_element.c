@@ -41,11 +41,11 @@ void draw_icon_sphere(VkCommandBuffer cmd, float cx, float cy, float radius, con
 
 /* a brush icon: a lit sphere with a icon_glyph on it, so every brush looks different.
    icon_glyph 0..8 = sculpt brushes (clay buildup, clay soften, standard, carve, grab, polish, inflate, smooth, flatten)
-   icon_glyph 9..17 = paint brushes (paint, airbrush, eraser, smudge, blur, fill, picker, lighten, darken)
+   icon_glyph 18 = pinch, 9..17 = paint brushes (paint, airbrush, eraser, smudge, blur, fill, picker, lighten, darken)
    each icon_glyph is 9 x 9 cells, X = lit cell. */
 void draw_icon_brush(VkCommandBuffer cmd, float cx, float cy, float radius, const float rgb[3], int icon_glyph)
 {
-    const char* const glyphs[18][9] = {
+    const char* const glyphs[19][9] = {
         { ".........", ".........", "..XXXXX..", ".........", ".XXXXXXX.", ".........", "XXXXXXXXX", ".........", "........." },
         { ".........", ".........", ".........", ".XX...XX.", "X..X.X..X", "....X....", ".........", ".........", "........." },
         { ".........", "...XXX...", "..X...X..", ".X.....X.", "X.......X", ".........", "XXXXXXXXX", ".........", "........." },
@@ -63,11 +63,12 @@ void draw_icon_brush(VkCommandBuffer cmd, float cx, float cy, float radius, cons
         { "....X....", "....X....", "...XXX...", "..XXXXX..", ".XXXXXXX.", ".XXXXXXX.", "..XXXXX..", ".........", "........." },
         { "......XXX", "......XXX", ".....XX..", "....XX...", "...XX....", "..XX.....", ".XX......", "X........", "........." },
         { "....X....", ".X..X..X.", "..XXXXX..", "..XXXXX..", "XXXXXXXXX", "..XXXXX..", "..XXXXX..", ".X..X..X.", "....X...." },
-        { "..XXX....", ".XXX.....", "XXX......", "XXX......", "XXX......", "XXX......", ".XXX.....", "..XXX....", "........." }
+        { "..XXX....", ".XXX.....", "XXX......", "XXX......", "XXX......", "XXX......", ".XXX.....", "..XXX....", "........." },
+        { "XX.....XX", ".XX...XX.", "..XX.XX..", "...XXX...", "....X....", "...XXX...", "..XX.XX..", ".XX...XX.", "XX.....XX" }
     };
 
     draw_icon_sphere(cmd, cx, cy, radius, rgb);
-    if (icon_glyph < 0 || icon_glyph >= 18) {
+    if (icon_glyph < 0 || icon_glyph >= 19) {
         return;
     }
 

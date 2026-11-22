@@ -1,4 +1,5 @@
 #include "system_globals.h"
+bool system_transform_gizmo_wants_mouse(void);
 
 /* Defined in system_grid.c: the camera the Scene view really renders with. */
 /* the Scene view is rendered with the editor fly camera (system_scene_camera.c): picking and overlays must use the same one */
@@ -285,6 +286,11 @@ void system_edit_mode_update(system_element_context* ui_element)
     if (ui_element->active_mode != mode_edit_mesh) { s_have_mode = false; return; }
 
     /* ---------------- Edit mode: component selection ---------------- */
+    if (is_terrain_object(obj) && g_terrain_tool.tool != terrain_tool_off) {
+        s_have_mode = false;                 /* a terrain brush tool is on (Modeler window): drag on the ground, no control grid */
+        s_state = ST_NONE;
+        return;
+    }
     edit_mode_mesh* mesh = is_terrain_object(obj) ? terrain_edit_mesh_acquire(obj) : em_registry_get_or_create(obj);
     if (!mesh) mesh = terrain_edit_mesh_acquire(obj);                   /* Terrain / region_xx: one chunk's control grid */
     if (!mesh) { s_obj = obj; s_state = ST_BRACKET; return; }       /* camera: not component-editable */
@@ -319,7 +325,7 @@ void system_edit_mode_update(system_element_context* ui_element)
 
     /* click = select the hovered vert / edge / face. shift or ctrl + click = add it to the selection (or remove it if it is already in).
        Not while a modeling tool owns the mouse (Target Weld, Insert Loop), over the manipulator overlay, or while something else holds the mouse. */
-    if (press && s_hover != EM_NONE && ui_element->active_id == 0 && !is_edit_ops_using_mouse() && !is_manip_overlay_using_mouse()) {
+    if (press && s_hover != EM_NONE && ui_element->active_id == 0 && !is_edit_ops_using_mouse() && !is_manip_overlay_using_mouse() && !system_transform_gizmo_wants_mouse()) {
         const bool additive = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
         em_select_element(mesh, ui_element->active_select_type, s_hover, additive);
     }
@@ -421,8 +427,10 @@ static void draw_edit_mode_selection_overlay(VkCommandBuffer cmd, system_element
     if (mode == select_face && s_hover != EM_NONE && !mesh->faces[s_hover].obj_vert_selected)
         draw_face_fill(cmd, &b, &mesh->faces[s_hover], system_theme.system_edit_mode_active_face_hover);
 
-    /* big meshes (the terrain edit grid): the plain wire / points only near the cursor, the Scene view already draws the whole mesh */
-    const bool big = mesh->vert_count > 2000;
+    /* the terrain edit grid (one chunk, 100 x 100 cells): the ground draws its own cell grid with the wire shader, so the plain edges are skipped here
+       and EVERY control vertex / face centre is shown, not only the ones near the mouse. other big meshes: plain wire / points only near the cursor */
+    const bool terrain_grid = (s_obj != NULL && is_terrain_object(s_obj));
+    const bool big = mesh->vert_count > 2000 && !terrain_grid;
     const float mxp = (float)ui_element->input.mouse_x, myp = (float)ui_element->input.mouse_y;
     #define near_cursor(px, py) (fabsf((px) - mxp) < 260.0f && fabsf((py) - myp) < 260.0f)
 
@@ -431,6 +439,7 @@ static void draw_edit_mode_selection_overlay(VkCommandBuffer cmd, system_element
         for (uint32_t i = 0; i < mesh->edge_count; ++i) {
             const edit_mode_edge* e = &mesh->edges[i];
             if ((e->obj_vert_selected != 0) != (pass == 1)) continue;
+            if (terrain_grid && pass == 0) continue;
             if (!s_proj[e->vert_to_edge_array[0]].ok || !s_proj[e->vert_to_edge_array[1]].ok) continue;
             if (big && pass == 0 && !near_cursor(s_proj[e->vert_to_edge_array[0]].sx, s_proj[e->vert_to_edge_array[0]].sy)) continue;
             bool vis = false;
@@ -453,6 +462,7 @@ static void draw_edit_mode_selection_overlay(VkCommandBuffer cmd, system_element
             if (big && i != s_hover && !mesh->verts[i].obj_vert_selected && !near_cursor(s_proj[i].sx, s_proj[i].sy)) continue;
             const float* c = (i == s_hover) ? C_HOVER : (mesh->verts[i].obj_vert_selected ? C_SEL : C_VERT);
             float sz = (i == s_hover || mesh->verts[i].obj_vert_selected) ? 8.0f : 6.0f;
+            if (terrain_grid && i != s_hover && !mesh->verts[i].obj_vert_selected) sz = 4.0f;
             px_rect(cmd, &b, s_proj[i].sx - sz * 0.5f, s_proj[i].sy - sz * 0.5f, sz, sz, c);
         }
     }

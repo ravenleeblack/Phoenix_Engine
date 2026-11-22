@@ -29,6 +29,25 @@
 ### File > Save All
 - Save Scene, Save Project and Save All now work: they save preferences and view state, every skin to `assets/skins`, and the paint map of every painted mesh. Scenes have no file format yet.
 
+### Lighting
+- The directional light is the source of everything: sky color, ambient and fog in-scattering follow its direction, color and intensity. Warm and cool shift the sun color, and fog reflects (scatters) light instead of blending in.
+- Light and camera icons and gizmos are hidden in the Game view.
+
+### Terrain editing (3D heightmap)
+- Terrain is editable again in Edit, Sculpt and Paint mode. The terrain streaming update now runs in the editor, so edited chunks rebuild.
+- Edit mode keeps Vertex / Edge / Face. The control grid is one chunk (100x100 cells) drawn on the ground; clicking terrain remembers the chunk, Ctrl+F frames it. Extrude pulls the selected vertices up by the extrude distance.
+- Modeler window terrain tools: Raise, Lower, Smooth, Flatten, Set Height.
+- Clicking a gizmo handle in Edit mode no longer selects the quads behind it.
+- Sculpt brushes on terrain each do their own thing: Standard (raise), Clay Buildup (layers up to a flat top), Clay Soften, Carve, Grab, Polish, Inflate, Smooth, Flatten, and the new **Pinch** (pulls the ground in toward the middle of the brush; Ctrl spreads it out). Pinch also works on meshes.
+- Sandbox terrain (whole cubes): speed follows Strength, and Smooth / Soften / Polish settle columns on their neighbors' average so they work on cubes.
+- Grab holds the ground under the cursor and moves it straight up or down with the mouse, from the heights saved at the start of the stroke, so it can not drift or flip.
+- The Invert button in the menu bar flips raise / lower for the sculpt brushes. Paint colors no longer get converted to sRGB twice.
+- Paint workflow: the Paint window has Export / Import / Clear for the terrain paint map (`assets/textures/terrain_paint.png`, one pixel per column). The default Terrain skin is built in and already applied.
+- Skin Maker uses the same color picker and saved-color palette as Paint.
+
+### Gizmos
+- Unity style transform gizmo: solid arrow heads, cube scale handles, X red / Y green / Z blue, yellow on hover, a bigger grab area at the tip. Corner orientation widget like Unity's. The gizmo moves on all axes (no Y-only limit) so overhang work is possible.
+
 ### Build fixes
 - `system_editor_plugin.c` was missing the `draw_preferences_overlay` declaration (it was already broken in 1.4 but only showed up when the file was rebuilt).
 - The makefile does not track header changes. After a header change run `make clean` (it keeps the preferences) and `make all`.

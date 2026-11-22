@@ -98,6 +98,7 @@ __declspec(dllexport) void editor_update(float delta_time)
     preferences_begin_frame(&element_context);
     export_begin_frame(&element_context);
     update_system_object_picking(&element_context);   /* click an object in the Scene view */
+    update_terrain_streaming();                       /* rebuilds the terrain chunks that were edited, sculpted or painted, and loads / frees them around the camera */
     update_system_undo(&element_context);             /* Ctrl+Z / Ctrl+Y and Edit > Undo / Redo */
 }
 

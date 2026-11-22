@@ -762,6 +762,7 @@ static void draw_scene_mesh_list(VkCommandBuffer cmd, const editor_mat4* view, c
             continue;
         }
         if (skip_cameras && o->type == scene_object_camera) continue;
+        if (g_sky.drawing_game_view && (o->type == scene_object_light || o->type == scene_object_camera)) continue;   /* a real game shows no light or camera icons */
 
         if (is_sky_dome_object(o)) {
             if (flat_rgb != NULL || !g_sky.draw_sky_now) continue;     /* no sky in the wire passes, or when the Sky button is off */
@@ -1090,15 +1091,27 @@ static void draw_selection_bounding_box(VkCommandBuffer cmd, const editor_mat4* 
    the region mesh is one merged buffer, so the chunk is a range of its indices (same loop order as upload_region in system_terrain.c). */
 static void draw_picked_terrain_chunk(VkCommandBuffer cmd, const editor_mat4* view, const editor_mat4* proj)
 {
-    if (!g_terrain.exists || g_pick_chunk_x < 0 || g_pick_chunk_z < 0 || g_wiregrid_pipeline == VK_NULL_HANDLE) return;
-    if (g_scene_registry.selected_object_id != g_pick_chunk_region_object_id) return;
+    if (!g_terrain.exists || g_wiregrid_pipeline == VK_NULL_HANDLE) return;
+
+    /* Edit mode on the terrain (vertex / edge / face): the chunk being edited always shows its grid. otherwise the chunk that was clicked. */
+    int pick_chunk_x = g_pick_chunk_x, pick_chunk_z = g_pick_chunk_z;
+    uint32_t pick_region_object_id = g_pick_chunk_region_object_id;
+    const system_scene_object* selected_object = find_scene_object_by_id(g_scene_registry.selected_object_id);
+    const bool editing_terrain = mode_state_is_edit() && selected_object != NULL && is_terrain_object(selected_object) && g_terrain_tool.tool == terrain_tool_off;
+    if (editing_terrain) {
+        pick_chunk_x = g_terrain.edit_cx;
+        pick_chunk_z = g_terrain.edit_cz;
+        pick_region_object_id = g_terrain.region_ids[get_terrain_region_of_chunk(pick_chunk_x, pick_chunk_z)];
+    } else {
+        if (pick_chunk_x < 0 || pick_chunk_z < 0) return;
+        if (g_scene_registry.selected_object_id != pick_region_object_id && g_scene_registry.selected_object_id != g_terrain.scene_object_id) return;
+    }
 
     int region = -1;
-    for (int r = 0; r < terrain_region_count; r++) if (g_terrain.region_ids[r] == g_pick_chunk_region_object_id) region = r;
+    for (int r = 0; r < terrain_region_count; r++) if (g_terrain.region_ids[r] == pick_region_object_id) region = r;
     if (region < 0 || !g_terrain.region_valid) return;
-    const system_scene_object* obj = find_scene_object_by_id(g_pick_chunk_region_object_id);
+    const system_scene_object* obj = find_scene_object_by_id(pick_region_object_id);
     if (!obj || obj->vertex_buffer == 0 || obj->index_buffer == 0 || obj->index_count == 0) return;
-
     const int rc = g_terrain.dims.region_chunks, rx = region % terrain_region_grid, rz = region / terrain_region_grid;
     const int ax = (g_terrain.region_cx0 > rx * rc) ? g_terrain.region_cx0 : rx * rc;
     const int bx = (g_terrain.region_cx1 < (rx + 1) * rc) ? g_terrain.region_cx1 : (rx + 1) * rc;
@@ -1110,7 +1123,7 @@ static void draw_picked_terrain_chunk(VkCommandBuffer cmd, const editor_mat4* vi
         for (int cx = ax; cx < bx; cx++) {
             const terrain_chunk* c = &g_terrain.layers[terrain_layer_terrain].chunks[cz * g_terrain.dims.chunks_x + cx];
             if (!c->mesh_built || c->mesh_vc == 0) continue;
-            if (cx == g_pick_chunk_x && cz == g_pick_chunk_z) { index_total = c->mesh_ic; break; }
+            if (cx == pick_chunk_x && cz == pick_chunk_z) { index_total = c->mesh_ic; break; }
             first_index += c->mesh_ic;
         }
     }
@@ -1153,6 +1166,7 @@ void draw_scene_objects(VkCommandBuffer cmd, const float* view16, const float* p
     memcpy(&view, view16, sizeof(view));
     memcpy(&proj, proj16, sizeof(proj));
 
+    g_sky.drawing_game_view = false;
     g_sky.draw_sky_now = g_sky.scene_sky_on;
     g_sky.draw_fog_now = g_sky.scene_fog_on;
     g_sky.draw_far     = g_camera_prefs.far_clip;
@@ -1220,6 +1234,7 @@ void draw_game_scene_objects(VkCommandBuffer cmd, const float* view16, const flo
     memcpy(&view, view16, sizeof(view));
     memcpy(&proj, proj16, sizeof(proj));
 
+    g_sky.drawing_game_view = true;
     g_sky.draw_sky_now = g_sky.game_sky_on;
     g_sky.draw_fog_now = g_sky.game_fog_on;
     g_sky.draw_far     = game_camera_far;
@@ -1227,6 +1242,7 @@ void draw_game_scene_objects(VkCommandBuffer cmd, const float* view16, const flo
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_obj_pipeline);
     draw_scene_mesh_list(cmd, &view, &proj, true, NULL, true);   /* the Game view always shows skins */
+    g_sky.drawing_game_view = false;
 }
 
 /* ------------------------------------------------------------------ */

@@ -3,7 +3,8 @@
 
 #define GIZMO_PI        3.14159265f
 #define SCENE_ROOT_ID   1000
-#define PICK_RADIUS_PX  8.0f
+#define PICK_RADIUS_PX  10.0f
+#define TIP_GRAB_PX     26.0f      /* the arrow head / cube at the end of an axis can be grabbed from this far away */
 #define RING_SEGMENTS   48
 #define GIZMO_SCREEN_K  0.18f      /* gizmo world length = view depth * this (constant on-screen size) */
 
@@ -170,13 +171,59 @@ static void line(VkCommandBuffer cmd, const gizmo_cam* c, float x0, float y0, fl
     }
 }
 
+/* the colors every game engine uses: X red, Y green, Z blue, the hovered / dragged handle turns yellow */
 static system_color axis_color(int axis, bool highlighted)
 {
-    if (highlighted)        return system_theme.system_color_edit_mode_preview_color;
-    if (axis == AX_X)       return system_theme.system_color_edit_mode_invalid_color;
-    if (axis == AX_Y)       return system_theme.system_color_edit_mode_normal_color;
-    if (axis == AX_Z)       return system_theme.system_edit_mode_active_face_hover;
-    return system_theme.system_color_edit_mode_hover_color;
+    if (highlighted)        return (system_color){ 0.96f, 0.93f, 0.22f, 1.0f };
+    if (axis == AX_X)       return (system_color){ 0.86f, 0.25f, 0.20f, 1.0f };
+    if (axis == AX_Y)       return (system_color){ 0.56f, 0.88f, 0.28f, 1.0f };
+    if (axis == AX_Z)       return (system_color){ 0.24f, 0.50f, 0.96f, 1.0f };
+    return (system_color){ 0.88f, 0.88f, 0.88f, 1.0f };
+}
+
+/* a solid line, 4 px wide, with a dark edge so it reads on any ground */
+static void thick_line(VkCommandBuffer cmd, const gizmo_cam* c, float x0, float y0, float x1, float y1, system_color col)
+{
+    const system_color edge = { 0.0f, 0.0f, 0.0f, 1.0f };
+    float dx = x1 - x0, dy = y1 - y0;
+    int steps = (int)(sqrtf(dx * dx + dy * dy) / 1.5f) + 1;
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i <= steps; i++) {
+            const float t = (float)i / (float)steps;
+            if (pass == 0) {
+                dot(cmd, c, x0 + dx * t, y0 + dy * t, 6.0f, edge);
+            } else {
+                dot(cmd, c, x0 + dx * t, y0 + dy * t, 4.0f, col);
+            }
+        }
+    }
+}
+
+/* the arrow head of a move handle: a solid cone from base to tip, drawn as slices across the axis */
+static void arrow_head(VkCommandBuffer cmd, const gizmo_cam* c, float bx, float by, float tx, float ty, float half_width, system_color col)
+{
+    float dx = tx - bx, dy = ty - by;
+    const float len = sqrtf(dx * dx + dy * dy);
+    if (len < 1.0f) return;
+    const float px = -dy / len, py = dx / len;
+    const int slices = (int)(len / 1.5f) + 2;
+    for (int i = 0; i <= slices; i++) {
+        const float t = (float)i / (float)slices;
+        const float w = half_width * (1.0f - t);
+        const float cx = bx + dx * t, cy = by + dy * t;
+        const int across = (int)(w / 1.5f) + 1;
+        for (int k = -across; k <= across; k++) {
+            const float o = (float)k / (float)across * w;
+            dot(cmd, c, cx + px * o, cy + py * o, 3.0f, col);
+        }
+    }
+}
+
+/* the end of a scale handle: a solid cube with a dark edge */
+static void cube_handle(VkCommandBuffer cmd, const gizmo_cam* c, float x, float y, float size, system_color col)
+{
+    dot(cmd, c, x, y, size + 3.0f, (system_color){ 0.0f, 0.0f, 0.0f, 1.0f });
+    dot(cmd, c, x, y, size, col);
 }
 
 /* ---------------------------------------------------------------- terrain sync (Object mode only) */
@@ -212,6 +259,7 @@ static bool resolve_target(system_element_context* ui_element, system_scene_obje
         return true;
     }
     if (ui_element->active_mode == mode_edit_mesh) {
+        if (is_terrain_object(o) && g_terrain_tool.tool != terrain_tool_off) return false;   /* a terrain brush tool is on: no control grid, nothing to grab */
         edit_mode_mesh* mesh = em_registry_get_or_create(o);
         if (!mesh && is_terrain_object(o)) mesh = terrain_edit_mesh_current();   /* Terrain / region_xx: the control grid Edit Mode is showing */
         if (!mesh) return false;
@@ -276,6 +324,11 @@ static int hit_test(const gizmo_cam* c, enum_dcc_tool tool, editor_vec3 origin, 
             float tx, ty;
             if (!project(c, tip, &tx, &ty)) continue;
             float d = seg_dist(mx, my, ox, oy, tx, ty, NULL);
+            const float tdx = mx - tx, tdy = my - ty;
+            const float tip_d = sqrtf(tdx * tdx + tdy * tdy);
+            if (tip_d < TIP_GRAB_PX) {
+                d = fminf(d, tip_d * 0.4f);            /* the head at the end is the easy part to grab */
+            }
             if (d < best_d) { best_d = d; best = i; }
         }
     }
@@ -493,11 +546,27 @@ static void run_gizmo(VkCommandBuffer cmd, system_element_context* ui_element, b
             editor_vec3 tip = { pivot.x + AXES[i].x * L, pivot.y + AXES[i].y * L, pivot.z + AXES[i].z * L };
             float tx, ty;
             if (!project(&c, tip, &tx, &ty)) continue;
-            line(cmd, &c, ox, oy, tx, ty, col);
-            dot(cmd, &c, tx, ty, tool == tool_scale ? 10.0f : 8.0f, col);
+            const float adx = tx - ox, ady = ty - oy;
+            const float alen = sqrtf(adx * adx + ady * ady);
+            if (alen < 2.0f) continue;
+            if (tool == tool_scale) {
+                thick_line(cmd, &c, ox, oy, tx, ty, col);
+                cube_handle(cmd, &c, tx, ty, 14.0f, col);
+            } else {
+                float head = 28.0f;
+                if (head > alen * 0.4f) head = alen * 0.4f;
+                const float ux = adx / alen, uy = ady / alen;
+                const float sx = tx - ux * head, sy = ty - uy * head;
+                thick_line(cmd, &c, ox, oy, sx, sy, col);
+                arrow_head(cmd, &c, sx, sy, tx, ty, head * 0.30f, col);
+            }
         }
     }
-    if (tool == tool_scale) dot(cmd, &c, ox, oy, 12.0f, axis_color(AX_UNIFORM, g.hover == AX_UNIFORM));
+    if (tool == tool_scale) {
+        cube_handle(cmd, &c, ox, oy, 14.0f, axis_color(AX_UNIFORM, g.hover == AX_UNIFORM));
+    } else if (tool == tool_translate) {
+        dot(cmd, &c, ox, oy, 6.0f, (system_color){ 0.85f, 0.85f, 0.85f, 1.0f });
+    }
 }
 
 /* Input + transform logic only. Safe to call from anywhere that runs every frame. */

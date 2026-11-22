@@ -180,6 +180,7 @@ void brush_ui_frame(system_element_context* ui_element)
     brush_follow_modes();         /* entering Paint mode opens the Brushes window */
     sculpt_input_update(ui_element);      /* mesh obj_vert_selected */
     paint_input_update(ui_element);
+    update_terrain_brush(ui_element);     /* Edit, Sculpt and Paint on the terrain: a ring on the ground. here, after s_bc.on was cleared above, so the ring survives to draw_brush_cursor */
 }
 
 /* ========================================================================= */
@@ -487,6 +488,22 @@ static bool cp_button(VkCommandBuffer cmd, system_element_context* ui_element, b
     const int tw = (int)strlen(label) * ui_font_w;
     draw_text_element(cmd, ui_element, label, x + (w - tw) / 2, y + (h - ui_font_h) / 2, system_theme.button_text);
     return hov && press;
+}
+
+int brush_color_picker_height(void)
+{
+    return 96 + 6 + 22;
+}
+
+int brush_color_palette_height(int w)
+{
+    const int cols = 12, g = 2;
+    int cell = (w - (cols - 1) * g) / cols;
+    if (cell > 20) cell = 20;
+    if (cell < 7) return 0;
+    const int saved_rows = (brush_saved_max + cols - 1) / cols;
+    const int rows = brush_palette_count / cols;
+    return 12 + saved_rows * (cell + g) + 6 + 12 + rows * (cell + g);
 }
 
 int brush_color_picker(VkCommandBuffer cmd, system_element_context* ui_element, int x, int y, int w, int h_avail, float rgb[3])

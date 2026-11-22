@@ -159,12 +159,6 @@ static void draw_sm_layers_section(VkCommandBuffer cmd, system_element_context* 
     if (draw_sm_button(cmd, ui_element, c, "Down",    false, false, system_theme.toolbar_background)) move_texshop_layer(s, -1);
 }
 
-static const struct { const char* name; float r, g, b; } k_sm_preset[] = {
-    { "Grey",  0.55f, 0.55f, 0.55f }, { "White", 0.95f, 0.95f, 0.95f }, { "Black", 0.05f, 0.05f, 0.05f },
-    { "Red",   0.80f, 0.15f, 0.12f }, { "Green", 0.25f, 0.62f, 0.20f }, { "Blue",  0.20f, 0.35f, 0.80f },
-    { "Sand",  0.76f, 0.66f, 0.42f }, { "Brown", 0.45f, 0.30f, 0.18f }
-};
-
 static float sm_step_value(float vert_to_edge_array, float delta)
 {
     vert_to_edge_array += delta;
@@ -180,25 +174,26 @@ static void draw_sm_layer_section(VkCommandBuffer cmd, system_element_context* u
     snprintf(text, sizeof(text), "Layer %d: %s", s->selected_layer, l->name);
     draw_sm_text(cmd, ui_element, c, text, system_theme.system_text);
 
-    snprintf(text, sizeof(text), "Color %.2f %.2f %.2f", l->color[0], l->color[1], l->color[2]);
-    draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
+    /* color: the same picker and palette as the Paint window (hue bar, saturation / value square, hex, Save and Del for your own saved colors, 60 preset colors) */
+    {
+        finish_sm_row(c);
+        const int picker_w = c->right - c->left;
+        const int picker_h = brush_color_picker_height();
+        const int palette_h = brush_color_palette_height(picker_w);
+        draw_sm_text(cmd, ui_element, c, "Color", system_theme.system_color_edit_mode_normal_color);
+        if (c->y >= c->top && c->y + picker_h <= c->bottom) {
+            brush_color_picker(cmd, ui_element, c->left, c->y, picker_w, picker_h, l->color);
+        }
+        c->y += picker_h + 6;
+        if (c->y >= c->top && c->y + palette_h <= c->bottom) {
+            brush_color_palette(cmd, ui_element, c->left, c->y, picker_w, palette_h, l->color);
+        }
+        c->y += palette_h + 6;
+    }
     snprintf(text, sizeof(text), "Opacity %.2f", l->opacity);
     draw_sm_text(cmd, ui_element, c, text, system_theme.system_color_edit_mode_normal_color);
-
-    static const char* const k_step_label[8] = { "R -", "R +", "G -", "G +", "B -", "B +", "Op -", "Op +" };
-    for (int p = 0; p < 8; p++) {
-        if (draw_sm_button(cmd, ui_element, c, k_step_label[p], false, false, system_theme.toolbar_background)) {
-            const float delta = (p & 1) ? 0.05f : -0.05f;
-            if (p < 6) l->color[p / 2] = sm_step_value(l->color[p / 2], delta);
-            else       l->opacity      = sm_step_value(l->opacity, delta);
-        }
-    }
-    for (int p = 0; p < (int)(sizeof(k_sm_preset) / sizeof(k_sm_preset[0])); p++) {
-        if (draw_sm_button(cmd, ui_element, c, k_sm_preset[p].name, false, false, system_theme.system_color_edit_mode_normal_color)) {
-            l->color[0] = k_sm_preset[p].r; l->color[1] = k_sm_preset[p].g; l->color[2] = k_sm_preset[p].b;
-        }
-    }
-
+    if (draw_sm_button(cmd, ui_element, c, "Op -", false, false, system_theme.toolbar_background)) l->opacity = sm_step_value(l->opacity, -0.05f);
+    if (draw_sm_button(cmd, ui_element, c, "Op +", false, false, system_theme.toolbar_background)) l->opacity = sm_step_value(l->opacity, 0.05f);
     draw_sm_text(cmd, ui_element, c, "Writes", system_theme.system_text);
     for (int o = 0; o < texshop_out_count; o++) {
         const bool on = (l->channel_mask & texshop_bit(o)) != 0;

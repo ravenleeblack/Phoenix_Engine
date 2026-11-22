@@ -115,6 +115,7 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 #include "system_light_gpu.h"
 #include "system_sky.h"
 #include "system_tooltip.h"
+#include "system_terrain_tool.h"
 
 
 

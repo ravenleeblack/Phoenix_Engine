@@ -32,8 +32,8 @@ THIS INCLUDES INSIDE THE SOURCE FILES NOT JUST HEADERS
 enum {
     light_gpu_max_lights  = 8,
     light_gpu_slot_count  = 32,
-    light_gpu_slot_size   = 1024,                                   /* >= the 976 byte block, multiple of any offset alignment */
-    light_gpu_block_floats = 12 + light_gpu_max_lights * 16 + 104   /* counts + sky + ground + lights (4 vec4 each) + sky / fog data (system_sky.h) */
+    light_gpu_slot_size   = 1024,                                   /* >= the 992 byte block, multiple of any offset alignment */
+    light_gpu_block_floats = 12 + light_gpu_max_lights * 16 + 108   /* counts + sky + ground + lights (4 vec4 each) + sky / fog data (system_sky.h) */
 };
 
 typedef struct {

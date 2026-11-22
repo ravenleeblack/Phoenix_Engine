@@ -23,7 +23,7 @@ static inline editor_vec3 v3_norm(editor_vec3 a)
 /* brush table                                                               */
 /* ========================================================================= */
 static const char* const k_brush_names[sculpt_brush_count] = {
-    "Clay Buildup", "Clay Soften", "Standard", "Carve", "Grab", "Polish", "Inflate", "Smooth", "Flatten"
+    "Clay Buildup", "Clay Soften", "Standard", "Carve", "Grab", "Polish", "Inflate", "Smooth", "Flatten", "Pinch"
 };
 static const uint32_t k_brush_masks[sculpt_brush_count] = {
     sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_plane_offset | sculpt_setting_spacing,        /* clay buildup */
@@ -34,7 +34,8 @@ static const uint32_t k_brush_masks[sculpt_brush_count] = {
     sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_smooth_passes | sculpt_setting_spacing,        /* polish       */
     sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_spacing,              /* inflate      */
     sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_smooth_passes | sculpt_setting_spacing,        /* smooth       */
-    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_plane_offset | sculpt_setting_spacing         /* flatten      */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_plane_offset | sculpt_setting_spacing,        /* flatten      */
+    sculpt_setting_radius | sculpt_setting_strength | sculpt_setting_hardness | sculpt_setting_spacing          /* pinch        */
 };
 #undef sculpt_setting_radius
 #undef sculpt_setting_strength
@@ -353,6 +354,12 @@ static void apply_brush_at(edit_mode_mesh* mesh, const editor_vec3* nrm, enum_sc
             const float delta = v3_dot(v3_sub(v3_add(pp, v3_scale(pn, h + off)), p), pn);
             if ((dir > 0.0f && delta > 0.0f) || (dir < 0.0f && delta < 0.0f))
                 p = v3_add(p, v3_scale(pn, delta * w * 0.5f));
+            break;
+        }
+        case sculpt_brush_pinch: {                                    /* pull the surface in toward the middle of the brush (Ctrl pushes it out) */
+            const editor_vec3 side = v3_sub(p, c);
+            const editor_vec3 flat = v3_sub(side, v3_scale(pn, v3_dot(side, pn)));
+            p = v3_sub(p, v3_scale(flat, clampf(s->strength * w * 0.5f, 0.0f, 0.9f) * dir));
             break;
         }
         case sculpt_brush_flatten: {                                  /* everything under the brush onto the work plane */

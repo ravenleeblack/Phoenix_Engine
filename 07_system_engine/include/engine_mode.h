@@ -162,6 +162,7 @@ typedef enum {
     sculpt_brush_inflate,
     sculpt_brush_smooth,
     sculpt_brush_flatten,
+    sculpt_brush_pinch,
     sculpt_brush_count
 } enum_sculpt_brush;
 

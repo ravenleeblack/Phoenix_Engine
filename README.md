@@ -65,7 +65,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 **Modeling**
 
 - Edit mode: extrude, multicut, target weld, multiple select, and the 1.4 tools (create edge, create face, delete edge, bevel, subdivide).
-- Sculpt and paint work on a cube once it is subdivided. They do not work on terrain yet.
+- Sculpt and paint work on a subdivided mesh and on terrain (Edit mode keeps Vertex / Edge / Face, with terrain tools in the Modeler window). Sculpt brushes include Pinch.
 
 **Skins and textures**
 
@@ -78,10 +78,8 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 - Installer module and a working build for it.
 - Texture Shop: finishing getting UV map collection object database then start making tab sub menu buttons work for uv mapping.
 - A possible node system on top of the shader profile. Textureshop should be our go to place: for uving, skinning objects, and texturing a substance like program.
-- Sculpt and paint on terrain. Terrain right now is a true 3D Heightmap will should allow vertical tunnel, trenches, overhangs, holes. See wiki.
-- Getting sculpt and paint icons to look more like skins icons.
+- Terrain overhangs, tunnels and holes (the terrain is still one height per column). See wiki.
 - The toolbar Run button.
-- skybox system with volume for fog since we have lighting.
 - 
 
 
@@ -92,7 +90,7 @@ If window loses focus while tabbing press alt and move camera around then try ag
 - **Version:** 1.5
 - **Tag:** [v1.5](https://github.com/ravenleeblack/Phoenix_Engine/releases/tag/v1.5)
 
-What is new in 1.5: Sculpt opens the Brushes window like Paint, brush icons are lit spheres with their own glyphs, tooltips on buttons, a Selection Highlight toggle, a procedural octagon sky dome that follows the sun, Unreal-style height fog with sun glow, resizable box fog volumes (cheap and good), with Scene and Game view switches, and File > Save All. Full details in [VERSION.md](VERSION.md).
+What is new in 1.5: Sculpt opens the Brushes window like Paint, brush icons are lit spheres with their own glyphs, tooltips on buttons, a Selection Highlight toggle, a procedural octagon sky dome that follows the sun, Unreal-style height fog with sun glow, resizable box fog volumes (cheap and good), with Scene and Game view switches, File > Save All, terrain Edit / Sculpt / Paint (with a new Pinch brush and a cursor-following Grab), a Unity-style gizmo, and directional-light driven sky and fog. Full details in [VERSION.md](VERSION.md).
 
 Version 1.4 added the Edit mode tools (Create Edge, Create Face, Delete Edge, Bevel, Subdivide), more light kinds, skin maps, `.obj` import with unit profiles, and the build and installer tools.
 

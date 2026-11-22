@@ -191,10 +191,45 @@ static void tools_object(VkCommandBuffer cmd, system_element_context* ui_element
     }
 }
 
+/* ---------------------------------------------------------------- TERRAIN */
+
+/* Edit mode with the terrain selected. Select = the normal Vertex / Edge / Face editing of the control grid (the gizmo moves Y only).
+   The other tools are brushes like Unity and Unreal: drag on the ground in the Scene view, only Y changes. */
+static void tools_terrain(VkCommandBuffer cmd, system_element_context* ui_element, flow_layout* f)
+{
+    flow_text(cmd, ui_element, f, "Terrain: Y tools", system_theme.system_text);
+    for (int tool = 0; tool < terrain_tool_count; tool++) {
+        const bool on = (g_terrain_tool.tool == tool);
+        if (flow_button(cmd, ui_element, f, get_terrain_tool_name(tool), on ? system_theme.tab_sub_menubar_button_active : system_theme.tab_sub_menubar_button)) {
+            g_terrain_tool.tool = tool;
+            set_modeler_status("Terrain tool: %s.", get_terrain_tool_name(tool));
+        }
+    }
+
+    if (g_terrain_tool.tool != terrain_tool_off) {
+        flow_text(cmd, ui_element, f, "Brush", system_theme.system_text);
+        flow_stepper_f(cmd, ui_element, f, "Size (cubes)", &g_terrain_tool.radius_cells, 1.0f, 1.0f, 60.0f);
+        flow_stepper_f(cmd, ui_element, f, "Strength", &g_terrain_tool.strength, 0.05f, 0.05f, 1.0f);
+        flow_stepper_f(cmd, ui_element, f, "Hardness", &g_terrain_tool.hardness, 0.05f, 0.0f, 0.95f);
+        if (g_terrain_tool.tool == terrain_tool_set_height) {
+            flow_stepper_f(cmd, ui_element, f, "Height (cubes)", &g_terrain_tool.height_cells, 1.0f, 0.0f, 400.0f);
+        }
+        flow_text(cmd, ui_element, f, "Drag on the ground. Ctrl does the opposite (raise <-> lower).", get_theme_hint_color());
+    } else {
+        flow_text(cmd, ui_element, f, "Pick vertices, edges or faces below and move them with the Y arrow.", get_theme_hint_color());
+    }
+}
+
 /* ---------------------------------------------------------------- EDIT */
 
 static void tools_edit(VkCommandBuffer cmd, system_element_context* ui_element, flow_layout* f)
 {
+    const system_scene_object* selected_terrain = find_scene_object_by_id(g_scene_registry.selected_object_id);
+    const bool terrain_selected = (selected_terrain != NULL && is_terrain_object(selected_terrain));
+    if (terrain_selected) {
+        tools_terrain(cmd, ui_element, f);
+    }
+
     edit_mode_state* es = &g_mode_state.edit;
 
     flow_text(cmd, ui_element, f, "Component", system_theme.system_text);
