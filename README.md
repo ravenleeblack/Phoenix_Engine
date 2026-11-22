@@ -108,6 +108,8 @@ Phoenix is under active development. Public APIs and editor workflows may change
 
 <img width="1280" height="963" alt="paint_sculpt_00" src="https://github.com/user-attachments/assets/8fb461b0-2ced-4298-8c7d-310529451086" />
 
+<img width="1386" height="915" alt="fog_skybox" src="https://github.com/user-attachments/assets/48c62fe0-2129-49ed-b636-e91372963fb3" />
+
 <img width="1920" height="1050" alt="paint_sculpt" src="https://github.com/user-attachments/assets/1cbc39b9-80c6-4f39-8070-fd38f17224fd" />
 
 <img width="1520" height="930" alt="texure" src="https://github.com/user-attachments/assets/b7246768-e55d-46f7-b39f-06af85e15e21" />
