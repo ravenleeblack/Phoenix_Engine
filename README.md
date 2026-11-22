@@ -38,19 +38,20 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 **Job Stystem**
 - multiple job system to allows process to handle ui for one, vulkan backend for another, etc
 
-**Interface: 3 main static bars menubar, toolbar, statusbar then dynamic docking system with tabbed window for middle.**
+**Interface: 3 main static bars-> menubar, toolbar, statusbar then dynamic docking system with tabbed window for middle.**
 
 - Menu bar with dropdown menus that work as buttons, and a dynamic menu that changes with the current mode.
-- Mode menu bar that changes modes and opens the windows each mode needs.
+- Maya like dynamic menu changer on menu in the middle for mode changes after main stuff.
+- Mode menu bar that changes modes and opens the windows that each mode needs.
 - Toolbar buttons all work except Run, for now.
 - Status bar showing program info.
-- Tab sub-menu options.
-- Preferences window, with universal theme settings that apply everywhere and can be saved.
-- Docking system: windows can be moved into different areas. Drag-to-reorder tabs.
+- Tab sub-menu options. Each tabbed window in docking should have one if its important to make things easier to access.
+- Preferences window, with universal theme settings that apply everywhere and can be saved. Decent and easy to create colored themes.
+- Docking system: dynamic tabbed windows that can be moved into different areas. Drag-to-reorder tabs. Dock slider to resize.
 
 **Right-click menus**
 
-- Over the Scene view: change modes and pick tools.
+- Over the Scene view: change modes and pick tools. Stays open unlike maya till you click circle with x in the center.
 - Over the File Archive: create and delete files and folders.
 
 **Scene**
@@ -63,7 +64,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 - 60-step undo / redo.
 - skybox - ugly right now but in progress
 - volume and fog decent
-- Many light types directional, area, spot or point, need to make the user interface blend better. preference window, lighting window has options scattered.
+- Many light types directional, area, spot or point, need to make the user interface options in one window. preference window, lighting window has options scattered.
 
 **Importing**
 
