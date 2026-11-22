@@ -38,8 +38,7 @@ Everything else lives in the [Phoenix Engine Wiki](https://github.com/ravenleebl
 **Job Stystem**
 - multiple job system to allows process to handle ui for one, vulkan backend for another, etc
 
-**Interface** 
-*3 main static bars menubar, toolbar, statusbar then dynamic docking system with tabbed window for middle.*
+**Interface: 3 main static bars menubar, toolbar, statusbar then dynamic docking system with tabbed window for middle.**
 
 - Menu bar with dropdown menus that work as buttons, and a dynamic menu that changes with the current mode.
 - Mode menu bar that changes modes and opens the windows each mode needs.
